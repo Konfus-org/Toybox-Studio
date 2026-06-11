@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:services="using:Toybox.Studio.Services"
+             xmlns:local="using:Toybox.Studio.Widgets.EntityInspector"
+             x:Class="Toybox.Studio.Widgets.EntityInspector.EntityInspectorView"
+             x:DataType="local:EntityInspectorViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.componentJson">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Opacity" Value="0.85"/>
+        </Style>
+    </UserControl.Styles>
+
+    <suki:GlassCard Padding="8">
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Margin="4,0,4,8" Orientation="Horizontal" Spacing="8">
+                <TextBlock Classes="h4" Text="Inspector"/>
+                <TextBlock Text="{Binding Entity.Name, FallbackValue=''}" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Subtitle}" Opacity="0.6" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <TextBlock IsVisible="{Binding !HasSelection}"
+                       Text="Select an entity to inspect its components."
+                       Opacity="0.5" Margin="4"/>
+
+            <ScrollViewer IsVisible="{Binding HasSelection}">
+                <ItemsControl ItemsSource="{Binding Entity.Components, FallbackValue={x:Null}}" Margin="4,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="services:SceneComponent">
+                            <Expander Header="{Binding Name}" IsExpanded="True" Margin="0,0,0,8">
+                                <SelectableTextBlock Classes="componentJson" Text="{Binding Json}"/>
+                            </Expander>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </suki:GlassCard>
+</UserControl>

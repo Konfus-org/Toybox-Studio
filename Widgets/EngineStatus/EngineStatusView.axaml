@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.EngineStatus"
+             x:Class="Toybox.Studio.Widgets.EngineStatus.EngineStatusView"
+             x:DataType="local:EngineStatusViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="Ellipse#StatusDot">
+            <Setter Property="Fill" Value="#7F8C8D"/>
+        </Style>
+        <Style Selector="Ellipse#StatusDot.launching">
+            <Setter Property="Fill" Value="#F1C40F"/>
+        </Style>
+        <Style Selector="Ellipse#StatusDot.connected">
+            <Setter Property="Fill" Value="#2ECC71"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Ellipse Name="StatusDot" Width="10" Height="10"
+                 Classes.launching="{Binding IsLaunching}"
+                 Classes.connected="{Binding IsConnected}"/>
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"/>
+        <TextBlock Text="{Binding PingText}" VerticalAlignment="Center" Opacity="0.6"/>
+    </StackPanel>
+</UserControl>

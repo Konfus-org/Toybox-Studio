@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:services="using:Toybox.Studio.Services"
+             xmlns:local="using:Toybox.Studio.Widgets.EngineConsole"
+             x:Class="Toybox.Studio.Widgets.EngineConsole.EngineConsoleView"
+             x:DataType="local:EngineConsoleViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.logLine">
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="TextBlock.logLine.warning">
+            <Setter Property="Foreground" Value="#F1C40F"/>
+        </Style>
+        <Style Selector="TextBlock.logLine.error">
+            <Setter Property="Foreground" Value="#E74C3C"/>
+        </Style>
+        <Style Selector="TextBlock.logLine.studio">
+            <Setter Property="Foreground" Value="#3498DB"/>
+        </Style>
+    </UserControl.Styles>
+
+    <suki:GlassCard Padding="8">
+        <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="4,0,4,8">
+                <Button DockPanel.Dock="Right" Classes="Basic" Content="Clear"
+                        Command="{Binding ClearCommand}"/>
+                <TextBlock Classes="h4" Text="Console" VerticalAlignment="Center"/>
+            </DockPanel>
+
+            <ScrollViewer Name="LogScrollViewer">
+                <ItemsControl ItemsSource="{Binding Lines}" Margin="4,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="services:EngineLogEntry">
+                            <TextBlock Classes="logLine"
+                                       Classes.warning="{Binding IsWarning}"
+                                       Classes.error="{Binding IsError}"
+                                       Classes.studio="{Binding IsStudio}"
+                                       Text="{Binding Message}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </suki:GlassCard>
+</UserControl>

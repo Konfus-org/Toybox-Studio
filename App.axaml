@@ -1,0 +1,11 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             x:Class="Toybox.Studio.App"
+             RequestedThemeVariant="Default">
+
+    <Application.Styles>
+        <suki:SukiTheme ThemeColor="Blue"/>
+        <StyleInclude Source="/Shell/ShellStyles.axaml"/>
+    </Application.Styles>
+</Application>

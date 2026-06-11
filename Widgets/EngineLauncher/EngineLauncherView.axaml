@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.EngineLauncher"
+             x:Class="Toybox.Studio.Widgets.EngineLauncher.EngineLauncherView"
+             x:DataType="local:EngineLauncherViewModel">
+
+    <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Classes="Flat" Content="Launch Engine" Command="{Binding LaunchCommand}"/>
+        <Button Classes="Basic" Content="Stop" Command="{Binding StopCommand}"/>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:suki="https://github.com/kikipoulet/SukiUI"
+             xmlns:local="using:Toybox.Studio.Widgets.EngineViewport"
+             x:Class="Toybox.Studio.Widgets.EngineViewport.EngineViewportView"
+             x:DataType="local:EngineViewportViewModel">
+
+    <suki:GlassCard Padding="8">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="h4" Text="Viewport" Margin="4,0,4,8"/>
+
+            <Panel>
+                <Image Name="FrameImage" Source="{Binding Frame}" Stretch="Uniform"
+                       IsVisible="{Binding HasFrames}"/>
+                <TextBlock Text="Launch the engine to see its view here."
+                           IsVisible="{Binding !HasFrames}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
+            </Panel>
+        </DockPanel>
+    </suki:GlassCard>
+</UserControl>

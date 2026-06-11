@@ -1,0 +1,40 @@
+<suki:SukiWindow xmlns="https://github.com/avaloniaui"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:suki="https://github.com/kikipoulet/SukiUI"
+                 xmlns:shell="using:Toybox.Studio.Shell"
+                 xmlns:status="using:Toybox.Studio.Widgets.EngineStatus"
+                 xmlns:console="using:Toybox.Studio.Widgets.EngineConsole"
+                 xmlns:launcher="using:Toybox.Studio.Widgets.EngineLauncher"
+                 xmlns:sceneTree="using:Toybox.Studio.Widgets.SceneTree"
+                 xmlns:inspector="using:Toybox.Studio.Widgets.EntityInspector"
+                 xmlns:viewport="using:Toybox.Studio.Widgets.EngineViewport"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="850"
+                 x:Class="Toybox.Studio.Shell.MainWindow"
+                 x:DataType="shell:ShellViewModel"
+                 Icon="/Assets/avalonia-logo.ico"
+                 Title="Toybox Studio"
+                 Width="1440" Height="850">
+
+    <DockPanel>
+        <Border Classes="StatusBar" DockPanel.Dock="Bottom">
+            <status:EngineStatusView DataContext="{Binding Status}"/>
+        </Border>
+
+        <Grid RowDefinitions="Auto,*,12,180" ColumnDefinitions="280,12,*,12,340" Margin="16">
+            <launcher:EngineLauncherView Grid.Row="0" Grid.ColumnSpan="5" Margin="0,0,0,12"
+                                         DataContext="{Binding Launcher}"/>
+
+            <sceneTree:SceneTreeView Grid.Row="1" Grid.Column="0"
+                                     DataContext="{Binding SceneTree}"/>
+            <viewport:EngineViewportView Grid.Row="1" Grid.Column="2"
+                                         DataContext="{Binding Viewport}"/>
+            <inspector:EntityInspectorView Grid.Row="1" Grid.Column="4"
+                                           DataContext="{Binding Inspector}"/>
+
+            <console:EngineConsoleView Grid.Row="3" Grid.ColumnSpan="5"
+                                       DataContext="{Binding Console}"/>
+        </Grid>
+    </DockPanel>
+</suki:SukiWindow>

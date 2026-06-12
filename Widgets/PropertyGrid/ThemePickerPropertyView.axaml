@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
-             x:Class="Toybox.Studio.Widgets.PropertyGrid.EnumPropertyView"
-             x:DataType="local:EnumPropertyViewModel">
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.ThemePickerPropertyView"
+             x:DataType="local:ThemePickerPropertyViewModel">
     <Grid Margin="0,1">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>

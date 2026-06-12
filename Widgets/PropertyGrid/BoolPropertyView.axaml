@@ -11,6 +11,6 @@
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
         <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <CheckBox Grid.Column="2" IsChecked="{Binding Value}"/>
+        <CheckBox Grid.Column="2" IsChecked="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"/>
     </Grid>
 </UserControl>

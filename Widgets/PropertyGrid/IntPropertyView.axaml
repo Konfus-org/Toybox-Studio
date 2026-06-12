@@ -11,6 +11,7 @@
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
         <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <NumericUpDown Grid.Column="2" Classes="prop" FormatString="0" Increment="1" Value="{Binding Value}"/>
+        <NumericUpDown Grid.Column="2" Classes="prop" FormatString="0" Increment="1" Value="{Binding Value}"
+                       IsEnabled="{Binding !IsReadOnly}"/>
     </Grid>
 </UserControl>

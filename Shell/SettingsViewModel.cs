@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
@@ -19,9 +20,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly Logger _log;
     private readonly EngineJsonParser _parser;
 
-    // Guards the cascade when we programmatically change the variant/theme selection.
-    private bool _suppressThemeEvents;
-
     public SettingsViewModel(
         Settings settings,
         ThemeManager theme,
@@ -39,11 +37,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         _log = log;
         _parser = parser;
 
-        SelectedVariant = _theme.Variant;
-        AvailableThemes = _theme.ThemeNamesFor(SelectedVariant);
-        SelectedTheme = _theme.Active.Name;
-        LoadEditorFrom(_theme.Active);
-
         ConnectTimeoutSeconds = settings.Editor.Engine.ConnectTimeoutSeconds;
         HideEngineWindow = settings.Editor.Engine.HideEngineWindow;
         RestartOnCrash = settings.Editor.Engine.RestartOnCrash;
@@ -54,107 +47,32 @@ public sealed partial class SettingsViewModel : ObservableObject
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshAppSettings);
         RefreshAppSettings();
         BuildEditorSettingsGrid();
-        BuildThemeGrid();
     }
 
     //// THEME ////
-
-    public IReadOnlyList<string> Variants => _theme.VariantNames;
-
-    [ObservableProperty]
-    public partial string SelectedVariant { get; set; }
-
-    [ObservableProperty]
-    public partial IReadOnlyList<string> AvailableThemes { get; private set; }
-
-    [ObservableProperty]
-    public partial string SelectedTheme { get; set; }
-
-    [ObservableProperty]
-    public partial string FontFamily { get; set; } = "";
-
-    [ObservableProperty]
-    public partial double FontSize { get; set; }
-
-    [ObservableProperty]
-    public partial string MonospaceFamily { get; set; } = "";
-
-    [ObservableProperty]
-    public partial double CornerRadius { get; set; }
-
-    [ObservableProperty]
-    public partial string PrimaryHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string SecondaryHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string TertiaryHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string ErrorHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string WarningHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string InfoHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string SuccessHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string BackgroundHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string SurfaceHex { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string TextHex { get; set; } = "";
-
-    partial void OnSelectedVariantChanged(string value)
-    {
-        if (_suppressThemeEvents)
-            return;
-
-        _theme.SetVariant(value);
-        _suppressThemeEvents = true;
-        AvailableThemes = _theme.ThemeNamesFor(value);
-        SelectedTheme = _theme.Active.Name;
-        _suppressThemeEvents = false;
-        LoadEditorFrom(_theme.Active);
-    }
-
-    partial void OnSelectedThemeChanged(string value)
-    {
-        if (_suppressThemeEvents || string.IsNullOrEmpty(value))
-            return;
-
-        _theme.SetActiveTheme(value);
-        LoadEditorFrom(_theme.Active);
-    }
+    // Theme selection lives in the editor-settings grid (the Variant and per-variant theme pickers,
+    // tagged in BuildEditorSettingsGrid). Authoring a new theme happens in the modal Theme Creator;
+    // built-in themes are non-editable.
 
     /// <summary>
-    /// Writes the editor fields back to the active theme's Theme.json and applies it.
+    /// Raised when the user asks to author a new theme; the view opens the modal Theme Creator and
+    /// calls <see cref="RefreshThemes"/> when it closes.
     /// </summary>
-    [RelayCommand]
-    private void SaveTheme()
-    {
-        _theme.SaveTheme(BuildThemeFromEditor());
-        LoadEditorFrom(_theme.Active);
-    }
+    public event Action? ThemeCreatorRequested;
+
+    /// <summary>
+    /// The theme manager, exposed so the view can launch the Theme Creator with it.
+    /// </summary>
+    public ThemeManager Theme => _theme;
 
     [RelayCommand]
-    private void ReloadThemes()
-    {
-        _theme.Reload();
-        _suppressThemeEvents = true;
-        SelectedVariant = _theme.Variant;
-        AvailableThemes = _theme.ThemeNamesFor(SelectedVariant);
-        SelectedTheme = _theme.Active.Name;
-        _suppressThemeEvents = false;
-        LoadEditorFrom(_theme.Active);
-    }
+    private void CreateTheme() => ThemeCreatorRequested?.Invoke();
+
+    /// <summary>
+    /// Rebuilds the editor-settings grid so the theme pickers pick up a newly created theme and the
+    /// current selection.
+    /// </summary>
+    public void RefreshThemes() => BuildEditorSettingsGrid();
 
     [RelayCommand]
     private void OpenThemesFolder()
@@ -162,45 +80,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         Directory.CreateDirectory(_theme.ThemesDirectory);
         Process.Start(new ProcessStartInfo(_theme.ThemesDirectory) { UseShellExecute = true });
     }
-
-    private void LoadEditorFrom(Theme theme)
-    {
-        FontFamily = theme.Font.Family;
-        FontSize = theme.Font.Size;
-        MonospaceFamily = theme.Font.Monospace;
-        CornerRadius = theme.CornerRadius;
-        PrimaryHex = theme.Colors.Primary;
-        SecondaryHex = theme.Colors.Secondary;
-        TertiaryHex = theme.Colors.Tertiary;
-        ErrorHex = theme.Colors.Error;
-        WarningHex = theme.Colors.Warning;
-        InfoHex = theme.Colors.Info;
-        SuccessHex = theme.Colors.Success;
-        BackgroundHex = theme.Colors.Background;
-        SurfaceHex = theme.Colors.Surface;
-        TextHex = theme.Colors.Text;
-    }
-
-    private Theme BuildThemeFromEditor() => new()
-    {
-        Name = _theme.Active.Name,
-        Variant = _theme.Active.Variant,
-        CornerRadius = CornerRadius,
-        Font = new ThemeFont { Family = FontFamily, Size = FontSize, Monospace = MonospaceFamily },
-        Colors = new ThemePalette
-        {
-            Primary = PrimaryHex,
-            Secondary = SecondaryHex,
-            Tertiary = TertiaryHex,
-            Error = ErrorHex,
-            Warning = WarningHex,
-            Info = InfoHex,
-            Success = SuccessHex,
-            Background = BackgroundHex,
-            Surface = SurfaceHex,
-            Text = TextHex,
-        },
-    };
 
     //// ENGINE ////
 
@@ -291,7 +170,6 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private JObject? _appSettingsJson;
     private JObject? _editorSettingsJson;
-    private JObject? _themeJson;
 
     /// <summary>
     /// All of the current project's app settings, edited through the generic property grid.
@@ -302,11 +180,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// All editor settings, edited through the generic property grid.
     /// </summary>
     public ObservableCollection<PropertyViewModelBase> EditorSettingsProperties { get; } = [];
-
-    /// <summary>
-    /// The active theme's palette/fonts, edited through the generic property grid.
-    /// </summary>
-    public ObservableCollection<PropertyViewModelBase> ThemeProperties { get; } = [];
 
     private void BuildAppSettingsGrid()
     {
@@ -337,13 +210,59 @@ public sealed partial class SettingsViewModel : ObservableObject
         // The reflected POCO loses the fact that the compiler is a fixed choice, so tag it as an enum
         // (with its options) here; the grid then renders it as a dropdown instead of a free-text box.
         TagEnum(_editorSettingsJson, "Build", "Compiler", "Auto", "MSVC", "Clang");
+        // Theme selection: variant is a Dark/Light enum; the two per-variant theme names render as
+        // [View("themePicker")] dropdowns, populated with the themes available for each variant.
+        TagViewsFromAttributes(_editorSettingsJson, _settings.Editor);
+        TagEnum(_editorSettingsJson, "Theme", "Variant", "Dark", "Light");
+        InjectChoices(_editorSettingsJson, "Theme", "DarkTheme", _theme.ThemeNamesFor(ThemeMode.Dark));
+        InjectChoices(_editorSettingsJson, "Theme", "LightTheme", _theme.ThemeNamesFor(ThemeMode.Light));
         foreach (var node in _parser.ParseProperties(_editorSettingsJson))
             EditorSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveEditorSettingsGrid));
     }
 
     /// <summary>
+    /// Walks the reflected settings POCO and, for every property carrying a <see cref="ViewAttribute"/>,
+    /// rewrites the matching JSON field as a typed wrapper carrying <c>$view</c> so the property grid
+    /// routes it to a custom control. Recurses into nested setting objects.
+    /// </summary>
+    private static void TagViewsFromAttributes(JObject json, object poco)
+    {
+        foreach (var property in poco.GetType().GetProperties())
+        {
+            var value = property.GetValue(poco);
+            var view = property.GetCustomAttribute<ViewAttribute>();
+            if (view is not null && json[property.Name] is JValue current)
+            {
+                json[property.Name] = new JObject
+                {
+                    ["type"] = "string",
+                    ["value"] = current,
+                    ["view"] = view.Name,
+                };
+            }
+            else if (json[property.Name] is JObject child
+                     && value is not null
+                     && property.PropertyType is { IsClass: true } type
+                     && type != typeof(string))
+            {
+                TagViewsFromAttributes(child, value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a <c>$choices</c> list to an already-wrapped field (e.g. a themePicker), so its dropdown
+    /// lists the given options. No-op when the field is absent or not a typed wrapper.
+    /// </summary>
+    private static void InjectChoices(JObject root, string parent, string field, IReadOnlyList<string> choices)
+    {
+        if (root[parent] is JObject owner && owner[field] is JObject wrapper)
+            wrapper["choices"] = new JArray(choices);
+    }
+
+    /// <summary>
     /// Rewrites <paramref name="field"/> inside <paramref name="parent"/> as a typed enum wrapper
-    /// (<c>{ "$type": "enum", "$value": …, "$choices": […] }</c>) so the property grid shows a dropdown.
+    /// (<c>{ "type": "enum", "value": …, "choices": […] }</c>) so the property grid shows a dropdown.
     /// <see cref="FlattenTypedWrappers"/> reverses this before the settings POCO is repopulated.
     /// </summary>
     private static void TagEnum(JObject root, string parent, string field, params string[] choices)
@@ -353,9 +272,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         owner[field] = new JObject
         {
-            ["$type"] = "enum",
-            ["$value"] = current,
-            ["$choices"] = new JArray(choices),
+            ["type"] = "enum",
+            ["value"] = current,
+            ["choices"] = new JArray(choices),
         };
     }
 
@@ -375,7 +294,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Recursively replaces every typed wrapper (<c>{ "$type", "$value", … }</c>) with its inner value,
+    /// Recursively replaces every typed wrapper (<c>{ "type", "value", … }</c>) with its inner value,
     /// turning a grid-editing document back into the plain JSON the settings POCO expects.
     /// </summary>
     private static void FlattenTypedWrappers(JToken token)
@@ -386,8 +305,8 @@ public sealed partial class SettingsViewModel : ObservableObject
                 foreach (var property in obj.Properties().ToList())
                 {
                     if (property.Value is JObject wrapper
-                        && wrapper["$type"]?.Type == JTokenType.String
-                        && wrapper["$value"] is { } inner)
+                        && wrapper["type"]?.Type == JTokenType.String
+                        && wrapper["value"] is { } inner)
                         property.Value = inner.DeepClone();
                     else
                         FlattenTypedWrappers(property.Value);
@@ -400,23 +319,5 @@ public sealed partial class SettingsViewModel : ObservableObject
                     FlattenTypedWrappers(element);
                 break;
         }
-    }
-
-    private void BuildThemeGrid()
-    {
-        ThemeProperties.Clear();
-        _themeJson = JObject.FromObject(_theme.Active);
-        foreach (var node in _parser.ParseProperties(_themeJson))
-            ThemeProperties.Add(PropertyViewModelFactory.Create(node, SaveThemeGrid));
-    }
-
-    private void SaveThemeGrid()
-    {
-        if (_themeJson is null)
-            return;
-
-        var theme = _themeJson.ToObject<Theme>();
-        if (theme is not null)
-            _theme.SaveTheme(theme);
     }
 }

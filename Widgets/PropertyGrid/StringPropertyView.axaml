@@ -11,6 +11,6 @@
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
         <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <TextBox Grid.Column="2" Text="{Binding Value}"/>
+        <TextBox Grid.Column="2" Text="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"/>
     </Grid>
 </UserControl>

@@ -127,6 +127,16 @@ public sealed class EngineRpcClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Fetches the project's assets and registered script types so the editor can resolve handle/script
+    /// ids to names and populate asset pickers.
+    /// </summary>
+    public Task<AssetCatalogReply> DescribeAssetsAsync(CancellationToken ct)
+    {
+        var rpc = _rpc ?? throw new InvalidOperationException("Not connected.");
+        return rpc.InvokeWithCancellationAsync<AssetCatalogReply>("editor.listAssets", null, ct);
+    }
+
+    /// <summary>
     /// Replaces one component on an entity with the given typed JSON. The engine tries to apply it and
     /// returns a JSON-RPC error (surfaced here as an exception) when the value cannot be applied.
     /// </summary>

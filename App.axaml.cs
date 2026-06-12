@@ -13,6 +13,7 @@ using Toybox.Studio.Widgets.Status;
 using Toybox.Studio.Widgets.Viewport;
 using Toybox.Studio.Widgets.EntityInspector;
 using Toybox.Studio.Widgets.GameToolbar;
+using Toybox.Studio.Widgets.PropertyGrid;
 using Toybox.Studio.Widgets.WorldTree;
 
 namespace Toybox.Studio;
@@ -83,6 +84,10 @@ public partial class App : Application
         {
             await StepAsync("Applying theme…").ContinueOnSameContext();
             _host!.Services.GetRequiredService<ThemeManager>().ApplySavedTheme();
+
+            // Give the property grid's custom widgets (asset pickers, script links) the services they
+            // need before any inspector or settings grid is built.
+            PropertyViewRegistry.Configure(_host.Services.GetRequiredService<AssetCatalog>());
 
             await StepAsync("Building workspace…").ContinueOnSameContext();
             // The shell (and its console widget) must exist before discovery so startup log
@@ -179,6 +184,7 @@ public partial class App : Application
         services.AddSingleton<EngineSession>();
         services.AddSingleton<EngineInstanceDetector>();
         services.AddSingleton<WorldManager>();
+        services.AddSingleton<AssetCatalog>();
         services.AddSingleton<ViewportStream>();
         services.AddSingleton<EngineLocator>();
         services.AddSingleton<StatusViewModel>();

@@ -41,15 +41,15 @@ public sealed class ThemeManager
     /// </summary>
     public Theme Active { get; private set; } = Theme.DefaultDark();
 
-    public string Variant => _settings.Editor.Theme.Variant;
+    public ThemeMode Variant => _settings.Editor.Theme.Variant;
 
-    public IReadOnlyList<string> VariantNames => ["Dark", "Light"];
+    public IReadOnlyList<ThemeMode> Variants => [ThemeMode.Dark, ThemeMode.Light];
 
     /// <summary>
     /// Theme names available for the given variant (for the picker).
     /// </summary>
-    public IReadOnlyList<string> ThemeNamesFor(string variant) =>
-        _themes.Where(t => string.Equals(t.Variant, variant, StringComparison.OrdinalIgnoreCase))
+    public IReadOnlyList<string> ThemeNamesFor(ThemeMode variant) =>
+        _themes.Where(t => t.Variant == variant)
             .Select(t => t.Name)
             .ToList();
 
@@ -93,7 +93,7 @@ public sealed class ThemeManager
     /// <summary>
     /// Switches the base variant (Dark/Light) and applies the matching theme.
     /// </summary>
-    public void SetVariant(string variant)
+    public void SetVariant(ThemeMode variant)
     {
         _settings.Editor.Theme.Variant = variant;
         _settings.Save();
@@ -121,9 +121,54 @@ public sealed class ThemeManager
     }
 
     /// <summary>
-    /// Persists an edited theme to its Theme.json and re-applies if it is active.
+    /// Persists an edited theme to its Theme.json and re-applies if it is active. Built-in defaults are
+    /// read-only and are never overwritten.
     /// </summary>
     public void SaveTheme(Theme theme)
+    {
+        if (theme.IsBuiltIn)
+            return;
+
+        WriteAndTrack(theme);
+
+        if (string.Equals(theme.Name, Active.Name, StringComparison.OrdinalIgnoreCase))
+            Apply(theme);
+    }
+
+    /// <summary>
+    /// Authors a brand-new theme: validates the name (not blank, not a reserved built-in name, not a
+    /// duplicate), writes it, then selects and applies it. Returns false with a reason on failure.
+    /// </summary>
+    public bool TryCreateTheme(Theme theme, out string? error)
+    {
+        error = null;
+        var name = theme.Name?.Trim() ?? "";
+        if (name.Length == 0)
+        {
+            error = "Enter a theme name.";
+            return false;
+        }
+
+        if (string.Equals(name, Theme.DarkName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, Theme.LightName, StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"'{name}' is a reserved built-in theme name.";
+            return false;
+        }
+
+        if (_themes.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            error = $"A theme named '{name}' already exists.";
+            return false;
+        }
+
+        theme.Name = name;
+        WriteAndTrack(theme);
+        SetActiveTheme(theme.Name);
+        return true;
+    }
+
+    private void WriteAndTrack(Theme theme)
     {
         Directory.CreateDirectory(ThemesDir);
         File.WriteAllText(PathFor(theme.Name), JsonConvert.SerializeObject(theme, Formatting.Indented));
@@ -134,9 +179,6 @@ public sealed class ThemeManager
             _themes[index] = theme;
         else
             _themes.Add(theme);
-
-        if (string.Equals(theme.Name, Active.Name, StringComparison.OrdinalIgnoreCase))
-            Apply(theme);
     }
 
     /// <summary>

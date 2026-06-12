@@ -25,14 +25,30 @@ public sealed class PropertyNode
     public IReadOnlyList<string>? Choices { get; init; }
 
     /// <summary>
-    /// Group heading from [[tbx::category]], or null for the default group.
+    /// Group heading from [[tbx::editor::category]], or null for the default group.
     /// </summary>
     public string? Category { get; init; }
 
     /// <summary>
-    /// Tooltip text from [[tbx::description]], or null.
+    /// Tooltip text from [[tbx::editor::description]], or null.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// True when [[tbx::editor::readonly]] is set: the field is shown but not editable.
+    /// </summary>
+    public bool ReadOnly { get; init; }
+
+    /// <summary>
+    /// True when [[tbx::editor::hidden]] is set: the field is dropped from the grid entirely.
+    /// </summary>
+    public bool Hidden { get; init; }
+
+    /// <summary>
+    /// Name of a custom editor control from [[tbx::editor::view]] / [View], or null to fall back to
+    /// the type-driven widget. Resolved by the property-view registry.
+    /// </summary>
+    public string? View { get; init; }
 
     public IReadOnlyList<PropertyNode> Children { get; init; } = [];
 

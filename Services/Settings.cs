@@ -73,16 +73,20 @@ public sealed class ProjectEditorSettings
 public sealed class ThemeEditorSettings
 {
     /// <summary>
-    /// "Dark" or "Light" — which of the two chosen themes is currently applied.
+    /// Dark or Light — which of the two chosen themes is currently applied. Serialized as its readable
+    /// name; legacy "Dark"/"Light" string files parse through the same converter.
     /// </summary>
-    public string Variant { get; set; } = "Dark";
+    [JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
+    public ThemeMode Variant { get; set; } = ThemeMode.Dark;
 
-    public string DarkTheme { get; set; } = "Toybox Dark";
+    [View("themePicker")]
+    public string DarkTheme { get; set; } = Theme.DarkName;
 
-    public string LightTheme { get; set; } = "Toybox Light";
+    [View("themePicker")]
+    public string LightTheme { get; set; } = Theme.LightName;
 
     [JsonIgnore]
-    public bool IsLight => string.Equals(Variant, "Light", StringComparison.OrdinalIgnoreCase);
+    public bool IsLight => Variant == ThemeMode.Light;
 }
 
 /// <summary>

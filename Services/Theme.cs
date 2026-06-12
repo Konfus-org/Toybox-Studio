@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Toybox.Studio.Services;
 
@@ -48,12 +49,21 @@ public sealed class ThemePalette
 /// </summary>
 public sealed class Theme
 {
-    public string Name { get; set; } = "Toybox Dark";
+    /// <summary>
+    /// Names of the two built-in themes written on first run. They are non-editable; the Theme Creator
+    /// always authors a new theme rather than overwriting one of these.
+    /// </summary>
+    public const string DarkName = "Toybox Dark";
+    public const string LightName = "Toybox Light";
+
+    public string Name { get; set; } = DarkName;
 
     /// <summary>
-    /// "Dark" or "Light" — selects the Avalonia base variant this theme applies under.
+    /// Dark or Light — selects the Avalonia base variant this theme applies under. Serialized as its
+    /// readable name ("Dark"/"Light"); legacy string files parse back through the same converter.
     /// </summary>
-    public string Variant { get; set; } = "Dark";
+    [JsonConverter(typeof(StringEnumConverter))]
+    public ThemeMode Variant { get; set; } = ThemeMode.Dark;
 
     public double CornerRadius { get; set; } = 6;
 
@@ -62,22 +72,30 @@ public sealed class Theme
     public ThemePalette Colors { get; set; } = new();
 
     [JsonIgnore]
-    public bool IsLight => string.Equals(Variant, "Light", StringComparison.OrdinalIgnoreCase);
+    public bool IsLight => Variant == ThemeMode.Light;
+
+    /// <summary>
+    /// True for the two shipped defaults, identified by name. Built-ins are read-only.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsBuiltIn =>
+        string.Equals(Name, DarkName, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Name, LightName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The two themes written to disk the first time the editor runs.
     /// </summary>
     public static Theme DefaultDark() => new()
     {
-        Name = "Toybox Dark",
-        Variant = "Dark",
+        Name = DarkName,
+        Variant = ThemeMode.Dark,
         Colors = new ThemePalette(),
     };
 
     public static Theme DefaultLight() => new()
     {
-        Name = "Toybox Light",
-        Variant = "Light",
+        Name = LightName,
+        Variant = ThemeMode.Light,
         Colors = new ThemePalette
         {
             Primary = "#0067C0",

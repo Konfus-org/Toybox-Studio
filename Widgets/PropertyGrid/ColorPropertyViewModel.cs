@@ -38,7 +38,7 @@ public sealed class ColorPropertyViewModel : PropertyViewModelBase
         }
     }
 
-    // Color channels may themselves be typed wrappers ({ "$type": "float", "$value": x }).
+    // Color channels may themselves be typed wrappers ({ "type": "float", "value": x }).
     private static JToken Unwrap(JToken token) =>
-        token is JObject obj && obj["$value"] is { } inner ? inner : token;
+        token is JObject obj && obj["value"] is { } inner ? inner : token;
 }

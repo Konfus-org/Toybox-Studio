@@ -11,7 +11,7 @@
         </Grid.ColumnDefinitions>
         <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
         <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <ItemsControl Grid.Column="2" ItemsSource="{Binding Components}">
+        <ItemsControl Grid.Column="2" ItemsSource="{Binding Components}" IsEnabled="{Binding !IsReadOnly}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <UniformGrid Rows="1"/>

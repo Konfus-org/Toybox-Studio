@@ -16,6 +16,7 @@ public abstract class PropertyViewModelBase : ObservableObject
         Type = node.Type;
         Category = node.Category;
         Description = node.Description;
+        IsReadOnly = node.ReadOnly;
     }
 
     public string Name { get; }
@@ -28,9 +29,15 @@ public abstract class PropertyViewModelBase : ObservableObject
     public string? Category { get; }
 
     /// <summary>
-    /// Tooltip text ([[tbx::description]]), or null.
+    /// Tooltip text ([[editor::description]]), or null.
     /// </summary>
     public string? Description { get; }
+
+    /// <summary>
+    /// True for [[editor::readonly]] fields: editable leaf views disable their control, and the host
+    /// also withholds the commit action (see <see cref="PropertyViewModelFactory"/>).
+    /// </summary>
+    public bool IsReadOnly { get; }
 
     /// <summary>
     /// True for composite rows (object/array) that render full-width rather than name+value.

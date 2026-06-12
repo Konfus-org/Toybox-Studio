@@ -1,8 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
-             x:Class="Toybox.Studio.Widgets.PropertyGrid.EnumPropertyView"
-             x:DataType="local:EnumPropertyViewModel">
+             xmlns:services="using:Toybox.Studio.Services"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.HandlePickerPropertyView"
+             x:DataType="local:HandlePickerPropertyViewModel">
     <Grid Margin="0,1">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
@@ -12,6 +13,13 @@
         <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
         <GridSplitter Grid.Column="1" Classes="propSplitter"/>
         <ComboBox Grid.Column="2" HorizontalAlignment="Stretch" IsEnabled="{Binding !IsReadOnly}"
-                  ItemsSource="{Binding Choices}" SelectedItem="{Binding Value}"/>
+                  ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}"
+                  PlaceholderText="{Binding CurrentId, StringFormat='#{0}'}">
+            <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="services:AssetEntry">
+                    <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Path}"/>
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
     </Grid>
 </UserControl>

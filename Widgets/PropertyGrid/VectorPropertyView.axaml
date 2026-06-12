@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.VectorPropertyView"
+             x:DataType="local:VectorPropertyViewModel">
+    <Grid Margin="0,1">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
+        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
+        <ItemsControl Grid.Column="2" ItemsSource="{Binding Components}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:VectorComponentViewModel">
+                    <DockPanel Margin="0,0,4,0">
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" Opacity="0.6"
+                                   VerticalAlignment="Center" Margin="0,0,3,0"/>
+                        <NumericUpDown Classes="prop" MinWidth="60" ShowButtonSpinner="False"
+                                       FormatString="0.######" Value="{Binding Value}"/>
+                    </DockPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Grid>
+</UserControl>

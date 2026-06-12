@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.Ghost"
+             x:Class="Toybox.Studio.Widgets.Ghost.LoadingGhostView"
+             x:Name="Root">
+    <!-- Reusable loading state: a ghost that wiggles back and forth above an indeterminate bar and a
+         message (shown below it and as a tooltip). Fills whatever hosts it and centres its content. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.ghostGlyph">
+            <Style.Animations>
+                <Animation Duration="0:0:1.1" IterationCount="INFINITE"
+                           PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="RotateTransform.Angle" Value="-12"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="RotateTransform.Angle" Value="12"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel ToolTip.Tip="{Binding #Root.Message}">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+            <TextBlock Classes="ghostGlyph" Text="👻" FontSize="56" Opacity="0.5"
+                       HorizontalAlignment="Center" RenderTransformOrigin="50%,50%"/>
+            <ProgressBar IsIndeterminate="True" Width="140" HorizontalAlignment="Center"/>
+            <TextBlock Text="{Binding #Root.Message}" Opacity="0.6" HorizontalAlignment="Center"
+                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280"/>
+        </StackPanel>
+    </Panel>
+</UserControl>

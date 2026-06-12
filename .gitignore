@@ -46,6 +46,7 @@ Testing/
 
 # Build
 Build/
+build/
 bin/
 obj/
 compileData.scor

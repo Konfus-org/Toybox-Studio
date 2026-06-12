@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Toybox.Studio.Controls"
+             xmlns:local="using:Toybox.Studio.Widgets.Console"
+             xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             x:Class="Toybox.Studio.Widgets.Console.ConsoleView"
+             x:DataType="local:ConsoleViewModel"
+             x:Name="Root">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.consoleLine">
+            <Setter Property="FontFamily" Value="{DynamicResource ThemeMonoFontFamily}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="TextBlock.consoleLine.warning">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeWarningBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.consoleLine.error">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeErrorBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.consoleLine.accent">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeInfoBrush}"/>
+        </Style>
+
+        <!-- Compact, console-like rows. -->
+        <Style Selector="ListBox.consoleList">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.consoleList ListBoxItem">
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel Margin="4">
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6"
+                   IsVisible="{Binding #Root.ShowToolbar}">
+            <Button DockPanel.Dock="Right" Classes="Basic" Content="Clear"
+                    Margin="6,0,0,0" Command="{Binding ClearCommand}"/>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding MatchSummary}"
+                       Opacity="0.6" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <controls:SearchBox Watermark="Search…" MinWidth="280"
+                                HorizontalAlignment="Stretch"
+                                Text="{Binding SearchText, Mode=TwoWay}"/>
+        </DockPanel>
+
+        <Panel>
+            <ListBox Name="LineList" Classes="consoleList"
+                     ItemsSource="{Binding VisibleLines}"
+                     SelectionMode="Multiple"
+                     KeyDown="OnLineKeyDown">
+                <ListBox.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Copy" InputGesture="Ctrl+C" Click="OnCopyClicked"/>
+                        <MenuItem Header="Select All" InputGesture="Ctrl+A" Click="OnSelectAllClicked"/>
+                        <Separator/>
+                        <MenuItem Header="Clear" Command="{Binding ClearCommand}"/>
+                    </ContextMenu>
+                </ListBox.ContextMenu>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:ConsoleLine">
+                        <TextBlock Classes="consoleLine"
+                                   Classes.warning="{Binding IsWarning}"
+                                   Classes.error="{Binding IsError}"
+                                   Classes.accent="{Binding IsAccent}"
+                                   Text="{Binding Text}"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <ghost:GhostView Message="No output yet." IsVisible="{Binding IsEmpty}"/>
+        </Panel>
+    </DockPanel>
+</UserControl>

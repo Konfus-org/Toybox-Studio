@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.PropertyGridView"
+             x:Name="Root">
+
+    <!-- Shared styles cascade to the per-type widget views rendered below. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.propName">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="2,0,8,0"/>
+            <Setter Property="Opacity" Value="0.8"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="GridSplitter.propSplitter">
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="ResizeDirection" Value="Columns"/>
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <Style Selector="GridSplitter.propSplitter:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
+        </Style>
+        <Style Selector="NumericUpDown.prop">
+            <Setter Property="MinWidth" Value="60"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        </Style>
+        <!-- Every expander in the grid (category, nested object, array) fills the width and stretches
+             its content, so the grid and all its children always take up the available space. -->
+        <Style Selector="Expander">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <!-- Category groups render as flat, collapsible headers with an underline (not a boxed Expander). -->
+        <Style Selector="ToggleButton.categoryHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeSecondaryBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="2,5"/>
+            <Setter Property="Margin" Value="0,6,0,2"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <!-- Stay flat across hover/checked/pressed: no FluentTheme button fill, keep the underline. -->
+        <Style Selector="ToggleButton.categoryHeader /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.categoryHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.categoryHeader:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.categoryHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.categoryHeader TextBlock.catChevron">
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+        </Style>
+        <Style Selector="ToggleButton.categoryHeader:checked TextBlock.catChevron">
+            <Setter Property="RenderTransform">
+                <RotateTransform Angle="90"/>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- One template per property type; each hosts its own widget view. The single place a new
+         widget gets wired into the grid (alongside PropertyViewModelFactory). -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="local:IntPropertyViewModel">
+            <local:IntPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:FloatPropertyViewModel">
+            <local:FloatPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:BoolPropertyViewModel">
+            <local:BoolPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:StringPropertyViewModel">
+            <local:StringPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:EnumPropertyViewModel">
+            <local:EnumPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:VectorPropertyViewModel">
+            <local:VectorPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ColorPropertyViewModel">
+            <local:ColorPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ObjectPropertyViewModel">
+            <local:ObjectPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ArrayPropertyViewModel">
+            <local:ArrayPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:UnknownPropertyViewModel">
+            <local:UnknownPropertyView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Panel>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <!-- One shared-size scope so every row's name column aligns and resizes together. The right
+                 margin reserves a gutter so the vertical scrollbar gets its own section, never overlapping. -->
+            <StackPanel Grid.IsSharedSizeScope="True" Margin="0,0,16,0">
+                <ItemsControl ItemsSource="{Binding #Root.Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:PropertyCategoryGroup">
+                            <StackPanel>
+                                <StackPanel IsVisible="{Binding HasHeader}">
+                                    <ToggleButton x:Name="CatToggle" Classes="categoryHeader" IsChecked="True">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Classes="catChevron"
+                                                       Text="▸" Margin="0,0,6,0"/>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                        </DockPanel>
+                                    </ToggleButton>
+                                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,2,0,0"
+                                                  IsVisible="{Binding #CatToggle.IsChecked}"/>
+                                </StackPanel>
+                                <ItemsControl IsVisible="{Binding !HasHeader}" ItemsSource="{Binding Items}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <ghost:GhostView Message="Nothing to show here yet." IsVisible="{Binding #Root.IsEmpty}"/>
+    </Panel>
+</UserControl>

@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.ArrayPropertyView"
+             x:DataType="local:ArrayPropertyViewModel">
+    <Expander IsExpanded="True" Margin="0,1" Padding="8,2" HorizontalAlignment="Stretch"
+              ToolTip.Tip="{Binding Description}">
+        <Expander.Header>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Name}"/>
+                <TextBlock Text="{Binding Summary}" Opacity="0.55"/>
+            </StackPanel>
+        </Expander.Header>
+        <StackPanel Grid.IsSharedSizeScope="True" Margin="10,0,0,0">
+            <ItemsControl ItemsSource="{Binding Items}"/>
+        </StackPanel>
+    </Expander>
+</UserControl>

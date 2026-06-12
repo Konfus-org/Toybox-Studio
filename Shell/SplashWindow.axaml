@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Toybox.Studio.Shell"
+        xmlns:console="using:Toybox.Studio.Widgets.Console"
+        x:Class="Toybox.Studio.Shell.SplashWindow"
+        x:DataType="shell:SplashViewModel"
+        Width="440" Height="360" CanResize="False"
+        SystemDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        Background="#0E1525"
+        Topmost="True">
+
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" Margin="24">
+        <Image Source="/Assets/Icons/Toybox.png" Width="84" Height="84"/>
+        <TextBlock Text="Toybox Studio" FontSize="24" FontWeight="SemiBold"
+                   HorizontalAlignment="Center" Foreground="#E8ECF4"/>
+
+        <ProgressBar IsIndeterminate="True" Width="320"/>
+
+        <TextBlock Text="{Binding Status}" HorizontalAlignment="Center"
+                   Foreground="#AEB8CC" FontSize="13"/>
+
+        <!-- The real console (line list only — no search/clear toolbar), so splash lines share the
+             main window's console and TbxStudio.log. -->
+        <Border Width="320" Height="120" CornerRadius="6" Padding="2"
+                Background="#0A0F1C" BorderBrush="#1E2A40" BorderThickness="1">
+            <console:ConsoleView DataContext="{Binding Console.Console}" ShowToolbar="False"/>
+        </Border>
+    </StackPanel>
+</Window>

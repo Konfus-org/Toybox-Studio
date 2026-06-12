@@ -6,4 +6,16 @@
         <Setter Property="BorderThickness" Value="0,1,0,0"/>
         <Setter Property="BorderBrush" Value="#22808080"/>
     </Style>
+
+    <!-- Apply the theme font to every window. -->
+    <Style Selector="Window">
+        <Setter Property="FontFamily" Value="{DynamicResource ThemeFontFamily}"/>
+        <Setter Property="FontSize" Value="{DynamicResource ThemeFontSize}"/>
+    </Style>
+
+    <!-- Section header style. -->
+    <Style Selector="TextBlock.h4">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
 </Styles>

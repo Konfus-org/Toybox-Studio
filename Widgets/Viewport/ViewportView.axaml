@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.Viewport"
+             xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             x:Class="Toybox.Studio.Widgets.Viewport.ViewportView"
+             x:DataType="local:ViewportViewModel">
+
+    <Panel>
+        <Image Name="FrameImage" Source="{Binding Frame}" Stretch="Uniform"
+               IsVisible="{Binding HasFrames}"/>
+        
+        <ghost:GhostView Message="No world loaded." IsVisible="{Binding ShowEmptyGhost}"/>
+
+        <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
+        <Border Background="#88000000" IsVisible="{Binding IsBusy}">
+            <ghost:LoadingGhostView Message="Working…"/>
+        </Border>
+    </Panel>
+</UserControl>

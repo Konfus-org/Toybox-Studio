@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.ObjectPropertyView"
+             x:DataType="local:ObjectPropertyViewModel">
+    <Expander Header="{Binding Name}" ToolTip.Tip="{Binding Description}" IsExpanded="True"
+              Margin="0,1" Padding="8,2" HorizontalAlignment="Stretch">
+        <!-- Nested objects get their own shared-size scope so their name column sizes independently. -->
+        <StackPanel Grid.IsSharedSizeScope="True" HorizontalAlignment="Stretch" Margin="10,0,0,0">
+            <ItemsControl ItemsSource="{Binding Children}"/>
+        </StackPanel>
+    </Expander>
+</UserControl>

@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Toybox.Studio.Shell"
+             xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Shell.SettingsView"
+             x:DataType="shell:SettingsViewModel">
+
+    <TabControl Margin="8">
+        <TabItem Header="Editor">
+            <Grid RowDefinitions="Auto,*,Auto,*" Margin="8">
+                <TextBlock Grid.Row="0" Classes="h4" Text="Editor"/>
+                <pg:PropertyGridView Grid.Row="1" Items="{Binding EditorSettingsProperties}"/>
+                <TextBlock Grid.Row="2" Classes="h4" Text="Theme" Margin="0,10,0,4"/>
+                <pg:PropertyGridView Grid.Row="3" Items="{Binding ThemeProperties}"/>
+            </Grid>
+        </TabItem>
+
+        <TabItem Header="App">
+            <Grid RowDefinitions="Auto,*" Margin="8">
+                <TextBlock Grid.Row="0" Text="Open a project to edit its app settings."
+                           IsVisible="{Binding !HasProject}" Opacity="0.6"/>
+                <pg:PropertyGridView Grid.Row="1" Items="{Binding AppSettingsProperties}"
+                                     IsVisible="{Binding HasProject}"/>
+            </Grid>
+        </TabItem>
+    </TabControl>
+</UserControl>

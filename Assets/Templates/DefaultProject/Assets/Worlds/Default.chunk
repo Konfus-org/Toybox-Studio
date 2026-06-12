@@ -1,0 +1,54 @@
+{
+    "coord": [0, 0, 0],
+    "entities": [
+        {
+            "id": 771000004,
+            "name": "Ground",
+            "tag": "ground",
+            "layer": "",
+            "parent": 0,
+            "components": {
+                "transform": {
+                    "position": [0, 0, 0],
+                    "rotation": [0, 0, 0, 1],
+                    "scale": [20, 1, 20]
+                },
+                "static_mesh": { "handle": 519 },
+                "material_instance": { "material": 539243910 },
+                "cube_collider": { "half_extents": [10, 0.5, 10] }
+            }
+        },
+        {
+            "id": 771000005,
+            "name": "FallingCube",
+            "tag": "physics_demo",
+            "layer": "",
+            "parent": 0,
+            "components": {
+                "transform": {
+                    "position": [0, 4, 0],
+                    "rotation": [0, 0, 0, 1],
+                    "scale": [1, 1, 1]
+                },
+                "static_mesh": { "handle": 514 },
+                "material_instance": { "material": 2 },
+                "cube_collider": { "half_extents": [0.5, 0.5, 0.5] },
+                "rigidbody": {
+                    "mass": 1.0,
+                    "is_kinematic": false,
+                    "is_gravity_enabled": true,
+                    "transform_sync_mode": 2,
+                    "linear_velocity": [0, 0, 0],
+                    "angular_velocity": [0, 0, 0],
+                    "friction": 0.5,
+                    "restitution": 0.0,
+                    "linear_damping": 0.05,
+                    "angular_damping": 0.05,
+                    "is_sleep_enabled": true,
+                    "sleep_velocity_threshold": 0.03,
+                    "sleep_time_seconds": 0.5
+                }
+            }
+        }
+    ]
+}

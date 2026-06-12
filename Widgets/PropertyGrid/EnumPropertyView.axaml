@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.EnumPropertyView"
+             x:DataType="local:EnumPropertyViewModel">
+    <Grid Margin="0,1">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
+        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
+        <ComboBox Grid.Column="2" HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding Choices}" SelectedItem="{Binding Value}"/>
+    </Grid>
+</UserControl>

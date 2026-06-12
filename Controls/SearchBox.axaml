@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             xmlns:controls="using:Toybox.Studio.Controls"
+             x:Class="Toybox.Studio.Controls.SearchBox">
+
+    <Border Background="{DynamicResource ThemeSurfaceBrush}"
+            BorderBrush="#33808080" BorderThickness="1"
+            CornerRadius="4" Padding="6,0" MinHeight="26">
+        <DockPanel>
+            <PathIcon DockPanel.Dock="Left"
+                      Data="{StaticResource SearchIconGeometry}"
+                      Width="13" Height="13" Opacity="0.5"
+                      Margin="0,0,6,0" VerticalAlignment="Center"/>
+
+            <Button DockPanel.Dock="Right" Classes="Basic"
+                    Padding="2" Margin="4,0,0,0"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="Clear search"
+                    Click="OnClearClicked"
+                    IsVisible="{Binding Text, RelativeSource={RelativeSource AncestorType=controls:SearchBox}, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}">
+                <PathIcon Data="{StaticResource CloseIconGeometry}" Width="10" Height="10" Opacity="0.6"/>
+            </Button>
+
+            <TextBox Name="PART_TextBox"
+                     Background="Transparent" BorderThickness="0"
+                     Padding="0" MinHeight="0" VerticalContentAlignment="Center"
+                     Watermark="{Binding Watermark, RelativeSource={RelativeSource AncestorType=controls:SearchBox}}"
+                     Text="{Binding Text, RelativeSource={RelativeSource AncestorType=controls:SearchBox}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+        </DockPanel>
+    </Border>
+</UserControl>

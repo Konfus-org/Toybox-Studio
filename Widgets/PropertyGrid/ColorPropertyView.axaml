@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.ColorPropertyView"
+             x:DataType="local:ColorPropertyViewModel">
+    <Grid Margin="0,1">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
+        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+            <Border Width="34" Height="18" CornerRadius="3" Background="{Binding Swatch}"
+                    BorderBrush="#40000000" BorderThickness="1"/>
+            <TextBlock Text="{Binding Hex}" VerticalAlignment="Center"
+                       FontFamily="{DynamicResource ThemeMonoFontFamily}" Opacity="0.8"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

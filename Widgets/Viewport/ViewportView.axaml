@@ -7,12 +7,13 @@
 
     <Panel>
         <Image Name="FrameImage" Source="{Binding Frame}" Stretch="Uniform"
-               IsVisible="{Binding HasFrames}"/>
+               IsVisible="{Binding HasFrames}"
+               local:FrameInvalidation.Tick="{Binding FrameTick}"/>
         
         <ghost:GhostView Message="No world loaded." IsVisible="{Binding ShowEmptyGhost}"/>
 
         <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
-        <Border Background="#88000000" IsVisible="{Binding IsBusy}">
+        <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding IsBusy}">
             <ghost:LoadingGhostView Message="Working…"/>
         </Border>
     </Panel>

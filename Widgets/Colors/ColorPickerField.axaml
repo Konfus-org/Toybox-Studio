@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Toybox.Studio.Widgets.Colors"
+             x:Class="Toybox.Studio.Widgets.Colors.ColorPickerField">
+
+    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <ColorPicker Name="PART_Picker"
+                     Color="{Binding Color, RelativeSource={RelativeSource AncestorType=controls:ColorPickerField}, Mode=TwoWay}"/>
+        <TextBlock VerticalAlignment="Center" Opacity="0.8"
+                   FontFamily="{DynamicResource ThemeMonoFontFamily}"
+                   Text="{Binding Color, RelativeSource={RelativeSource AncestorType=controls:ColorPickerField}, Converter={x:Static controls:ColorToHexConverter.Instance}}"/>
+    </StackPanel>
+</UserControl>

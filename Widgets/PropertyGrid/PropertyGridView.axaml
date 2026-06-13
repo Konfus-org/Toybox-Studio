@@ -5,50 +5,181 @@
              x:Class="Toybox.Studio.Widgets.PropertyGrid.PropertyGridView"
              x:Name="Root">
 
-    <!-- Shared styles cascade to the per-type widget views rendered below. -->
+    <UserControl.Resources>
+        <!-- Shared chrome for every leaf row: resizable label gutter | state column | value well. -->
+        <ControlTheme x:Key="{x:Type local:PropertyRow}" TargetType="local:PropertyRow">
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,0,0,0.5"
+                            Background="{TemplateBinding Depth,
+                                         Converter={x:Static local:DepthToBrushConverter.Instance}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="PgLabel" MinWidth="64"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Label gutter -->
+                            <Border Grid.Column="0" Background="{DynamicResource ThemeWellBrush}">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Depth,
+                                                Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                                    <!-- Collapse chevron, shown only on parent (object/array) rows; the slot
+                                         is always reserved so every label aligns. -->
+                                    <Border Width="15" VerticalAlignment="Center" Margin="2,0,0,0">
+                                        <ToggleButton x:Name="PART_Chevron" Classes="rowChevron"
+                                                      Width="15" Height="15" Padding="0"
+                                                      IsVisible="{TemplateBinding IsParent}"
+                                                      IsChecked="{Binding IsExpanded,
+                                                          RelativeSource={RelativeSource TemplatedParent},
+                                                          Mode=TwoWay}">
+                                            <Path x:Name="PART_ChevronGlyph" Width="8" Height="8"
+                                                  Stretch="Uniform" Fill="{DynamicResource ThemeTextBrush}"
+                                                  Opacity="0.7" Data="M 0,0 L 4,4 L 0,8 Z"
+                                                  RenderTransformOrigin="50%,50%"/>
+                                        </ToggleButton>
+                                    </Border>
+                                    <Border Width="9" Height="8" Margin="2,0,7,0" VerticalAlignment="Center"
+                                            BorderBrush="{DynamicResource ThemeBorderBrush}"
+                                            BorderThickness="1.5,0,0,1.5"
+                                            IsVisible="{TemplateBinding Depth,
+                                                Converter={x:Static local:PositiveIntConverter.Instance}}"/>
+                                    <local:IconView Width="15" Height="15" Margin="6,0,6,0"
+                                                    VerticalAlignment="Center"
+                                                    IconName="{TemplateBinding IconName}"
+                                                    IconColor="{TemplateBinding IconColor}"/>
+                                    <TextBlock x:Name="PART_Label" Text="{TemplateBinding HeaderText}"
+                                               Margin="6,0,8,0" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource ThemeTextBrush}" Opacity="0.85"
+                                               ToolTip.Tip="{TemplateBinding Description}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Drag handle: resizes the shared label column for every row at once. -->
+                            <GridSplitter Grid.Column="1" Width="3" ResizeDirection="Columns"
+                                          Background="Transparent"/>
+
+                            <!-- Value side: a fixed state slot (read-only lock / "set" dot) then the editor. -->
+                            <Border Grid.Column="2" Background="{DynamicResource ThemeWellBrush}">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Left" Width="26"
+                                            BorderBrush="{DynamicResource ThemeBorderBrush}"
+                                            BorderThickness="0.5,0,0.5,0">
+                                        <Panel>
+                                            <Ellipse Width="7" Height="7"
+                                                     Fill="{DynamicResource SystemAccentColor}"
+                                                     IsVisible="{ReflectionBinding ShowSetDot}"/>
+                                            <Panel IsVisible="{TemplateBinding IsReadOnly}">
+                                                <local:IconView Width="13" Height="13" IconName="Lock"
+                                                                IconColor="YELLOW"/>
+                                            </Panel>
+                                            <!-- Resettable rows (top-level component properties) swap the
+                                                 "set" dot for a click-to-reset-to-default button. -->
+                                            <Button x:Name="PART_Reset" Classes="rowReset"
+                                                    IsVisible="{ReflectionBinding CanReset}"
+                                                    Command="{ReflectionBinding ResetCommand}"
+                                                    ToolTip.Tip="Reset to default"
+                                                    Width="18" Height="18" Padding="0"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <local:IconView Width="12" Height="12" IconName="RotateCcw"/>
+                                            </Button>
+                                        </Panel>
+                                    </Border>
+                                    <Border Padding="9,2">
+                                        <ContentPresenter Content="{TemplateBinding Content}"
+                                                          VerticalAlignment="Center"
+                                                          HorizontalAlignment="Stretch"/>
+                                    </Border>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+
+            <!-- Read-only rows gray their label. -->
+            <Style Selector="^[IsReadOnly=true] /template/ TextBlock#PART_Label">
+                <Setter Property="Opacity" Value="0.5"/>
+            </Style>
+
+            <!-- Strip the chevron ToggleButton's chrome (border/sizing). The ContentPresenter background
+                 in each interaction state can't be reached from here — a nested style inside a ControlTheme
+                 may cross only one template boundary — so that lives in UserControl.Styles below, keyed off
+                 the rowChevron class (same pattern as categoryHeader). -->
+            <Style Selector="^ /template/ ToggleButton#PART_Chevron">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+            </Style>
+            <!-- Glyph points right when collapsed, down when expanded. -->
+            <Style Selector="^ /template/ ToggleButton#PART_Chevron:checked Path#PART_ChevronGlyph">
+                <Setter Property="RenderTransform">
+                    <RotateTransform Angle="90"/>
+                </Setter>
+            </Style>
+        </ControlTheme>
+    </UserControl.Resources>
+
+    <!-- Compact, unified value-editor styling so every field reads as the same dark box. -->
     <UserControl.Styles>
-        <Style Selector="TextBlock.propName">
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="2,0,8,0"/>
-            <Setter Property="Opacity" Value="0.8"/>
-            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Style Selector="NumericUpDown.field">
+            <Setter Property="MinWidth" Value="56"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
         </Style>
-        <Style Selector="GridSplitter.propSplitter">
-            <Setter Property="Width" Value="6"/>
+        <Style Selector="TextBox.field">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ComboBox.field">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+        <Style Selector="GridSplitter">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="ResizeDirection" Value="Columns"/>
-            <Setter Property="Cursor" Value="SizeWestEast"/>
         </Style>
-        <Style Selector="GridSplitter.propSplitter:pointerover">
+        <!-- Row reset button: chrome-less, dim until hovered. -->
+        <Style Selector="Button.rowReset">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Opacity" Value="0.55"/>
+        </Style>
+        <Style Selector="Button.rowReset:pointerover">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="Button.rowReset /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="GridSplitter:pointerover">
             <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
         </Style>
-        <Style Selector="NumericUpDown.prop">
-            <Setter Property="MinWidth" Value="60"/>
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-        </Style>
-        <!-- Every expander in the grid (category, nested object, array) fills the width and stretches
-             its content, so the grid and all its children always take up the available space. -->
-        <Style Selector="Expander">
-            <Setter Property="HorizontalAlignment" Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-        </Style>
-        <!-- Category groups render as flat, collapsible headers with an underline (not a boxed Expander). -->
+        <!-- Collapsible category band: lighter than the component header, sits above its rows. -->
         <Style Selector="ToggleButton.categoryHeader">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemeSecondaryBrush}"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeBandBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0.5,0,0.5"/>
             <Setter Property="CornerRadius" Value="0"/>
-            <Setter Property="Padding" Value="2,5"/>
-            <Setter Property="Margin" Value="0,6,0,2"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Margin" Value="0"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
-        <!-- Stay flat across hover/checked/pressed: no FluentTheme button fill, keep the underline. -->
         <Style Selector="ToggleButton.categoryHeader /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
         <Style Selector="ToggleButton.categoryHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeBandBrush}"/>
         </Style>
         <Style Selector="ToggleButton.categoryHeader:checked /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent"/>
@@ -56,11 +187,26 @@
         <Style Selector="ToggleButton.categoryHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
-        <Style Selector="ToggleButton.categoryHeader TextBlock.catChevron">
-            <Setter Property="Opacity" Value="0.7"/>
+        <!-- Row collapse chevron: keep its ContentPresenter transparent in every state so FluentTheme's
+             accent fill never shows. Single template hop from the class selector (a nested style inside the
+             PropertyRow ControlTheme can't cross two template boundaries to reach this). -->
+        <Style Selector="ToggleButton.rowChevron /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.rowChevron:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.rowChevron:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.rowChevron:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.categoryHeader Path.catChevron">
+            <Setter Property="Opacity" Value="0.6"/>
             <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
         </Style>
-        <Style Selector="ToggleButton.categoryHeader:checked TextBlock.catChevron">
+        <Style Selector="ToggleButton.categoryHeader:checked Path.catChevron">
             <Setter Property="RenderTransform">
                 <RotateTransform Angle="90"/>
             </Setter>
@@ -88,6 +234,9 @@
         <DataTemplate DataType="local:VectorPropertyViewModel">
             <local:VectorPropertyView/>
         </DataTemplate>
+        <DataTemplate DataType="local:RotationPropertyViewModel">
+            <local:RotationPropertyView/>
+        </DataTemplate>
         <DataTemplate DataType="local:ColorPropertyViewModel">
             <local:ColorPropertyView/>
         </DataTemplate>
@@ -113,9 +262,8 @@
 
     <Panel>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-            <!-- One shared-size scope so every row's name column aligns and resizes together. The right
-                 margin reserves a gutter so the vertical scrollbar gets its own section, never overlapping. -->
-            <StackPanel Grid.IsSharedSizeScope="True" Margin="0,0,16,0">
+            <!-- One shared-size scope so every row's label column resizes together via the splitter. -->
+            <StackPanel Grid.IsSharedSizeScope="True">
                 <ItemsControl ItemsSource="{Binding #Root.Groups}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="local:PropertyCategoryGroup">
@@ -123,12 +271,15 @@
                                 <StackPanel IsVisible="{Binding HasHeader}">
                                     <ToggleButton x:Name="CatToggle" Classes="categoryHeader" IsChecked="True">
                                         <DockPanel>
-                                            <TextBlock DockPanel.Dock="Left" Classes="catChevron"
-                                                       Text="▸" Margin="0,0,6,0"/>
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <Path DockPanel.Dock="Left" Classes="catChevron" Width="8" Height="8"
+                                                  Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                  Fill="{DynamicResource ThemeTextBrush}"
+                                                  Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                            <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="11"
+                                                       Opacity="0.7"/>
                                         </DockPanel>
                                     </ToggleButton>
-                                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,2,0,0"
+                                    <ItemsControl ItemsSource="{Binding Items}"
                                                   IsVisible="{Binding #CatToggle.IsChecked}"/>
                                 </StackPanel>
                                 <ItemsControl IsVisible="{Binding !HasHeader}" ItemsSource="{Binding Items}"/>

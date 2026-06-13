@@ -1,14 +1,14 @@
-using Toybox.Studio.Services;
-
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>
-/// Maps a parsed <see cref="PropertyNode"/> to the view-model for its type — the single place new
-/// property widgets get wired in.
+/// Maps a parsed <see cref="PropertyNode"/> to the view-model for its type. Type-driven widgets are wired
+/// here; custom <c>[[editor::view]]</c> widgets resolve first through <see cref="PropertyViewRegistry"/>.
+/// Adding a widget of either kind also means registering its paired View as a DataTemplate in
+/// <c>PropertyGridView.axaml</c>.
 /// </summary>
 public static class PropertyViewModelFactory
 {
-    public static PropertyViewModelBase Create(PropertyNode node, Action? commit = null)
+    public static PropertyViewModelBase Create(PropertyNode node, Action? commit = null, int depth = 0)
     {
         // A read-only field withholds the commit action entirely, so any in-place token edit is never
         // persisted; editable leaf views additionally disable their control via IsReadOnly.
@@ -16,11 +16,11 @@ public static class PropertyViewModelFactory
 
         // Nested structs render as a recursive sub-grid regardless of their concrete type token.
         if (node.HasChildren && node.Type != "array")
-            return new ObjectPropertyViewModel(node, effectiveCommit);
+            return Tag(new ObjectPropertyViewModel(node, effectiveCommit, depth), depth);
 
         // A custom view ([[editor::view]] / [View]) wins over the type-driven widget when registered.
         if (PropertyViewRegistry.TryCreate(node, effectiveCommit, out var custom))
-            return custom;
+            return Tag(custom, depth);
 
         PropertyViewModelBase viewModel = node.Type switch
         {
@@ -33,13 +33,21 @@ public static class PropertyViewModelFactory
             "float" or "double" => new FloatPropertyViewModel(node),
             "bool" => new BoolPropertyViewModel(node),
             "string" => new StringPropertyViewModel(node),
-            "vec2" or "vec3" or "vec4" or "quat" => new VectorPropertyViewModel(node),
+            // A quaternion is shown as three Euler-degree fields rather than four raw components.
+            "quat" => new RotationPropertyViewModel(node),
+            "vec2" or "vec3" or "vec4" => new VectorPropertyViewModel(node),
             "color" => new ColorPropertyViewModel(node),
-            "array" => new ArrayPropertyViewModel(node, effectiveCommit),
+            "array" => new ArrayPropertyViewModel(node, effectiveCommit, depth),
             _ => new UnknownPropertyViewModel(node),
         };
 
         viewModel.CommitChanges = effectiveCommit;
+        return Tag(viewModel, depth);
+    }
+
+    private static PropertyViewModelBase Tag(PropertyViewModelBase viewModel, int depth)
+    {
+        viewModel.Depth = depth;
         return viewModel;
     }
 }

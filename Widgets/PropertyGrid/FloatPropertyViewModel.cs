@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Services;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -9,11 +8,11 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed partial class FloatPropertyViewModel : PropertyViewModelBase
 {
-    private readonly JToken? _token;
+    private readonly JsonValueSlot _slot;
 
     public FloatPropertyViewModel(PropertyNode node) : base(node)
     {
-        _token = node.Value;
+        _slot = new JsonValueSlot(node.Value);
         _value = PropertyConvert.TryDecimal(node.Value);
     }
 
@@ -22,10 +21,10 @@ public sealed partial class FloatPropertyViewModel : PropertyViewModelBase
 
     partial void OnValueChanged(decimal? value)
     {
-        if (value is null || _token is null)
+        if (value is null)
             return;
 
-        _token.Replace(new JValue((double)value.Value));
-        RaiseCommit();
+        if (_slot.Set(new JValue((double)value.Value)))
+            RaiseCommit();
     }
 }

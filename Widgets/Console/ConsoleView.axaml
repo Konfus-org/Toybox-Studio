@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="using:Toybox.Studio.Controls"
+             xmlns:controls="using:Toybox.Studio.Widgets.Searching"
              xmlns:local="using:Toybox.Studio.Widgets.Console"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              x:Class="Toybox.Studio.Widgets.Console.ConsoleView"
@@ -23,13 +23,13 @@
             <Setter Property="Foreground" Value="{DynamicResource ThemeInfoBrush}"/>
         </Style>
 
-        <!-- Compact, console-like rows. -->
-        <Style Selector="ListBox.consoleList">
+        <!-- Compact, console-like rows. (:is matches the ConsoleListBox subclass too.) -->
+        <Style Selector=":is(ListBox).consoleList">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="0"/>
         </Style>
-        <Style Selector="ListBox.consoleList ListBoxItem">
+        <Style Selector=":is(ListBox).consoleList ListBoxItem">
             <Setter Property="Padding" Value="4,0"/>
             <Setter Property="MinHeight" Value="0"/>
         </Style>
@@ -48,14 +48,15 @@
         </DockPanel>
 
         <Panel>
-            <ListBox Name="LineList" Classes="consoleList"
-                     ItemsSource="{Binding VisibleLines}"
-                     SelectionMode="Multiple"
-                     KeyDown="OnLineKeyDown">
+            <local:ConsoleListBox Name="LineList" Classes="consoleList"
+                                  ItemsSource="{Binding VisibleLines}"
+                                  SelectionMode="Multiple">
                 <ListBox.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="Copy" InputGesture="Ctrl+C" Click="OnCopyClicked"/>
-                        <MenuItem Header="Select All" InputGesture="Ctrl+A" Click="OnSelectAllClicked"/>
+                        <MenuItem Header="Copy" InputGesture="Ctrl+C"
+                                  Command="{Binding #LineList.CopySelectionCommand}"/>
+                        <MenuItem Header="Select All" InputGesture="Ctrl+A"
+                                  Command="{Binding #LineList.SelectAllCommand}"/>
                         <Separator/>
                         <MenuItem Header="Clear" Command="{Binding ClearCommand}"/>
                     </ContextMenu>
@@ -69,7 +70,7 @@
                                    Text="{Binding Text}"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
-            </ListBox>
+            </local:ConsoleListBox>
 
             <ghost:GhostView Message="No output yet." IsVisible="{Binding IsEmpty}"/>
         </Panel>

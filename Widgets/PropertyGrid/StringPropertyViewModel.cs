@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Services;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -9,11 +8,11 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed partial class StringPropertyViewModel : PropertyViewModelBase
 {
-    private readonly JToken? _token;
+    private readonly JsonValueSlot _slot;
 
     public StringPropertyViewModel(PropertyNode node) : base(node)
     {
-        _token = node.Value;
+        _slot = new JsonValueSlot(node.Value);
         _value = node.Value?.Value<string>() ?? "";
     }
 
@@ -22,10 +21,7 @@ public sealed partial class StringPropertyViewModel : PropertyViewModelBase
 
     partial void OnValueChanged(string value)
     {
-        if (_token is null)
-            return;
-
-        _token.Replace(new JValue(value));
-        RaiseCommit();
+        if (_slot.Set(new JValue(value)))
+            RaiseCommit();
     }
 }

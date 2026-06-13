@@ -1,62 +1,143 @@
 {
     "shader": {
-        "vertex": 304,
-        "fragment": 322,
-        "tesselation": 0,
-        "geometry": 325,
-        "computes": []
-    },
-    "parameters": [
-        {
-            "name": "base_color",
-            "data": {
-                "type": "color",
-                "value": {
-                    "r": 0.18,
-                    "g": 0.42,
-                    "b": 0.16,
-                    "a": 1
-                }
-            }
-        },
-        {
-            "name": "blade_scale",
-            "data": {
-                "type": "float",
-                "value": 2.5
-            }
-        },
-        {
-            "name": "fuzz",
-            "data": {
-                "type": "float",
-                "value": 0.65
-            }
-        },
-        {
-            "name": "roughness",
-            "data": {
-                "type": "float",
-                "value": 0.9
-            }
-        },
-        {
-            "name": "height",
-            "data": {
-                "type": "float",
-                "value": 0.55
+        "type": "shader_program",
+        "value": {
+            "vertex": {
+                "type": "handle",
+                "value": 304
+            },
+            "fragment": {
+                "type": "handle",
+                "value": 322
+            },
+            "tesselation": {
+                "type": "handle",
+                "value": 0
+            },
+            "geometry": {
+                "type": "handle",
+                "value": 325
+            },
+            "computes": {
+                "type": "array",
+                "value": []
             }
         }
-    ],
-    "textures": [],
+    },
+    "parameters": {
+        "type": "material_parameter_bindings",
+        "value": [
+            {
+                "name": {
+                    "type": "string",
+                    "value": "base_color"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "color",
+                        "value": {
+                            "r": 0.18,
+                            "g": 0.42,
+                            "b": 0.16,
+                            "a": 1
+                        }
+                    }
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "blade_scale"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "float",
+                        "value": 2.5
+                    }
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "fuzz"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "float",
+                        "value": 0.65
+                    }
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "roughness"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "float",
+                        "value": 0.9
+                    }
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "height"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "float",
+                        "value": 0.55
+                    }
+                }
+            }
+        ]
+    },
+    "textures": {
+        "type": "material_texture_bindings",
+        "value": []
+    },
     "config": {
-        "is_depth_test_enabled": true,
-        "is_depth_write_enabled": true,
-        "is_depth_prepass_enabled": false,
-        "is_two_sided": true,
-        "is_cullable": false,
-        "depth_function": "less",
-        "blend_mode": "opaque",
-        "shadow_mode": "on"
+        "type": "material_config",
+        "value": {
+            "is_depth_test_enabled": {
+                "type": "bool",
+                "value": true
+            },
+            "is_depth_write_enabled": {
+                "type": "bool",
+                "value": true
+            },
+            "is_depth_prepass_enabled": {
+                "type": "bool",
+                "value": false
+            },
+            "is_two_sided": {
+                "type": "bool",
+                "value": true
+            },
+            "is_cullable": {
+                "type": "bool",
+                "value": false
+            },
+            "depth_function": {
+                "type": "material_depth_function",
+                "value": "less"
+            },
+            "blend_mode": {
+                "type": "material_blend_mode",
+                "value": "opaque"
+            },
+            "shadow_mode": {
+                "type": "shadow_mode",
+                "value": "on"
+            }
+        }
     }
 }

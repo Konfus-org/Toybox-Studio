@@ -1,49 +1,43 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Toybox.Studio.Services;
-using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;
-using Toybox.Studio.Widgets.Viewport;
-using Toybox.Studio.Widgets.EntityInspector;
 using Toybox.Studio.Widgets.GameToolbar;
-using Toybox.Studio.Widgets.WorldTree;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.EngineApi;
+using Toybox.Studio.Logging;
+using Toybox.Studio.Project;
+using Toybox.Studio.Workspace;
 
 namespace Toybox.Studio.Shell;
 
 /// <summary>
-/// Composes the independent widgets into the application shell and hosts menu actions.
+/// Composes the top-strip widgets into the application shell, hosts the menu actions, and owns the
+/// <see cref="Workspace"/> — which manages every dockable panel and the dock layout. Individual panels are
+/// no longer referenced here by name; they flow through the workspace's catalog.
 /// </summary>
 public sealed partial class ShellViewModel : ObservableObject
 {
-    private readonly EngineSession _session;
+    private readonly Session _session;
     private readonly Logger _log;
     private readonly ProjectManager _projects;
     private readonly FilePicker _filePicker;
 
     public ShellViewModel(
         StatusViewModel status,
-        LogConsoleViewModel console,
-        WorldTreeViewModel worldTree,
-        EntityInspectorViewModel inspector,
-        ViewportViewModel viewport,
         GameToolbarViewModel gameToolbar,
-        EngineSession session,
+        WorkspaceViewModel workspace,
+        Session session,
         Logger log,
         ProjectManager projects,
-        FilePicker filePicker,
-        SettingsViewModel settings)
+        FilePicker filePicker)
     {
         Status = status;
-        Console = console;
-        WorldTree = worldTree;
-        Inspector = inspector;
-        Viewport = viewport;
         GameToolbar = gameToolbar;
+        Workspace = workspace;
         _session = session;
         _log = log;
         _projects = projects;
         _filePicker = filePicker;
-        Settings = settings;
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshTitle);
         RefreshTitle();
@@ -51,20 +45,10 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public StatusViewModel Status { get; }
 
-    public LogConsoleViewModel Console { get; }
-
-    public WorldTreeViewModel WorldTree { get; }
-
-    public EntityInspectorViewModel Inspector { get; }
-
-    public ViewportViewModel Viewport { get; }
-
     public GameToolbarViewModel GameToolbar { get; }
 
-    /// <summary>
-    /// Settings VM, shown in a floating dockable tool opened from the toolbar.
-    /// </summary>
-    public SettingsViewModel Settings { get; }
+    /// <summary>The window manager: registered dockables, live dock state, and open/reset/save actions.</summary>
+    public WorkspaceViewModel Workspace { get; }
 
     [ObservableProperty]
     public partial string Title { get; private set; } = "Toybox Studio";
@@ -89,7 +73,7 @@ public sealed partial class ShellViewModel : ObservableObject
     [RelayCommand]
     private Task AttachAsync()
     {
-        return _session.AttachAsync(EngineInstanceDetector.DefaultEnginePort);
+        return _session.AttachAsync(InstanceDetector.DefaultEnginePort);
     }
 
     [RelayCommand]

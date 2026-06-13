@@ -5,25 +5,26 @@
         x:Class="Toybox.Studio.Shell.SplashWindow"
         x:DataType="shell:SplashViewModel"
         Width="440" Height="360" CanResize="False"
-        SystemDecorations="None"
+        WindowDecorations="None"
         WindowStartupLocation="CenterScreen"
-        Background="#0E1525"
+        Background="{DynamicResource ThemeBackgroundBrush}"
         Topmost="True">
 
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" Margin="24">
         <Image Source="/Assets/Icons/Toybox.png" Width="84" Height="84"/>
         <TextBlock Text="Toybox Studio" FontSize="24" FontWeight="SemiBold"
-                   HorizontalAlignment="Center" Foreground="#E8ECF4"/>
+                   HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextBrush}"/>
 
         <ProgressBar IsIndeterminate="True" Width="320"/>
 
         <TextBlock Text="{Binding Status}" HorizontalAlignment="Center"
-                   Foreground="#AEB8CC" FontSize="13"/>
+                   Foreground="{DynamicResource ThemeMutedTextBrush}" FontSize="13"/>
 
         <!-- The real console (line list only — no search/clear toolbar), so splash lines share the
              main window's console and TbxStudio.log. -->
         <Border Width="320" Height="120" CornerRadius="6" Padding="2"
-                Background="#0A0F1C" BorderBrush="#1E2A40" BorderThickness="1">
+                Background="{DynamicResource ThemeSurfaceBrush}"
+                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1">
             <console:ConsoleView DataContext="{Binding Console.Console}" ShowToolbar="False"/>
         </Border>
     </StackPanel>

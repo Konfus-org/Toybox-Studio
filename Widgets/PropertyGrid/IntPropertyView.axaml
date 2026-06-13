@@ -3,15 +3,9 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.IntPropertyView"
              x:DataType="local:IntPropertyViewModel">
-    <Grid Margin="0,1">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
-        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <NumericUpDown Grid.Column="2" Classes="prop" FormatString="0" Increment="1" Value="{Binding Value}"
-                       IsEnabled="{Binding !IsReadOnly}"/>
-    </Grid>
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <NumericUpDown Classes="field" ShowButtonSpinner="False" FormatString="0" Increment="1"
+                       Value="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"/>
+    </local:PropertyRow>
 </UserControl>

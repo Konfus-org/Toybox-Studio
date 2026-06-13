@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using Toybox.Studio.Services;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -8,14 +7,24 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed class ObjectPropertyViewModel : PropertyViewModelBase
 {
-    public ObjectPropertyViewModel(PropertyNode node, Action? commit) : base(node)
+    public ObjectPropertyViewModel(PropertyNode node, Action? commit, int depth = 0) : base(node)
     {
         Children = [];
         foreach (var child in node.Children)
-            Children.Add(PropertyViewModelFactory.Create(child, commit));
+            Children.Add(PropertyViewModelFactory.Create(child, commit, depth + 1));
     }
 
     public override bool IsComposite => true;
+
+    public override bool HasChildren => true;
+
+    private bool _isExpanded = true;
+
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set => SetProperty(ref _isExpanded, value);
+    }
 
     public ObservableCollection<PropertyViewModelBase> Children { get; }
 }

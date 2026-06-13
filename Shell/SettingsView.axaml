@@ -7,21 +7,20 @@
 
     <TabControl Margin="8">
         <TabItem Header="Editor">
-            <Grid RowDefinitions="Auto,*,Auto" Margin="8">
-                <TextBlock Grid.Row="0" Classes="h4" Text="Editor"/>
-                <pg:PropertyGridView Grid.Row="1" Items="{Binding EditorSettingsProperties}"/>
-                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+            <Grid RowDefinitions="*,Auto" Margin="8">
+                <pg:PropertyGridView Grid.Row="0" Items="{Binding EditorSettingsProperties}"/>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
                     <Button Content="Create Theme…" Command="{Binding CreateThemeCommand}"/>
                     <Button Content="Open Themes Folder" Command="{Binding OpenThemesFolderCommand}"/>
                 </StackPanel>
             </Grid>
         </TabItem>
 
-        <TabItem Header="App">
+        <TabItem Header="Project">
             <Grid RowDefinitions="Auto,*" Margin="8">
-                <TextBlock Grid.Row="0" Text="Open a project to edit its app settings."
+                <TextBlock Grid.Row="0" Text="Open a project to edit its settings."
                            IsVisible="{Binding !HasProject}" Opacity="0.6"/>
-                <pg:PropertyGridView Grid.Row="1" Items="{Binding AppSettingsProperties}"
+                <pg:PropertyGridView Grid.Row="1" Items="{Binding ProjectSettingsProperties}"
                                      IsVisible="{Binding HasProject}"/>
             </Grid>
         </TabItem>

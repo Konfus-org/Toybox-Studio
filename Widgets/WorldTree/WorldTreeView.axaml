@@ -1,10 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:services="using:Toybox.Studio.Services"
-             xmlns:local="using:Toybox.Studio.Widgets.WorldTree"
+             xmlns:ecs="using:Toybox.Studio.Widgets.Ecs"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              x:Class="Toybox.Studio.Widgets.WorldTree.WorldTreeView"
-             x:DataType="local:WorldTreeViewModel">
+             x:DataType="ecs:WorldViewModel">
 
     <DockPanel Margin="4">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
@@ -16,18 +15,18 @@
         </DockPanel>
 
         <Panel>
-            <TreeView ItemsSource="{Binding RootNodes}"
-                      SelectedItem="{Binding SelectedNode}"
+            <TreeView ItemsSource="{Binding RootEntities}"
+                      SelectedItem="{Binding SelectedEntity}"
                       SelectionMode="Single"
-                      IsVisible="{Binding HasScene}">
+                      IsVisible="{Binding HasWorld}">
                 <TreeView.ItemTemplate>
-                    <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="services:WorldNode">
+                    <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="ecs:EntityViewModel">
                         <TextBlock Text="{Binding Name}"/>
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
 
-            <ghost:GhostView Message="No scene loaded." IsVisible="{Binding !HasScene}"/>
+            <ghost:GhostView Message="No world loaded." IsVisible="{Binding !HasWorld}"/>
         </Panel>
     </DockPanel>
 </UserControl>

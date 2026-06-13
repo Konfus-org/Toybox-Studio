@@ -1,61 +1,40 @@
+using System;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
-using Dock.Model.Avalonia.Controls;
-using Dock.Model.Controls;
-using Dock.Model.Core;
+using Toybox.Studio.Widgets.GameToolbar;
 
 namespace Toybox.Studio.Shell;
 
 public partial class MainWindow : Window
 {
-    // The floating Settings dock window, if currently open.
-    private IDockWindow? _settingsWindow;
+    private GameToolbarViewModel? _toolbar;
 
     public MainWindow()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
     }
 
-    /// <summary>
-    /// Opens Settings as a floating, dockable tool (not a modal). If it's already open, just brings it
-    /// forward; otherwise a fresh tool is floated into its own window that the user can dock anywhere.
-    /// </summary>
-    private void OnSettingsClick(object? sender, RoutedEventArgs e)
+    private void OnDataContextChanged(object? sender, EventArgs e)
     {
+        if (_toolbar is not null)
+            _toolbar.PlayRequested -= OnPlayRequested;
+        _toolbar = null;
+
         if (DataContext is not ShellViewModel shell)
             return;
-        if (DockHost.Layout is not IRootDock root || DockHost.Factory is not { } factory)
-            return;
 
-        // Already open: bring the existing window forward instead of opening a second one.
-        if (_settingsWindow is not null
-            && root.Windows is { } windows
-            && windows.Contains(_settingsWindow))
-        {
-            (_settingsWindow.Host as Window)?.Activate();
-            return;
-        }
+        // Hand the dock host its data-driven factory + layout (saved or default) and let the workspace
+        // track live state. From here on, opening/closing/saving panels all go through the workspace.
+        shell.Workspace.Bind(DockHost);
 
-        var tool = new Tool
-        {
-            Id = "Settings",
-            Title = "Settings",
-            CanClose = true,
-            Content = new SettingsView { DataContext = shell.Settings },
-        };
+        _toolbar = shell.GameToolbar;
+        _toolbar.PlayRequested += OnPlayRequested;
+    }
 
-        var window = factory.CreateWindowFrom(tool);
-        if (window is null)
-            return;
-
-        window.Title = "Settings";
-        window.Width = 680;
-        window.Height = 620;
-        window.X = Position.X + 80;
-        window.Y = Position.Y + 80;
-
-        factory.AddWindow(root, window);
-        window.Present(isDialog: false);
-        _settingsWindow = window;
+    // Pressing Play opens the viewport if the user had closed it, so the game is always visible on launch.
+    private void OnPlayRequested()
+    {
+        if (DataContext is ShellViewModel shell)
+            shell.Workspace.EnsureOpen("Viewport");
     }
 }

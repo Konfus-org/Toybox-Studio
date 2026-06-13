@@ -3,15 +3,9 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.UnknownPropertyView"
              x:DataType="local:UnknownPropertyViewModel">
-    <Grid Margin="0,1">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
-        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <SelectableTextBlock Grid.Column="2" Text="{Binding Json}" TextWrapping="Wrap"
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <SelectableTextBlock Text="{Binding Json}" TextWrapping="Wrap" FontSize="12"
                              FontFamily="{DynamicResource ThemeMonoFontFamily}" Opacity="0.7"/>
-    </Grid>
+    </local:PropertyRow>
 </UserControl>

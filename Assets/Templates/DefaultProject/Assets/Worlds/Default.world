@@ -1,6 +1,12 @@
 {
-    "globals": 770000002,
-    "chunks": [
-        770000003
-    ]
+    "globals": {
+        "type": "handle",
+        "value": 770000002
+    },
+    "chunks": {
+        "type": "array",
+        "value": [
+            770000003
+        ]
+    }
 }

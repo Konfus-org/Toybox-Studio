@@ -1,20 +1,25 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Toybox.Studio.Services;
 using Toybox.Studio.Shell;
 using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;
-using Toybox.Studio.Widgets.Viewport;
-using Toybox.Studio.Widgets.EntityInspector;
 using Toybox.Studio.Widgets.GameToolbar;
 using Toybox.Studio.Widgets.PropertyGrid;
-using Toybox.Studio.Widgets.WorldTree;
+using Toybox.Studio.Workspace;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.EngineApi;
+using Toybox.Studio.Logging;
+using Toybox.Studio.Project;
+using Toybox.Studio.Theming;
+using Toybox.Studio.ECS;
+using Toybox.Studio.Widgets.Utils;
 
 namespace Toybox.Studio;
 
@@ -83,11 +88,24 @@ public partial class App : Application
         try
         {
             await StepAsync("Applying theme…").ContinueOnSameContext();
-            _host!.Services.GetRequiredService<ThemeManager>().ApplySavedTheme();
+            var themeManager = _host!.Services.GetRequiredService<ThemeManager>();
+            themeManager.ApplySavedTheme();
+            // Themes load before the logger exists, so surface any malformed-file warnings now.
+            foreach (var warning in themeManager.LoadWarnings)
+                log.Warning(warning);
 
             // Give the property grid's custom widgets (asset pickers, script links) the services they
             // need before any inspector or settings grid is built.
-            PropertyViewRegistry.Configure(_host.Services.GetRequiredService<AssetCatalog>());
+            var catalog = _host.Services.GetRequiredService<AssetCatalog>();
+            PropertyViewRegistry.Configure(catalog);
+
+            // Activating an asset link (e.g. a handle hyperlink) reveals the file in the OS explorer.
+            catalog.AssetActivated += id =>
+            {
+                var project = _host!.Services.GetRequiredService<ProjectManager>().CurrentProject;
+                if (catalog.Resolve(id) is { } asset && project is not null)
+                    FileReveal.InExplorer(ResolveAssetPath(project, asset.Path));
+            };
 
             await StepAsync("Building workspace…").ContinueOnSameContext();
             // The shell (and its console widget) must exist before discovery so startup log
@@ -103,15 +121,15 @@ public partial class App : Application
             desktop.Exit += OnExit;
 
             await StepAsync("Locating engine…").ContinueOnSameContext();
-            var session = _host.Services.GetRequiredService<EngineSession>();
-            var locator = _host.Services.GetRequiredService<EngineLocator>();
+            var session = _host.Services.GetRequiredService<Session>();
+            var locator = _host.Services.GetRequiredService<Locator>();
             var locatorReport = locator.ResolveAtStartup();
             log.Info(locatorReport);
             splashViewModel.Status =
                 locator.IsLocated ? "Engine located." : "Engine not found — set it in Settings.";
 
             await StepAsync("Watching for running engines…").ContinueOnSameContext();
-            var detector = _host.Services.GetRequiredService<EngineInstanceDetector>();
+            var detector = _host.Services.GetRequiredService<InstanceDetector>();
             detector.InstanceDetected += port => session.AttachAsync(port).FireAndForget();
             detector.Start();
 
@@ -170,6 +188,30 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Resolves an asset's project-relative path to an absolute one for revealing. Tries the project
+    /// root then the Assets folder (paths are reported relative to one of the two), and passes through
+    /// an already-rooted path.
+    /// </summary>
+    private static string ResolveAssetPath(ProjectInfo project, string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath))
+            return project.AssetsDirectory;
+
+        if (Path.IsPathRooted(relativePath))
+            return relativePath;
+
+        var underRoot = Path.Combine(project.RootDirectory, relativePath);
+        if (File.Exists(underRoot) || Directory.Exists(underRoot))
+            return underRoot;
+
+        var underAssets = Path.Combine(project.AssetsDirectory, relativePath);
+        if (File.Exists(underAssets) || Directory.Exists(underAssets))
+            return underAssets;
+
+        return underRoot;
+    }
+
     private static void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<Settings>();
@@ -179,21 +221,25 @@ public partial class App : Application
         services.AddSingleton<ProjectManager>();
         services.AddSingleton<FilePicker>();
         services.AddSingleton<CMakeCompiler>();
-        services.AddSingleton<EngineJsonParser>();
-        services.AddSingleton<WorldSelection>();
-        services.AddSingleton<EngineSession>();
-        services.AddSingleton<EngineInstanceDetector>();
-        services.AddSingleton<WorldManager>();
+        services.AddSingleton<EngineRpc>();
+        services.AddSingleton<JsonParser>();
+        services.AddSingleton<Selection>();
+        services.AddSingleton<Session>();
+        services.AddSingleton<InstanceDetector>();
+        services.AddSingleton<World>();
         services.AddSingleton<AssetCatalog>();
         services.AddSingleton<ViewportStream>();
-        services.AddSingleton<EngineLocator>();
+        services.AddSingleton<Locator>();
+        services.AddSingleton<ThemeCreatorService>();
         services.AddSingleton<StatusViewModel>();
-        services.AddSingleton<LogConsoleViewModel>();
-        services.AddSingleton<WorldTreeViewModel>();
-        services.AddSingleton<EntityInspectorViewModel>();
-        services.AddSingleton<ViewportViewModel>();
         services.AddSingleton<GameToolbarViewModel>();
-        services.AddSingleton<SettingsViewModel>();
+
+        // Auto-registers every [Dockable] View's view-model (World, Viewport, Console, Settings, …) and the
+        // catalog itself, so panels are declared only on their Views — no per-panel registration here.
+        DockableCatalog.RegisterDockables(services);
+        services.AddSingleton<LayoutStore>();
+        services.AddSingleton<WorkspaceViewModel>();
+
         services.AddSingleton<ShellViewModel>();
     }
 
@@ -202,13 +248,24 @@ public partial class App : Application
         if (_host is null)
             return;
 
+        // Persist the working dock layout (docked + floating) so it's restored next launch. Runs on the UI
+        // thread, before teardown, while the DockControl is still alive.
+        try
+        {
+            _host.Services.GetRequiredService<WorkspaceViewModel>().SaveCurrentLayout();
+        }
+        catch (Exception)
+        {
+            // Never let a layout-save failure block shutdown.
+        }
+
         // Run the async teardown on the thread pool: blocking the UI thread on code that
         // resumes via its SynchronizationContext would deadlock.
         var host = _host;
         _host = null;
         Task.Run(async () =>
         {
-            await host.Services.GetRequiredService<EngineSession>().DisposeAsync().ContinueOnAnyContext();
+            await host.Services.GetRequiredService<Session>().DisposeAsync().ContinueOnAnyContext();
             await host.StopAsync(TimeSpan.FromSeconds(5)).ContinueOnAnyContext();
         }).Wait(TimeSpan.FromSeconds(15));
         host.Dispose();

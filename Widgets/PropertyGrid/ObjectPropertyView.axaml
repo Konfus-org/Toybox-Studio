@@ -3,11 +3,13 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.ObjectPropertyView"
              x:DataType="local:ObjectPropertyViewModel">
-    <Expander Header="{Binding Name}" ToolTip.Tip="{Binding Description}" IsExpanded="True"
-              Margin="0,1" Padding="8,2" HorizontalAlignment="Stretch">
-        <!-- Nested objects get their own shared-size scope so their name column sizes independently. -->
-        <StackPanel Grid.IsSharedSizeScope="True" HorizontalAlignment="Stretch" Margin="10,0,0,0">
-            <ItemsControl ItemsSource="{Binding Children}"/>
-        </StackPanel>
-    </Expander>
+    <!-- A nested struct renders as its own header row (type icon + name) followed by its child rows,
+         which carry Depth + 1 so they indent and shade one level deeper. Always expanded. -->
+    <StackPanel>
+        <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                           Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
+                           IsParent="True" IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                           IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
+        <ItemsControl ItemsSource="{Binding Children}" IsVisible="{Binding IsExpanded}"/>
+    </StackPanel>
 </UserControl>

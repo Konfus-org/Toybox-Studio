@@ -3,20 +3,13 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.ScriptLinkPropertyView"
              x:DataType="local:ScriptLinkPropertyViewModel">
-    <Grid Margin="0,1">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
-        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <Button Grid.Column="2" Classes="scriptLink" HorizontalAlignment="Left"
-                Padding="0" Background="Transparent" BorderThickness="0"
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <Button Classes="scriptLink" HorizontalAlignment="Left" Padding="0"
+                Background="Transparent" BorderThickness="0"
                 Command="{Binding OpenCommand}" IsEnabled="{Binding HasReference}">
-            <TextBlock Text="{Binding DisplayName}"
-                       Foreground="{DynamicResource SystemAccentColor}"
-                       TextDecorations="Underline"/>
+            <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                       Foreground="{DynamicResource SystemAccentColor}" TextDecorations="Underline"/>
         </Button>
-    </Grid>
+    </local:PropertyRow>
 </UserControl>

@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Services;
+using Toybox.Studio.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 

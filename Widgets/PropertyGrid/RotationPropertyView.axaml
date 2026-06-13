@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.RotationPropertyView"
+             x:DataType="local:RotationPropertyViewModel">
+    <!-- Stored as a quaternion but edited as Euler degrees; the tooltip makes the units explicit. -->
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <ItemsControl ItemsSource="{Binding Components}" IsEnabled="{Binding !IsReadOnly}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:RotationComponentViewModel">
+                    <DockPanel Margin="0,0,6,0">
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" FontSize="11"
+                                   FontWeight="Medium" Margin="0,0,4,0" VerticalAlignment="Center"
+                                   ToolTip.Tip="Rotation in degrees"
+                                   Foreground="{Binding Label,
+                                       Converter={x:Static local:AxisLabelToBrushConverter.Instance}}"/>
+                        <NumericUpDown Classes="field" ShowButtonSpinner="False" FormatString="0.######"
+                                       Value="{Binding Value}"/>
+                    </DockPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </local:PropertyRow>
+</UserControl>

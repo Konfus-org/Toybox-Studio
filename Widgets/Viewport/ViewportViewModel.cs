@@ -3,30 +3,32 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.Services;
+using Toybox.Studio.EngineApi;
 
 namespace Toybox.Studio.Widgets.Viewport;
 
 public sealed partial class ViewportViewModel : ObservableObject
 {
-    public ViewportViewModel(ViewportStream viewport, EngineSession session)
+    public ViewportViewModel(ViewportStream viewport, Session session)
     {
         viewport.FrameArrived += frame => Dispatch.To(DispatchContext.UI, () => Render(frame));
         session.StateChanged += state => Dispatch.To(DispatchContext.UI, () =>
         {
-            if (state != EngineConnectionState.Connected)
+            if (state != ConnectionState.Connected)
                 HasFrames = false;
         });
         session.BusyChanged += busy => Dispatch.To(DispatchContext.UI, () => IsBusy = busy);
     }
 
-    /// <summary>
-    /// Raised after new pixels were written so the view can invalidate the image.
-    /// </summary>
-    public event Action? FrameRendered;
-
     [ObservableProperty]
     public partial WriteableBitmap? Frame { get; private set; }
+
+    /// <summary>
+    /// Bumped after each frame's pixels are written. The view binds it through the FrameInvalidation
+    /// behavior to repaint the image — the bitmap is mutated in place, so its reference never changes.
+    /// </summary>
+    [ObservableProperty]
+    public partial int FrameTick { get; private set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
@@ -73,6 +75,6 @@ public sealed partial class ViewportViewModel : ObservableObject
         }
 
         HasFrames = true;
-        FrameRendered?.Invoke();
+        FrameTick++;
     }
 }

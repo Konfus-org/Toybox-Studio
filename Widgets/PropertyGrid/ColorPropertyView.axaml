@@ -1,21 +1,28 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:colors="using:Toybox.Studio.Widgets.Colors"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.ColorPropertyView"
              x:DataType="local:ColorPropertyViewModel">
-    <Grid Margin="0,1">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
-        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-            <Border Width="34" Height="18" CornerRadius="3" Background="{Binding Swatch}"
-                    BorderBrush="#40000000" BorderThickness="1"/>
-            <TextBlock Text="{Binding Hex}" VerticalAlignment="Center"
-                       FontFamily="{DynamicResource ThemeMonoFontFamily}" Opacity="0.8"/>
-        </StackPanel>
-    </Grid>
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <Panel>
+            <!-- Editable: the picker writes each channel back through the view-model on change. -->
+            <colors:ColorPickerField Color="{Binding Color, Mode=TwoWay}"
+                                     HorizontalAlignment="Left"
+                                     IsVisible="{Binding !IsReadOnly}"/>
+            <!-- Read-only: a static swatch + hex readout. -->
+            <Border Background="{DynamicResource ThemeWellBrush}"
+                    BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0.5" CornerRadius="2"
+                    Height="20" Padding="6,0" HorizontalAlignment="Left"
+                    IsVisible="{Binding IsReadOnly}">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Swatch}"
+                            BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"/>
+                    <TextBlock Text="{Binding Hex}" VerticalAlignment="Center" FontSize="12"
+                               FontFamily="{DynamicResource ThemeMonoFontFamily}"/>
+                </StackPanel>
+            </Border>
+        </Panel>
+    </local:PropertyRow>
 </UserControl>

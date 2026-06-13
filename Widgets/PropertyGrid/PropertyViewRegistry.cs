@@ -1,4 +1,4 @@
-using Toybox.Studio.Services;
+using Toybox.Studio.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -36,6 +36,15 @@ public static class PropertyViewRegistry
     {
         _assets = assets;
     }
+
+    /// <summary>
+    /// Registers a custom view-model builder under a view name (matched case-insensitively), so a node
+    /// tagged <c>[[editor::view("name")]]</c> / <c>[View("name")]</c> routes to it. Call at startup to add
+    /// a widget without editing this class; its paired View still needs a DataTemplate in
+    /// <c>PropertyGridView.axaml</c>.
+    /// </summary>
+    public static void Register(string view, Func<PropertyNode, Action?, PropertyViewModelBase> builder) =>
+        Builders[view] = builder;
 
     /// <summary>
     /// Builds the view-model for <paramref name="node"/>'s custom view, or returns false when the node

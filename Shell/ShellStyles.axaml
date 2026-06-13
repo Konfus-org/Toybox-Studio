@@ -4,13 +4,17 @@
     <Style Selector="Border.StatusBar">
         <Setter Property="Padding" Value="12,6"/>
         <Setter Property="BorderThickness" Value="0,1,0,0"/>
-        <Setter Property="BorderBrush" Value="#22808080"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource ThemeHeaderBrush}"/>
     </Style>
 
-    <!-- Apply the theme font to every window. -->
+    <!-- Apply the theme font, background, and text colour to every window. Foreground is inherited, so
+         raw TextBlocks pick up the theme's Text colour unless they opt out. -->
     <Style Selector="Window">
         <Setter Property="FontFamily" Value="{DynamicResource ThemeFontFamily}"/>
         <Setter Property="FontSize" Value="{DynamicResource ThemeFontSize}"/>
+        <Setter Property="Background" Value="{DynamicResource ThemeBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}"/>
     </Style>
 
     <!-- Section header style. -->

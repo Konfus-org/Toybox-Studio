@@ -5,8 +5,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Services;
 using Toybox.Studio.Widgets.PropertyGrid;
+using Toybox.Studio.EngineApi;
+using Toybox.Studio.Logging;
+using Toybox.Studio.Project;
+using Toybox.Studio.Theming;
 
 namespace Toybox.Studio.Shell;
 
@@ -14,59 +17,42 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly Settings _settings;
     private readonly ThemeManager _theme;
-    private readonly EngineLocator _locator;
+    private readonly ThemeCreatorService _themeCreator;
     private readonly ProjectManager _projects;
-    private readonly FilePicker _filePicker;
     private readonly Logger _log;
-    private readonly EngineJsonParser _parser;
+    private readonly JsonParser _parser;
 
     public SettingsViewModel(
         Settings settings,
         ThemeManager theme,
-        EngineLocator locator,
+        ThemeCreatorService themeCreator,
         ProjectManager projects,
-        FilePicker filePicker,
         Logger log,
-        EngineJsonParser parser)
+        JsonParser parser)
     {
         _settings = settings;
         _theme = theme;
-        _locator = locator;
+        _themeCreator = themeCreator;
         _projects = projects;
-        _filePicker = filePicker;
         _log = log;
         _parser = parser;
 
-        ConnectTimeoutSeconds = settings.Editor.Engine.ConnectTimeoutSeconds;
-        HideEngineWindow = settings.Editor.Engine.HideEngineWindow;
-        RestartOnCrash = settings.Editor.Engine.RestartOnCrash;
-        EnginePath = locator.EngineSourcePath ?? "(not found)";
-
-        locator.EngineChanged += path =>
-            Dispatch.To(DispatchContext.UI, () => EnginePath = path ?? "(not found)");
-        projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshAppSettings);
-        RefreshAppSettings();
+        projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshProjectSettings);
+        RefreshProjectSettings();
         BuildEditorSettingsGrid();
     }
 
-    //// THEME ////
     // Theme selection lives in the editor-settings grid (the Variant and per-variant theme pickers,
     // tagged in BuildEditorSettingsGrid). Authoring a new theme happens in the modal Theme Creator;
     // built-in themes are non-editable.
 
-    /// <summary>
-    /// Raised when the user asks to author a new theme; the view opens the modal Theme Creator and
-    /// calls <see cref="RefreshThemes"/> when it closes.
-    /// </summary>
-    public event Action? ThemeCreatorRequested;
-
-    /// <summary>
-    /// The theme manager, exposed so the view can launch the Theme Creator with it.
-    /// </summary>
-    public ThemeManager Theme => _theme;
-
     [RelayCommand]
-    private void CreateTheme() => ThemeCreatorRequested?.Invoke();
+    private async Task CreateThemeAsync()
+    {
+        await _themeCreator.CreateThemeAsync().ContinueOnSameContext();
+        // Pick up the newly created theme (and current selection) in the pickers.
+        RefreshThemes();
+    }
 
     /// <summary>
     /// Rebuilds the editor-settings grid so the theme pickers pick up a newly created theme and the
@@ -81,124 +67,50 @@ public sealed partial class SettingsViewModel : ObservableObject
         Process.Start(new ProcessStartInfo(_theme.ThemesDirectory) { UseShellExecute = true });
     }
 
-    //// ENGINE ////
-
     [ObservableProperty]
-    public partial string EnginePath { get; private set; }
-
-    [ObservableProperty]
-    public partial int ConnectTimeoutSeconds { get; set; }
-
-    [ObservableProperty]
-    public partial bool HideEngineWindow { get; set; }
-
-    [ObservableProperty]
-    public partial bool RestartOnCrash { get; set; }
-
-    partial void OnConnectTimeoutSecondsChanged(int value)
-    {
-        _settings.Editor.Engine.ConnectTimeoutSeconds = value;
-        _settings.Save();
-    }
-
-    partial void OnHideEngineWindowChanged(bool value)
-    {
-        _settings.Editor.Engine.HideEngineWindow = value;
-        _settings.Save();
-    }
-
-    partial void OnRestartOnCrashChanged(bool value)
-    {
-        _settings.Editor.Engine.RestartOnCrash = value;
-        _settings.Save();
-    }
-
-    [RelayCommand]
-    private async Task BrowseEngineAsync()
-    {
-        var path = await _filePicker.PickFolderAsync("Locate the Toybox Engine source folder")
-            .ContinueOnAnyContext();
-        if (path is null)
-            return;
-
-        if (!_locator.TrySetManually(path))
-            _log.Error($"'{path}' is not a Toybox Engine source folder.");
-    }
-
-    //// APP ////
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SaveAppSettingsCommand))]
     public partial bool HasProject { get; private set; }
 
-    [ObservableProperty]
-    public partial string AppName { get; set; } = "";
-
-    [ObservableProperty]
-    public partial string PluginsText { get; set; } = "";
-
-    [RelayCommand(CanExecute = nameof(HasProject))]
-    private void SaveAppSettings()
+    private void RefreshProjectSettings()
     {
-        var plugins = PluginsText
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        if (!_settings.TrySaveAppSettings(_projects.CurrentProject, AppName, plugins, out var error))
-        {
-            _log.Error(error ?? "Failed to save app settings.");
-        }
-        else
-        {
-            _projects.Reopen(); // refresh display name + notify listeners
-            _log.Info("App settings saved.");
-        }
+        HasProject = _projects.CurrentProject is not null;
+        BuildProjectSettingsGrid();
     }
 
-    private void RefreshAppSettings()
-    {
-        var appSettings = _settings.ReadAppSettings(_projects.CurrentProject);
-        HasProject = appSettings is not null;
-        AppName = appSettings?.Name ?? "";
-        PluginsText = appSettings is null ? "" : string.Join('\n', appSettings.Plugins);
-        BuildAppSettingsGrid();
-    }
-
-    //// GENERIC PROPERTY GRIDS ////
     // The same type-driven grid used by the entity inspector, pointed at the project's AppSettings.json
     // and the editor's own settings POCO. Leaf widgets mutate the backing JObject in place; the commit
     // closure persists it.
 
-    private JObject? _appSettingsJson;
+    private JObject? _projectSettingsJson;
     private JObject? _editorSettingsJson;
 
     /// <summary>
-    /// All of the current project's app settings, edited through the generic property grid.
+    /// All of the current project's settings, edited through the generic property grid.
     /// </summary>
-    public ObservableCollection<PropertyViewModelBase> AppSettingsProperties { get; } = [];
+    public ObservableCollection<PropertyViewModelBase> ProjectSettingsProperties { get; } = [];
 
     /// <summary>
     /// All editor settings, edited through the generic property grid.
     /// </summary>
     public ObservableCollection<PropertyViewModelBase> EditorSettingsProperties { get; } = [];
 
-    private void BuildAppSettingsGrid()
+    private void BuildProjectSettingsGrid()
     {
-        AppSettingsProperties.Clear();
-        _appSettingsJson = _settings.ReadAppSettingsJson(_projects.CurrentProject);
-        if (_appSettingsJson is null)
+        ProjectSettingsProperties.Clear();
+        _projectSettingsJson = _settings.ReadProjectSettingsJson(_projects.CurrentProject);
+        if (_projectSettingsJson is null)
             return;
 
-        foreach (var node in _parser.ParseProperties(_appSettingsJson))
-            AppSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveAppSettingsGrid));
+        foreach (var node in _parser.ParseProperties(_projectSettingsJson))
+            ProjectSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveProjectSettingsGrid));
     }
 
-    private void SaveAppSettingsGrid()
+    private void SaveProjectSettingsGrid()
     {
-        if (_appSettingsJson is null)
+        if (_projectSettingsJson is null)
             return;
 
-        if (!_settings.TrySaveAppSettingsJson(_projects.CurrentProject, _appSettingsJson, out var error))
-            _log.Error(error ?? "Failed to save app settings.");
+        if (!_settings.TrySaveProjectSettingsJson(_projects.CurrentProject, _projectSettingsJson, out var error))
+            _log.Error(error ?? "Failed to save project settings.");
         else
             _projects.Reopen(); // refresh display name + notify listeners
     }
@@ -209,7 +121,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _editorSettingsJson = JObject.FromObject(_settings.Editor);
         // The reflected POCO loses the fact that the compiler is a fixed choice, so tag it as an enum
         // (with its options) here; the grid then renders it as a dropdown instead of a free-text box.
-        TagEnum(_editorSettingsJson, "Build", "Compiler", "Auto", "MSVC", "Clang");
+        TagEnum(_editorSettingsJson, "Build", "Compiler", [.. CMakeCompiler.CompilerChoices]);
         // Theme selection: variant is a Dark/Light enum; the two per-variant theme names render as
         // [View("themePicker")] dropdowns, populated with the themes available for each variant.
         TagViewsFromAttributes(_editorSettingsJson, _settings.Editor);

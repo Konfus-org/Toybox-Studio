@@ -1,54 +1,193 @@
 [
     {
-        "id": 771000001,
-        "name": "Sun",
-        "tag": "lighting",
-        "layer": "",
-        "parent": 0,
+        "id": {
+            "type": "uuid",
+            "value": 771000001
+        },
+        "name": {
+            "type": "string",
+            "value": "Sun"
+        },
+        "tag": {
+            "type": "string",
+            "value": "lighting"
+        },
+        "layer": {
+            "type": "string",
+            "value": ""
+        },
+        "parent": {
+            "type": "uuid",
+            "value": 0
+        },
         "components": {
             "directional_light": {
-                "color": { "r": 1, "g": 1, "b": 1, "a": 1 },
-                "intensity": 1,
-                "cast_shadows": true,
-                "ambient": 0.2
+                "color": {
+                    "type": "color",
+                    "value": {
+                        "r": 1,
+                        "g": 1,
+                        "b": 1,
+                        "a": 1
+                    }
+                },
+                "intensity": {
+                    "type": "float",
+                    "value": 1
+                },
+                "cast_shadows": {
+                    "type": "bool",
+                    "value": true
+                },
+                "ambient": {
+                    "type": "float",
+                    "value": 0.2
+                }
             },
             "transform": {
-                "position": [0, 0, 0],
-                "rotation": [-0.353553, 0.353553, -0.146447, 0.853553],
-                "scale": [1, 1, 1]
+                "position": {
+                    "type": "vec3",
+                    "value": [
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "rotation": {
+                    "type": "quat",
+                    "value": [
+                        -0.353553,
+                        0.353553,
+                        -0.146447,
+                        0.853553
+                    ]
+                },
+                "scale": {
+                    "type": "vec3",
+                    "value": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
             }
         }
     },
     {
-        "id": 771000002,
-        "name": "Sky",
-        "tag": "environment",
-        "layer": "",
-        "parent": 0,
+        "id": {
+            "type": "uuid",
+            "value": 771000002
+        },
+        "name": {
+            "type": "string",
+            "value": "Sky"
+        },
+        "tag": {
+            "type": "string",
+            "value": "environment"
+        },
+        "layer": {
+            "type": "string",
+            "value": ""
+        },
+        "parent": {
+            "type": "uuid",
+            "value": 0
+        },
         "components": {
             "sky": {
-                "material": { "material": 271593556 },
-                "type": 1
+                "material": {
+                    "type": "material_instance",
+                    "value": {
+                        "material": {
+                            "type": "handle",
+                            "value": 271593556
+                        }
+                    }
+                },
+                "type": {
+                    "type": "object",
+                    "value": 1
+                }
             },
             "transform": {
-                "position": [0, 0, 0],
-                "rotation": [0, 1, 0, 0],
-                "scale": [1, 1, 1]
+                "position": {
+                    "type": "vec3",
+                    "value": [
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "rotation": {
+                    "type": "quat",
+                    "value": [
+                        0,
+                        1,
+                        0,
+                        0
+                    ]
+                },
+                "scale": {
+                    "type": "vec3",
+                    "value": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
             }
         }
     },
     {
-        "id": 771000003,
-        "name": "Camera",
-        "tag": "camera",
-        "layer": "",
-        "parent": 0,
+        "id": {
+            "type": "uuid",
+            "value": 771000003
+        },
+        "name": {
+            "type": "string",
+            "value": "Camera"
+        },
+        "tag": {
+            "type": "string",
+            "value": "camera"
+        },
+        "layer": {
+            "type": "string",
+            "value": ""
+        },
+        "parent": {
+            "type": "uuid",
+            "value": 0
+        },
         "components": {
             "camera": {},
             "transform": {
-                "position": [0, 3, 9],
-                "rotation": [-0.174108, 0, 0, 0.984727],
-                "scale": [1, 1, 1]
+                "position": {
+                    "type": "vec3",
+                    "value": [
+                        0,
+                        3,
+                        9
+                    ]
+                },
+                "rotation": {
+                    "type": "quat",
+                    "value": [
+                        -0.174108,
+                        0,
+                        0,
+                        0.984727
+                    ]
+                },
+                "scale": {
+                    "type": "vec3",
+                    "value": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
             }
         }
     }

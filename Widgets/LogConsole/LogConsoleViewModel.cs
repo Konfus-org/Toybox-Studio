@@ -1,5 +1,5 @@
-using Toybox.Studio.Services;
 using Toybox.Studio.Widgets.Console;
+using Toybox.Studio.Logging;
 
 namespace Toybox.Studio.Widgets.LogConsole;
 

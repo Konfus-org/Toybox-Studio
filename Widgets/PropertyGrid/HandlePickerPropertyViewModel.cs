@@ -1,72 +1,84 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Services;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>
-/// A handle/asset reference rendered as a picker: a dropdown of the project's assets (from the
-/// <see cref="AssetCatalog"/>, optionally filtered by the node's <c>$choices</c> type list) that
-/// commits the chosen asset's id back to the backing token. Used for [[editor::view("handle"/"asset")]].
+/// A handle/asset reference rendered as a link plus a picker button: the current asset shows as a
+/// hyperlink of its resolved name (clicking reveals it in the asset database), and the picker button
+/// opens a modal chooser of assets matching the node's <c>$choices</c> type list, committing the chosen
+/// asset's id back to the backing token. Used for [[editor::view("handle"/"asset")]].
 /// </summary>
 public sealed partial class HandlePickerPropertyViewModel : PropertyViewModelBase
 {
     private readonly AssetCatalog? _catalog;
     private readonly IReadOnlyList<string>? _typeFilter;
-    private JToken? _token;
-    private bool _suppressCommit;
+    private readonly JsonValueSlot _slot;
 
     public HandlePickerPropertyViewModel(PropertyNode node, Action? commit, AssetCatalog? catalog) : base(node)
     {
         _catalog = catalog;
         _typeFilter = node.Choices;
-        _token = node.Value;
+        _slot = new JsonValueSlot(node.Value);
         CommitChanges = commit;
-
-        Repopulate();
+        _displayName = ResolveDisplayName();
 
         if (catalog is not null)
             catalog.CatalogUpdated += OnCatalogUpdated;
     }
 
-    public ObservableCollection<AssetEntry> Options { get; } = [];
-
     [ObservableProperty]
-    private AssetEntry? _selected;
+    private string _displayName;
 
-    /// <summary>
-    /// The raw id when no matching asset is in the catalog (e.g. an unloaded reference), shown so the
-    /// reference is never silently blanked.
-    /// </summary>
-    public long CurrentId => _token?.Value<long?>() ?? 0;
+    public long CurrentId => _slot.Read<long?>() ?? 0;
 
-    private void OnCatalogUpdated() => Dispatch.To(DispatchContext.UI, Repopulate);
+    public bool HasReference => CurrentId != 0;
 
-    private void Repopulate()
+    private void OnCatalogUpdated() => Dispatch.To(DispatchContext.UI, RefreshDisplay);
+
+    private void RefreshDisplay()
     {
-        Options.Clear();
-        if (_catalog is not null)
-        {
-            foreach (var asset in _catalog.AssetsOfType(_typeFilter))
-                Options.Add(asset);
-        }
-
-        // Reselect without re-committing: matching the current token id to an option.
-        _suppressCommit = true;
-        Selected = Options.FirstOrDefault(asset => asset.Id == CurrentId);
-        _suppressCommit = false;
+        DisplayName = ResolveDisplayName();
+        OnPropertyChanged(nameof(HasReference));
     }
 
-    partial void OnSelectedChanged(AssetEntry? value)
+    private string ResolveDisplayName()
     {
-        if (_suppressCommit || value is null || _token is null)
+        var id = CurrentId;
+        if (id == 0)
+            return "(none)";
+
+        return _catalog?.ResolveName(id) ?? $"#{id}";
+    }
+
+    /// <summary>Reveals the referenced asset in the catalog (the hyperlink action).</summary>
+    [RelayCommand]
+    private void Open()
+    {
+        if (CurrentId != 0)
+            _catalog?.Activate(CurrentId);
+    }
+
+    /// <summary>Opens the modal asset chooser filtered to this handle's type, then commits the pick.</summary>
+    [RelayCommand]
+    private async Task PickAsync()
+    {
+        var options = _catalog?.AssetsOfType(_typeFilter) ?? [];
+        var title = _typeFilter is { Count: > 0 }
+            ? $"Select {string.Join(" / ", _typeFilter)}"
+            : "Select asset";
+
+        var pick = await AssetPicker.ShowAsync(title, options, CurrentId).ContinueOnSameContext();
+        if (!pick.Confirmed)
             return;
 
-        // Replace and re-hold the token so repeated picks keep persisting (a detached token wouldn't).
-        var replacement = new JValue(value.Id);
-        _token.Replace(replacement);
-        _token = replacement;
-        RaiseCommit();
+        if (_slot.Set(new JValue(pick.Id)))
+        {
+            RefreshDisplay();
+            RaiseCommit();
+        }
     }
 }

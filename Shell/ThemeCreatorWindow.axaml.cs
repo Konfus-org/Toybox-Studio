@@ -1,5 +1,6 @@
 using Avalonia.Controls;
-using Toybox.Studio.Services;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.Theming;
 
 namespace Toybox.Studio.Shell;
 
@@ -17,7 +18,11 @@ public partial class ThemeCreatorWindow : Window
     {
         var viewModel = new ThemeCreatorViewModel(themes);
         var window = new ThemeCreatorWindow { DataContext = viewModel };
+        // Own the switch prompt under this dialog so it nests correctly over the editor.
+        viewModel.Confirm = (title, message) => Popups.ConfirmAsync(title, message, owner: window);
         viewModel.CloseRequested += window.Close;
+        // Reverts the live preview if the user didn't switch — also covers closing via the title-bar button.
+        window.Closed += (_, _) => viewModel.OnClosed();
         return window.ShowDialog(owner);
     }
 }

@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="using:Toybox.Studio.Shell"
+        xmlns:colors="using:Toybox.Studio.Widgets.Colors"
         x:Class="Toybox.Studio.Shell.ThemeCreatorWindow"
         x:DataType="shell:ThemeCreatorViewModel"
         Width="420" SizeToContent="Height" CanResize="False"
@@ -15,7 +16,7 @@
 
             <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto" Margin="0,6,0,0">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,2" Text="{Binding Name}" Watermark="My Theme"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,2" Text="{Binding Name}" PlaceholderText="My Theme"/>
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Variant" VerticalAlignment="Center"/>
                 <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,2" HorizontalAlignment="Stretch"
@@ -37,31 +38,31 @@
                 <TextBox Grid.Row="2" Grid.Column="1" Margin="0,2" Text="{Binding MonospaceFamily}"/>
             </Grid>
 
-            <TextBlock Text="Palette (hex)" FontWeight="SemiBold" Margin="0,6,0,0"/>
+            <TextBlock Text="Palette" FontWeight="SemiBold" Margin="0,6,0,0"/>
             <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Primary" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,2" Text="{Binding PrimaryHex}"/>
+                <colors:ColorPickerField Grid.Row="0" Grid.Column="1" Margin="0,2" Color="{Binding Primary}"/>
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Secondary" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,2" Text="{Binding SecondaryHex}"/>
+                <colors:ColorPickerField Grid.Row="1" Grid.Column="1" Margin="0,2" Color="{Binding Secondary}"/>
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Tertiary" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="2" Grid.Column="1" Margin="0,2" Text="{Binding TertiaryHex}"/>
+                <colors:ColorPickerField Grid.Row="2" Grid.Column="1" Margin="0,2" Color="{Binding Tertiary}"/>
                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Error" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="3" Grid.Column="1" Margin="0,2" Text="{Binding ErrorHex}"/>
+                <colors:ColorPickerField Grid.Row="3" Grid.Column="1" Margin="0,2" Color="{Binding Error}"/>
                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Warning" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="4" Grid.Column="1" Margin="0,2" Text="{Binding WarningHex}"/>
+                <colors:ColorPickerField Grid.Row="4" Grid.Column="1" Margin="0,2" Color="{Binding Warning}"/>
                 <TextBlock Grid.Row="5" Grid.Column="0" Text="Info" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="5" Grid.Column="1" Margin="0,2" Text="{Binding InfoHex}"/>
+                <colors:ColorPickerField Grid.Row="5" Grid.Column="1" Margin="0,2" Color="{Binding Info}"/>
                 <TextBlock Grid.Row="6" Grid.Column="0" Text="Success" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="6" Grid.Column="1" Margin="0,2" Text="{Binding SuccessHex}"/>
+                <colors:ColorPickerField Grid.Row="6" Grid.Column="1" Margin="0,2" Color="{Binding Success}"/>
                 <TextBlock Grid.Row="7" Grid.Column="0" Text="Background" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="7" Grid.Column="1" Margin="0,2" Text="{Binding BackgroundHex}"/>
+                <colors:ColorPickerField Grid.Row="7" Grid.Column="1" Margin="0,2" Color="{Binding Background}"/>
                 <TextBlock Grid.Row="8" Grid.Column="0" Text="Surface" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="8" Grid.Column="1" Margin="0,2" Text="{Binding SurfaceHex}"/>
+                <colors:ColorPickerField Grid.Row="8" Grid.Column="1" Margin="0,2" Color="{Binding Surface}"/>
                 <TextBlock Grid.Row="9" Grid.Column="0" Text="Text" VerticalAlignment="Center"/>
-                <TextBox Grid.Row="9" Grid.Column="1" Margin="0,2" Text="{Binding TextHex}"/>
+                <colors:ColorPickerField Grid.Row="9" Grid.Column="1" Margin="0,2" Color="{Binding Text}"/>
             </Grid>
 
-            <TextBlock Text="{Binding Error}" Foreground="{DynamicResource ThemeErrorBrush}"
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource ThemeErrorBrush}"
                        TextWrapping="Wrap" IsVisible="{Binding HasError}"/>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">

@@ -1,13 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.Services;
+using Toybox.Studio.EngineApi;
 
 namespace Toybox.Studio.Widgets.Status;
 
 public sealed partial class StatusViewModel : ObservableObject
 {
-    private readonly EngineSession _session;
+    private readonly Session _session;
 
-    public StatusViewModel(EngineSession session)
+    public StatusViewModel(Session session)
     {
         _session = session;
         session.StateChanged += state => Dispatch.To(DispatchContext.UI, () => ApplyState(state));
@@ -18,7 +18,7 @@ public sealed partial class StatusViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConnected))]
     [NotifyPropertyChangedFor(nameof(IsLaunching))]
-    public partial EngineConnectionState State { get; private set; } = EngineConnectionState.Disconnected;
+    public partial ConnectionState State { get; private set; } = ConnectionState.Disconnected;
 
     [ObservableProperty]
     public partial string StatusText { get; private set; } = "Engine: not connected";
@@ -26,23 +26,23 @@ public sealed partial class StatusViewModel : ObservableObject
     [ObservableProperty]
     public partial string PingText { get; private set; } = "";
 
-    public bool IsConnected => State == EngineConnectionState.Connected;
+    public bool IsConnected => State == ConnectionState.Connected;
 
-    public bool IsLaunching => State == EngineConnectionState.Launching;
+    public bool IsLaunching => State == ConnectionState.Launching;
 
-    private void ApplyState(EngineConnectionState state)
+    private void ApplyState(ConnectionState state)
     {
         State = state;
         StatusText = state switch
         {
-            EngineConnectionState.Launching => "Engine: launching…",
-            EngineConnectionState.Connected => _session.Kind == EngineSessionKind.Attached
+            ConnectionState.Launching => "Engine: launching…",
+            ConnectionState.Connected => _session.Kind == SessionKind.Attached
                 ? $"Engine: attached — {_session.ConnectedAppName}"
                 : $"Engine: connected — {_session.ConnectedAppName}",
             _ => "Engine: not connected",
         };
 
-        if (state != EngineConnectionState.Connected)
+        if (state != ConnectionState.Connected)
             PingText = "";
     }
 }

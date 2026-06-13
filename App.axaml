@@ -25,6 +25,14 @@
         <SolidColorBrush x:Key="ThemeBackgroundBrush" Color="#0E1525"/>
         <SolidColorBrush x:Key="ThemeSurfaceBrush" Color="#16203A"/>
         <SolidColorBrush x:Key="ThemeTextBrush" Color="#E8ECF4"/>
+        <!-- Derived neutrals (ThemeManager recomputes these from the palette on apply). Defaults match
+             the dark theme so DynamicResource lookups resolve at design time and on first frame. -->
+        <SolidColorBrush x:Key="ThemeBorderBrush" Color="#2EE8ECF4"/>
+        <SolidColorBrush x:Key="ThemeHeaderBrush" Color="#18E8ECF4"/>
+        <SolidColorBrush x:Key="ThemeBandBrush" Color="#10E8ECF4"/>
+        <SolidColorBrush x:Key="ThemeWellBrush" Color="#0AE8ECF4"/>
+        <SolidColorBrush x:Key="ThemeMutedTextBrush" Color="#868B97"/>
+        <SolidColorBrush x:Key="ThemeScrimBrush" Color="#B00E1525"/>
         <FontFamily x:Key="ThemeFontFamily">Inter</FontFamily>
         <FontFamily x:Key="ThemeMonoFontFamily">Cascadia Mono, Consolas, monospace</FontFamily>
         <x:Double x:Key="ThemeFontSize">13</x:Double>
@@ -32,6 +40,10 @@
 
     <Application.Styles>
         <FluentTheme/>
+        <!-- ColorPicker/ColorView themes ship in their own package and are NOT bundled with FluentTheme;
+             without this include the ColorPicker control has no template and can't be used (e.g. the
+             Theme Creator's palette pickers render dead). -->
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
         <StyleInclude Source="avares://Dock.Avalonia.Themes.Fluent/DockFluentTheme.axaml"/>
         <StyleInclude Source="/Shell/ShellStyles.axaml"/>
     </Application.Styles>

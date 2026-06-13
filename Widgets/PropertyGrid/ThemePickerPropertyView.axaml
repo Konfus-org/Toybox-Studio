@@ -3,15 +3,9 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.ThemePickerPropertyView"
              x:DataType="local:ThemePickerPropertyViewModel">
-    <Grid Margin="0,1">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" SharedSizeGroup="PropName" MinWidth="70"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" Classes="propName" Text="{Binding Name}" ToolTip.Tip="{Binding Description}"/>
-        <GridSplitter Grid.Column="1" Classes="propSplitter"/>
-        <ComboBox Grid.Column="2" HorizontalAlignment="Stretch" IsEnabled="{Binding !IsReadOnly}"
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <ComboBox Classes="field" IsEnabled="{Binding !IsReadOnly}"
                   ItemsSource="{Binding Choices}" SelectedItem="{Binding Value}"/>
-    </Grid>
+    </local:PropertyRow>
 </UserControl>

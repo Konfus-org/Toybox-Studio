@@ -1,29 +1,81 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:Toybox.Studio.Widgets.EntityInspector"
+             xmlns:ecs="using:Toybox.Studio.Widgets.Ecs"
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              x:Class="Toybox.Studio.Widgets.EntityInspector.EntityInspectorView"
-             x:DataType="local:EntityInspectorViewModel">
+             x:DataType="ecs:WorldViewModel">
 
-    <DockPanel Margin="4">
-        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6" Orientation="Horizontal" Spacing="8"
-                    IsVisible="{Binding HasSelection}">
-            <TextBlock Text="{Binding Entity.Name, FallbackValue=''}" VerticalAlignment="Center"/>
-            <TextBlock Text="{Binding Subtitle}" Opacity="0.6" VerticalAlignment="Center"/>
-        </StackPanel>
+    <UserControl.Styles>
+        <!-- Component header: the darkest band, the top of the inspector's tone hierarchy. -->
+        <Style Selector="ToggleButton.componentHeader">
+            <Setter Property="Background" Value="{DynamicResource ThemeHeaderBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0.5,0,0.5"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ToggleButton.componentHeader /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.componentHeader:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.componentHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.componentHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ThemeBandBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.componentHeader Path.compChevron">
+            <Setter Property="Opacity" Value="0.6"/>
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+        </Style>
+        <Style Selector="ToggleButton.componentHeader:checked Path.compChevron">
+            <Setter Property="RenderTransform">
+                <RotateTransform Angle="90"/>
+            </Setter>
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel>
+        <!-- Entity header: a dark band matching the component/footer tone. -->
+        <Border DockPanel.Dock="Top" Background="{DynamicResource ThemeHeaderBrush}"
+                BorderBrush="{DynamicResource ThemeBorderBrush}"
+                BorderThickness="0,0,0,0.5" Padding="10,7" IsVisible="{Binding HasSelection}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding SelectedEntity.Name, FallbackValue=''}" FontWeight="Medium"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding SelectedEntity.Subtitle}" Opacity="0.55" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
 
         <Panel>
             <ghost:GhostView Message="No entity selected." IsVisible="{Binding !HasSelection}"/>
 
             <ScrollViewer IsVisible="{Binding HasSelection}">
-                <ItemsControl ItemsSource="{Binding Components}">
+                <ItemsControl ItemsSource="{Binding SelectedEntity.Components}">
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="local:ComponentGroupViewModel">
-                            <Expander Header="{Binding Name}" IsExpanded="True" Margin="0,0,0,8" Padding="8,4"
-                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                                <pg:PropertyGridView Items="{Binding Properties}"/>
-                            </Expander>
+                        <DataTemplate x:DataType="ecs:ComponentViewModel">
+                            <StackPanel>
+                                <ToggleButton x:Name="CompToggle" Classes="componentHeader" IsChecked="True">
+                                    <DockPanel>
+                                        <Path DockPanel.Dock="Left" Classes="compChevron" Width="9" Height="9"
+                                              Stretch="Uniform" Margin="0,0,7,0" VerticalAlignment="Center"
+                                              Fill="{DynamicResource ThemeTextBrush}"
+                                              Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                        <pg:IconView DockPanel.Dock="Left" Width="15" Height="15"
+                                                     Margin="0,0,6,0" VerticalAlignment="Center"
+                                                     IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="Medium"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </ToggleButton>
+                                <pg:PropertyGridView Items="{Binding Properties}"
+                                                     IsVisible="{Binding #CompToggle.IsChecked}"/>
+                            </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

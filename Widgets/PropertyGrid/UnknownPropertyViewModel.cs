@@ -1,5 +1,3 @@
-using Toybox.Studio.Services;
-
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>

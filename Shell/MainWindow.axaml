@@ -2,14 +2,9 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:shell="using:Toybox.Studio.Shell"
                  xmlns:status="using:Toybox.Studio.Widgets.Status"
-                 xmlns:console="using:Toybox.Studio.Widgets.LogConsole"
-                 xmlns:worldTree="using:Toybox.Studio.Widgets.WorldTree"
-                 xmlns:inspector="using:Toybox.Studio.Widgets.EntityInspector"
-                 xmlns:viewport="using:Toybox.Studio.Widgets.Viewport"
                  xmlns:gameToolbar="using:Toybox.Studio.Widgets.GameToolbar"
+                 xmlns:workspace="using:Toybox.Studio.Workspace"
                  xmlns:dock="using:Dock.Avalonia.Controls"
-                 xmlns:dm="using:Dock.Model.Avalonia.Controls"
-                 xmlns:dmAvalonia="using:Dock.Model.Avalonia"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="850"
@@ -21,15 +16,13 @@
                  Width="1440" Height="850">
 
     <DockPanel>
-        <DockPanel DockPanel.Dock="Top" Margin="8,2">
-            <Button DockPanel.Dock="Right" Classes="Basic"
-                    AutomationProperties.Name="Settings"
-                    ToolTip.Tip="Settings" Click="OnSettingsClick">
-                <PathIcon Data="{StaticResource SettingsIconGeometry}" Width="15" Height="15"/>
-            </Button>
-            <Menu>
+        <Panel DockPanel.Dock="Top" Margin="8,2">
+            <Menu HorizontalAlignment="Left" VerticalAlignment="Center">
                 <MenuItem Header="File">
                     <MenuItem Header="Open Project…" Command="{Binding OpenProjectCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Settings"
+                              Command="{Binding Workspace.OpenDockableCommand}" CommandParameter="Settings"/>
                 </MenuItem>
                 <MenuItem Header="Build">
                     <MenuItem Header="Compile" Command="{Binding CompileCommand}"/>
@@ -42,56 +35,33 @@
                 <MenuItem Header="Debug">
                     <MenuItem Header="Attach to Running Instance" Command="{Binding AttachCommand}"/>
                 </MenuItem>
+                <!-- Data-driven: one item per registered [Dockable], opened (or focused) by Id. -->
+                <MenuItem Header="Windows" ItemsSource="{Binding Workspace.All}">
+                    <MenuItem.ItemContainerTheme>
+                        <ControlTheme TargetType="MenuItem" x:DataType="workspace:DockableDescriptor"
+                                      BasedOn="{StaticResource {x:Type MenuItem}}">
+                            <Setter Property="Header" Value="{Binding Title}"/>
+                            <Setter Property="Command"
+                                    Value="{Binding #RootWindow.((shell:ShellViewModel)DataContext).Workspace.OpenDockableCommand}"/>
+                            <Setter Property="CommandParameter" Value="{Binding Id}"/>
+                        </ControlTheme>
+                    </MenuItem.ItemContainerTheme>
+                </MenuItem>
+                <MenuItem Header="Layout">
+                    <MenuItem Header="Reset Layout" Command="{Binding Workspace.ResetLayoutCommand}"/>
+                </MenuItem>
             </Menu>
-        </DockPanel>
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center">
+                <gameToolbar:GameToolbarView
+                    DataContext="{Binding #RootWindow.((shell:ShellViewModel)DataContext).GameToolbar}"/>
+            </Border>
+        </Panel>
 
         <Border Classes="StatusBar" DockPanel.Dock="Bottom">
             <status:StatusView DataContext="{Binding Status}"/>
         </Border>
 
-        <dock:DockControl x:Name="DockHost" Margin="6" InitializeLayout="True" InitializeFactory="True">
-            <dock:DockControl.Factory>
-                <dmAvalonia:Factory/>
-            </dock:DockControl.Factory>
-            <dm:RootDock Id="Root" IsCollapsable="False" DefaultDockable="{Binding #MainLayout}">
-                <dm:ProportionalDock x:Name="MainLayout" Id="MainLayout" Orientation="Horizontal">
-                    <dm:ToolDock Id="SceneDock" Proportion="0.18" Alignment="Left">
-                        <dm:Tool Id="Scene" Title="Scene" CanClose="False">
-                            <worldTree:WorldTreeView
-                                DataContext="{Binding #RootWindow.((shell:ShellViewModel)DataContext).WorldTree}"/>
-                        </dm:Tool>
-                    </dm:ToolDock>
-                    <dm:ProportionalDockSplitter/>
-                    <dm:ProportionalDock Id="CenterLayout" Orientation="Vertical" Proportion="0.57">
-                        <dm:ToolDock Id="ViewportDock" Proportion="0.72" Alignment="Top">
-                            <dm:Tool Id="Viewport" Title="Viewport" CanClose="False">
-                                <DockPanel>
-                                    <Border DockPanel.Dock="Top" Margin="0,2,0,4">
-                                        <gameToolbar:GameToolbarView
-                                            DataContext="{Binding #RootWindow.((shell:ShellViewModel)DataContext).GameToolbar}"/>
-                                    </Border>
-                                    <viewport:ViewportView
-                                        DataContext="{Binding #RootWindow.((shell:ShellViewModel)DataContext).Viewport}"/>
-                                </DockPanel>
-                            </dm:Tool>
-                        </dm:ToolDock>
-                        <dm:ProportionalDockSplitter/>
-                        <dm:ToolDock Id="ConsoleDock" Proportion="0.28" Alignment="Bottom">
-                            <dm:Tool Id="Console" Title="Console" CanClose="False">
-                                <console:LogConsoleView
-                                    DataContext="{Binding #RootWindow.((shell:ShellViewModel)DataContext).Console}"/>
-                            </dm:Tool>
-                        </dm:ToolDock>
-                    </dm:ProportionalDock>
-                    <dm:ProportionalDockSplitter/>
-                    <dm:ToolDock Id="InspectorDock" Proportion="0.25" Alignment="Right">
-                        <dm:Tool Id="Inspector" Title="Inspector" CanClose="False">
-                            <inspector:EntityInspectorView
-                                DataContext="{Binding #RootWindow.((shell:ShellViewModel)DataContext).Inspector}"/>
-                        </dm:Tool>
-                    </dm:ToolDock>
-                </dm:ProportionalDock>
-            </dm:RootDock>
-        </dock:DockControl>
+        <!-- Factory + Layout are assigned in code from Workspace; the layout is data-driven, saved on exit. -->
+        <dock:DockControl x:Name="DockHost" Margin="6"/>
     </DockPanel>
 </Window>

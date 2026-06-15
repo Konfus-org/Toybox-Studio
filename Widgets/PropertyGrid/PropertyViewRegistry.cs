@@ -1,3 +1,4 @@
+using Toybox.Studio.ECS;
 using Toybox.Studio.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
@@ -14,6 +15,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 public static class PropertyViewRegistry
 {
     private static AssetCatalog? _assets;
+    private static World? _world;
 
     /// <summary>
     /// The asset catalog the custom widgets read from. Exposed so the type-driven factory can build a
@@ -21,7 +23,13 @@ public static class PropertyViewRegistry
     /// </summary>
     public static AssetCatalog? Assets => _assets;
 
-    private static readonly Dictionary<string, Func<PropertyNode, Action?, PropertyViewModelBase>> Builders =
+    /// <summary>
+    /// The world snapshot the entity picker chooses from (entity-reference fields route by their "entity"
+    /// type token).
+    /// </summary>
+    public static World? World => _world;
+
+    private static readonly Dictionary<string, Func<PropertyNode, Action?, PropertyViewModel>> Builders =
         new(StringComparer.OrdinalIgnoreCase)
         {
             ["script"] = (node, _) => new ScriptLinkPropertyViewModel(node, _assets),
@@ -32,9 +40,10 @@ public static class PropertyViewRegistry
     /// Supplies the services the custom widgets depend on. Called once after the app's services are
     /// built; safe to call again if they are rebuilt.
     /// </summary>
-    public static void Configure(AssetCatalog assets)
+    public static void Configure(AssetCatalog assets, World world)
     {
         _assets = assets;
+        _world = world;
     }
 
     /// <summary>
@@ -43,14 +52,14 @@ public static class PropertyViewRegistry
     /// a widget without editing this class; its paired View still needs a DataTemplate in
     /// <c>PropertyGridView.axaml</c>.
     /// </summary>
-    public static void Register(string view, Func<PropertyNode, Action?, PropertyViewModelBase> builder) =>
+    public static void Register(string view, Func<PropertyNode, Action?, PropertyViewModel> builder) =>
         Builders[view] = builder;
 
     /// <summary>
     /// Builds the view-model for <paramref name="node"/>'s custom view, or returns false when the node
     /// names no view (or an unregistered one) so the caller falls back to the type-driven widget.
     /// </summary>
-    public static bool TryCreate(PropertyNode node, Action? commit, out PropertyViewModelBase viewModel)
+    public static bool TryCreate(PropertyNode node, Action? commit, out PropertyViewModel viewModel)
     {
         if (node.View is { Length: > 0 } view && Builders.TryGetValue(view, out var builder))
         {

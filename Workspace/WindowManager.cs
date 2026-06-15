@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Controls;
+using Dock.Avalonia.Controls;
 using Dock.Model.Avalonia;
 using Dock.Model.Avalonia.Controls;
 using Dock.Model.Controls;
@@ -15,13 +17,32 @@ namespace Toybox.Studio.Workspace;
 /// </summary>
 public sealed class WindowManager : Factory
 {
+    // Separates a non-singleton tool's instance id from its descriptor's base id, e.g. "Viewport#3".
+    private const char InstanceSeparator = '#';
+
     private readonly IReadOnlyList<DockableDescriptor> _dockables;
     private readonly Dictionary<string, DockableDescriptor> _byId;
+
+    // Live view-models for spawned (non-singleton) tools, keyed by unique tool id. Each is created on
+    // open and disposed when its window closes; the deferred view template binds to it across
+    // re-templating so Dock never resolves a second view-model for the same window.
+    private readonly Dictionary<string, object> _instances = [];
+    private int _instanceCounter;
 
     public WindowManager(DockableCatalog catalog)
     {
         _dockables = catalog.Dockables;
         _byId = _dockables.ToDictionary(descriptor => descriptor.Id);
+
+        // Without a host-window factory Dock has nothing to put a dragged-out panel into, so floating it
+        // just makes it vanish. Hand it Dock's themed HostWindow (DockFluentTheme styles it) as the default
+        // factory for floated windows. (HostWindowLocator is a per-id dictionary for overrides; the
+        // drag-float path falls back to DefaultHostWindowLocator.)
+        DefaultHostWindowLocator = () => new HostWindow();
+
+        // Closing a spawned tool's window must dispose its view-model so the engine view + frame stream
+        // it owns are torn down.
+        DockableClosed += (_, args) => DisposeInstance(args.Dockable);
     }
 
     public override IRootDock CreateLayout() => CreateDefaultLayout();
@@ -33,6 +54,10 @@ public sealed class WindowManager : Factory
     /// </summary>
     public IRootDock CreateDefaultLayout()
     {
+        // Building a fresh default layout abandons any previously spawned tools, so dispose their
+        // view-models and reset the instance counter before re-seeding from the catalog.
+        ClearInstances();
+
         var children = new List<IDockable>();
         AddWithSplitters(children, BuildToolDock(DockSlot.Left, Alignment.Left), BuildCenter(),
             BuildToolDock(DockSlot.Right, Alignment.Right));
@@ -61,8 +86,10 @@ public sealed class WindowManager : Factory
         if (dockable is null)
             return;
 
-        if (dockable is Tool tool && _byId.TryGetValue(tool.Id, out var descriptor))
-            tool.Content = DeferredContent(descriptor);
+        EnsureDockCapabilities(dockable);
+
+        if (dockable is Tool tool && TryResolveDescriptor(tool.Id, out var descriptor))
+            tool.Content = DeferredContent(descriptor, ResolveInstance(tool.Id, descriptor));
 
         if (dockable is IDock dock && dock.VisibleDockables is { } children)
         {
@@ -77,31 +104,50 @@ public sealed class WindowManager : Factory
         }
     }
 
-    /// <summary>Focuses the dockable if it already exists anywhere in the layout; otherwise docks it open.</summary>
+    // Dock's Fluent chrome binds straight into each dockable's capability override (and each dock's policy).
+    // Those objects are null by design — null means "inherit" — but a null trips a binding error for every
+    // panel each time its chrome is templated, which floods the log. Hand each dockable an empty instance:
+    // all fields stay null, so capability resolution is unchanged, but the theme now has something to bind.
+    private static void EnsureDockCapabilities(IDockable dockable)
+    {
+        dockable.DockCapabilityOverrides ??= new DockCapabilityOverrides();
+        if (dockable is IDock dock)
+            dock.DockCapabilityPolicy ??= new DockCapabilityPolicy();
+        if (dockable is IRootDock root)
+            root.RootDockCapabilityPolicy ??= new DockCapabilityPolicy();
+    }
+
+    /// <summary>
+    /// For a singleton dockable: focuses it if it already exists anywhere, otherwise docks it open.
+    /// For a non-singleton dockable: always docks a fresh instance with its own view-model.
+    /// </summary>
     public void OpenOrFocus(DockableDescriptor descriptor, IRootDock root, Window owner)
     {
-        if (TryFindExisting(descriptor.Id, root, out var existing, out var floatingHost))
+        if (descriptor.Singleton && TryFindExisting(descriptor.Id, root, out var existing, out var floatingHost))
             Focus(root, existing, floatingHost);
         else
             Open(descriptor, root);
     }
 
-    /// <summary>Docks the dockable open only when it isn't already open anywhere (used by the Play button).</summary>
-    public void EnsureOpen(DockableDescriptor descriptor, IRootDock root, Window owner)
-    {
-        if (!TryFindExisting(descriptor.Id, root, out _, out _))
-            Open(descriptor, root);
-    }
+    /// <summary>
+    /// Surfaces the dockable (used to bring up the game view on Play): focuses it if open, otherwise
+    /// docks it. Same behavior as <see cref="OpenOrFocus"/> — kept as a named entry point for the
+    /// Play flow.
+    /// </summary>
+    public void EnsureOpen(DockableDescriptor descriptor, IRootDock root, Window owner) =>
+        OpenOrFocus(descriptor, root, owner);
 
+    // State queries match by base id so a non-singleton with any open instance (e.g. "Viewport#2")
+    // reads as docked/floating for its descriptor id ("Viewport").
     public bool IsDocked(string id, IRootDock root) =>
-        FindInDock(root, id, out _);
+        ContainsBaseId(root, id);
 
     public bool IsFloating(string id, IRootDock root)
     {
         if (root.Windows is not { } windows)
             return false;
 
-        return windows.Any(window => window.Layout is { } layout && FindInDock(layout, id, out _));
+        return windows.Any(window => window.Layout is { } layout && ContainsBaseId(layout, id));
     }
 
     private IToolDock? BuildToolDock(DockSlot slot, Alignment alignment)
@@ -152,18 +198,41 @@ public sealed class WindowManager : Factory
         return first is null || double.IsNaN(first.Proportion) ? 0 : first.Proportion;
     }
 
+    // Builds the tool for a descriptor. Singletons use the descriptor id and bind their DI view-model;
+    // non-singletons get a unique instance id and a freshly-spawned, registered view-model.
     private Tool CreateToolFor(DockableDescriptor descriptor)
     {
-        var tool = new Tool { Id = descriptor.Id, Title = descriptor.Title, CanClose = true };
-        tool.Content = DeferredContent(descriptor);
+        if (descriptor.Singleton)
+        {
+            var tool = new Tool { Id = descriptor.Id, Title = descriptor.Title, CanClose = true };
+            tool.Content = DeferredContent(descriptor, null);
+            EnsureDockCapabilities(tool);
+            return tool;
+        }
+
+        return CreateInstanceTool(descriptor, NextInstanceId(descriptor), descriptor.CreateViewModel());
+    }
+
+    // Builds a spawned tool bound to a specific view-model, registering it so the deferred template
+    // reuses the same instance and the close handler can dispose it.
+    private Tool CreateInstanceTool(DockableDescriptor descriptor, string toolId, object viewModel)
+    {
+        _instances[toolId] = viewModel;
+        var tool = new Tool { Id = toolId, Title = descriptor.Title, CanClose = true };
+        tool.Content = DeferredContent(descriptor, viewModel);
+        EnsureDockCapabilities(tool);
         return tool;
     }
 
+    private string NextInstanceId(DockableDescriptor descriptor) =>
+        $"{descriptor.Id}{InstanceSeparator}{++_instanceCounter}";
+
     // Hand Dock a deferred-template factory, not a constructed view: Dock rebuilds the content on every
     // dock / theme re-templating. A single live control gets orphaned when re-parented (blanking it); the
-    // shared view-model carries all state, so rebuilding the view loses nothing.
-    private static Func<IServiceProvider, object> DeferredContent(DockableDescriptor descriptor) =>
-        _ => descriptor.CreateView();
+    // view-model carries all state, so rebuilding the view loses nothing. A null view-model means "resolve
+    // from DI" (singletons); a spawned instance passes its own view-model so every rebuild reuses it.
+    private static Func<IServiceProvider, object> DeferredContent(DockableDescriptor descriptor, object? viewModel) =>
+        _ => descriptor.CreateView(viewModel);
 
     private static void AddWithSplitters(List<IDockable> target, params IDock?[] docks)
     {
@@ -284,5 +353,79 @@ public sealed class WindowManager : Factory
 
         found = null!;
         return false;
+    }
+
+    // The descriptor id for a tool id: identical for singletons, the part before '#' for spawned tools.
+    private static string BaseId(string toolId)
+    {
+        var separator = toolId.IndexOf(InstanceSeparator);
+        return separator < 0 ? toolId : toolId[..separator];
+    }
+
+    private bool TryResolveDescriptor(
+        string toolId,
+        [MaybeNullWhen(false)] out DockableDescriptor descriptor) =>
+        _byId.TryGetValue(BaseId(toolId), out descriptor);
+
+    // The view-model a tool should bind to: null for singletons (resolved from DI by the deferred
+    // template); for a spawned tool, its registered instance — created and tracked here on first sight
+    // so layout restore rehydrates every saved viewport, idempotently across AttachContent re-runs.
+    private object? ResolveInstance(string toolId, DockableDescriptor descriptor)
+    {
+        if (descriptor.Singleton)
+            return null;
+
+        if (!_instances.TryGetValue(toolId, out var viewModel))
+        {
+            viewModel = descriptor.CreateViewModel();
+            _instances[toolId] = viewModel;
+            TrackRestoredInstanceId(toolId);
+        }
+
+        return viewModel;
+    }
+
+    // Keep the spawn counter ahead of any restored instance id so later opens never collide with one.
+    private void TrackRestoredInstanceId(string toolId)
+    {
+        var separator = toolId.IndexOf(InstanceSeparator);
+        if (separator >= 0
+            && int.TryParse(toolId.AsSpan(separator + 1), out var suffix)
+            && suffix > _instanceCounter)
+            _instanceCounter = suffix;
+    }
+
+    // Whether any dockable under this dock (recursively) belongs to the given descriptor id.
+    private static bool ContainsBaseId(IDock dock, string id)
+    {
+        if (dock.VisibleDockables is not { } dockables)
+            return false;
+
+        foreach (var dockable in dockables)
+        {
+            if (BaseId(dockable.Id) == id)
+                return true;
+            if (dockable is IDock child && ContainsBaseId(child, id))
+                return true;
+        }
+
+        return false;
+    }
+
+    private void ClearInstances()
+    {
+        foreach (var viewModel in _instances.Values)
+            (viewModel as IDisposable)?.Dispose();
+
+        _instances.Clear();
+        _instanceCounter = 0;
+    }
+
+    private void DisposeInstance(IDockable? dockable)
+    {
+        if (dockable is null || !_instances.Remove(dockable.Id, out var viewModel))
+            return;
+
+        (viewModel as IDisposable)?.Dispose();
     }
 }

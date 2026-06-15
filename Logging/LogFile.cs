@@ -43,7 +43,7 @@ public sealed class LogFile : IDisposable
                 return;
 
             var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-            _writer.WriteLine($"[{timestamp}] [{entry.Level}] [{entry.Source}] {entry.Message}");
+            _writer.WriteLine($"[{timestamp}] [{entry.Level.ToWire()}] {entry.Message}");
         }
     }
 

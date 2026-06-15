@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.EntityPickerPropertyView"
+             x:DataType="local:EntityPickerPropertyViewModel">
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <Border Classes="fieldHost">
+            <DockPanel>
+                <!-- Picker: opens a chooser over the world's entities. -->
+                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding PickCommand}"
+                        VerticalAlignment="Stretch" ToolTip.Tip="Pick an entity">
+                    <local:IconView Width="14" Height="14" IconName="Search"
+                                    Foreground="{DynamicResource ThemeTextBrush}"/>
+                </Button>
+                <!-- The referenced entity's name (or "(none)"). -->
+                <TextBlock Text="{Binding DisplayName}" FontSize="12" Margin="7,0,0,0"
+                           VerticalAlignment="Center" Opacity="0.85"
+                           Foreground="{DynamicResource ThemeTextBrush}"/>
+            </DockPanel>
+        </Border>
+    </local:PropertyRow>
+</UserControl>

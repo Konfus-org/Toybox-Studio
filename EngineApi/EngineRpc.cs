@@ -12,31 +12,18 @@ namespace Toybox.Studio.EngineApi;
 /// <summary>The engine's reply to the editor.hello handshake.</summary>
 public sealed record Hello(int ProtocolVersion, string Engine, string App);
 
-/// <summary>The engine's reply to view.start: where and how frames are shared.</summary>
+/// <summary>The engine's reply to view.start: the new view's id and pixel format.</summary>
 public sealed record ViewInfo(string Name, string Format);
 
 /// <summary>
-/// One reflected property's metadata from <c>reflect.describeType</c>: its serialization type token plus
-/// the editor attributes and, for composite properties, the wire name of the nested type.
+/// A <c>view.surface</c> notification: the engine has created (or failed to create) a view's shared
+/// GPU texture. <see cref="Handle"/> is a Windows global shared D3D11 texture handle the editor's
+/// compositor imports directly; a zero handle means GPU sharing was unavailable for this view.
 /// </summary>
-public sealed record ReflectedProperty(
-    string Name,
-    string Type,
-    string? NestedType,
-    string? Category,
-    string? Description,
-    string? View,
-    bool Readonly,
-    bool Hidden);
-
-/// <summary>A reflected type's editor description from <c>reflect.describeType</c>.</summary>
-public sealed record ReflectedType(string Name, string? Icon, string? IconColor, List<ReflectedProperty> Properties);
-
-/// <summary>The <c>reflect.isDefault</c> reply.</summary>
-public sealed record ReflectIsDefaultReply(bool IsDefault);
+public sealed record ViewSurface(string Name, long Handle, int Width, int Height, string Format);
 
 /// <summary>
-/// The one, always-injectable engine API. It owns the JSON-RPC connection to the engine's RpcCommunication
+/// The one, always-injectable engine API. It owns the JSON-RPC connection to the engine's StudioBridge
 /// plugin (newline-delimited JSON over loopback TCP) and exposes every call as an easy-to-use, transactional
 /// wrapper that returns a <see cref="Result"/> with a helpful message on failure rather than throwing —
 /// including returning failure when not connected. <see cref="Session"/> drives the connection
@@ -51,6 +38,26 @@ public sealed class EngineRpc : IAsyncDisposable
 
     /// <summary>Raised for every engine.log notification streamed by the engine.</summary>
     public event Action<LogEntry>? LogReceived;
+
+    /// <summary>
+    /// Raised for every view.surface notification: a view's shared GPU texture is ready (or failed).
+    /// Each <see cref="ViewportStream"/> filters by view name. Fired on the RPC listener thread.
+    /// </summary>
+    public event Action<ViewSurface>? SurfaceReceived;
+
+    /// <summary>
+    /// Raised for every view.presented notification: a view has drawn its first real frame into the
+    /// shared surface (sent once per view, after the surface is created). Carries the view name.
+    /// Fired on the RPC listener thread.
+    /// </summary>
+    public event Action<string>? ViewPresented;
+
+    /// <summary>
+    /// Raised for every input.mouseLock notification: the playing game's mouse-lock mode changed
+    /// ("unlocked", "relative", or "grabbed"). Lets the game panel capture the cursor for mouselook.
+    /// Fired on the RPC listener thread.
+    /// </summary>
+    public event Action<string>? MouseLockModeChanged;
 
     /// <summary>Raised when the connection drops for any reason.</summary>
     public event Action? Disconnected;
@@ -74,7 +81,18 @@ public sealed class EngineRpc : IAsyncDisposable
             _rpc = new JsonRpc(new NewLineDelimitedMessageHandler(stream, stream, formatter));
             _rpc.AddLocalRpcMethod(
                 "engine.log",
-                (string level, string message) => LogReceived?.Invoke(new LogEntry(level, message)));
+                (string level, string message) =>
+                    LogReceived?.Invoke(new LogEntry(LogLevels.Parse(level), message)));
+            _rpc.AddLocalRpcMethod(
+                "view.surface",
+                (string name, long sharedHandle, int width, int height, string format) =>
+                    SurfaceReceived?.Invoke(new ViewSurface(name, sharedHandle, width, height, format)));
+            _rpc.AddLocalRpcMethod(
+                "view.presented",
+                (string name) => ViewPresented?.Invoke(name));
+            _rpc.AddLocalRpcMethod(
+                "input.mouseLock",
+                (string mode) => MouseLockModeChanged?.Invoke(mode));
             _rpc.Disconnected += (_, _) => Disconnected?.Invoke();
             _rpc.StartListening();
 
@@ -121,6 +139,13 @@ public sealed class EngineRpc : IAsyncDisposable
     public Task<Result> SetPausedAsync(bool isPaused, CancellationToken ct) =>
         InvokeAsync("engine.setPaused", new { IsPaused = isPaused }, ct);
 
+    /// <summary>
+    /// Enters or exits play mode. Entering snapshots the world and runs the game loop; exiting
+    /// restores the pre-play world and halts simulation. The engine keeps rendering either way.
+    /// </summary>
+    public Task<Result> SetPlayingAsync(bool isPlaying, CancellationToken ct) =>
+        InvokeAsync("engine.setPlaying", new { IsPlaying = isPlaying }, ct);
+
     /// <summary>Asks the engine to exit gracefully.</summary>
     public Task<Result> ShutdownAsync(CancellationToken ct) =>
         InvokeAsync("engine.shutdown", null, ct);
@@ -139,6 +164,47 @@ public sealed class EngineRpc : IAsyncDisposable
     /// <summary>Fetches the active world's entities with their reflected component data (the raw reply).</summary>
     public Task<Result<JObject>> DescribeWorldAsync(CancellationToken ct) =>
         InvokeAsync<JObject>("world.describe", null, ct);
+
+    /// <summary>
+    /// Fetches one entity's current reflected component data (the same per-entity shape as
+    /// <see cref="DescribeWorldAsync"/>, wrapped as <c>{ entity, component_types }</c>). Used to keep the
+    /// selected entity in sync with the running game without re-describing the whole world.
+    /// </summary>
+    public Task<Result<JObject>> DescribeEntityAsync(ulong entityId, CancellationToken ct) =>
+        InvokeAsync<JObject>("entity.describe", new { EntityId = entityId }, ct);
+
+    /// <summary>
+    /// Creates a new entity (optionally named and parented; a zero/omitted parent means a root entity) and
+    /// returns its new id. The engine appends it after its last sibling.
+    /// </summary>
+    public async Task<Result<ulong>> CreateEntityAsync(string? name, ulong parent, CancellationToken ct)
+    {
+        var result = await InvokeAsync<JObject>(
+            "entity.create",
+            new { Name = name ?? "", Parent = parent },
+            ct).ContinueOnAnyContext();
+        return result is { Success: true, Value: { } reply }
+            ? Result<ulong>.Ok(reply.Value<ulong>("id"))
+            : Result<ulong>.Fail(result.Error ?? "The engine returned no result.");
+    }
+
+    /// <summary>Destroys an entity and its whole subtree.</summary>
+    public Task<Result> DestroyEntityAsync(ulong entityId, CancellationToken ct) =>
+        InvokeAsync("entity.destroy", new { EntityId = entityId }, ct);
+
+    /// <summary>Promotes or demotes an entity between global (full-lifetime resident) and ordinary scene.</summary>
+    public Task<Result> SetEntityGlobalAsync(ulong entityId, bool global, CancellationToken ct) =>
+        InvokeAsync("entity.setGlobal", new { EntityId = entityId, Global = global }, ct);
+
+    /// <summary>
+    /// Moves an entity to <paramref name="parent"/> (zero = root) and to position <paramref name="index"/>
+    /// among that parent's children — one call covers both reorder and reparent.
+    /// </summary>
+    public Task<Result> MoveEntityAsync(ulong entityId, ulong parent, int index, CancellationToken ct) =>
+        InvokeAsync(
+            "entity.move",
+            new { EntityId = entityId, Parent = parent, Index = index },
+            ct);
 
     /// <summary>Replaces a whole component on an entity with the given typed JSON.</summary>
     public Task<Result> SetComponentAsync(ulong entityId, string component, JObject value, CancellationToken ct) =>
@@ -175,26 +241,43 @@ public sealed class EngineRpc : IAsyncDisposable
     public async Task<Result<bool>> IsPropertyDefaultAsync(
         ulong entityId, string component, string property, CancellationToken ct)
     {
-        var result = await InvokeAsync<ReflectIsDefaultReply>(
+        var result = await InvokeAsync<JObject>(
             "reflect.isDefault",
             new { EntityId = entityId, Component = component, Property = property },
             ct).ContinueOnAnyContext();
         return result is { Success: true, Value: { } reply }
-            ? Result<bool>.Ok(reply.IsDefault)
+            ? Result<bool>.Ok(reply.Value<bool>("isDefault"))
             : Result<bool>.Fail(result.Error ?? "The engine returned no result.");
     }
 
-    /// <summary>Describes a reflected type's properties and icon without needing a live instance.</summary>
-    public Task<Result<ReflectedType>> DescribeTypeAsync(string typeName, CancellationToken ct) =>
-        InvokeAsync<ReflectedType>("reflect.describeType", new { TypeName = typeName }, ct);
+    /// <summary>
+    /// Asks the engine to start a new view and returns its unique id. Each call creates an
+    /// independent view with its own engine camera: an editor camera (free, spawned at the game
+    /// camera) or a game view that mirrors the game camera. The view's shared GPU texture arrives
+    /// shortly after as a <see cref="SurfaceReceived"/> notification (created on the render lane).
+    /// </summary>
+    public Task<Result<ViewInfo>> StartViewAsync(ViewKind kind, CancellationToken ct) =>
+        InvokeAsync<ViewInfo>("view.start", new { Kind = kind == ViewKind.Game ? "game" : "editor" }, ct);
 
-    /// <summary>Asks the engine to start streaming frames into shared memory, returning where and how.</summary>
-    public Task<Result<ViewInfo>> StartViewAsync(CancellationToken ct) =>
-        InvokeAsync<ViewInfo>("view.start", null, ct);
+    /// <summary>Stops the engine view with the given id (from <see cref="StartViewAsync"/>).</summary>
+    public Task<Result> StopViewAsync(string name, CancellationToken ct) =>
+        InvokeAsync("view.stop", new { Name = name }, ct);
 
-    /// <summary>Stops the engine's frame streaming.</summary>
-    public Task<Result> StopViewAsync(CancellationToken ct) =>
-        InvokeAsync("view.stop", null, ct);
+    /// <summary>
+    /// Forwards the focused viewport's input to its engine view (fire-and-forget notification). Drives
+    /// the editor fly camera; mouse/wheel values are deltas since the last call. Buttons: bit0 left,
+    /// bit1 right, bit2 middle. MoveKeys: bit0 fwd, 1 back, 2 left, 3 right, 4 up, 5 down.
+    /// </summary>
+    public Task SendViewInputAsync(
+        string view, bool focused, int buttons, int moveKeys,
+        IReadOnlyList<int> keys, double mouseX, double mouseY, double dx, double dy, double wheel) =>
+        NotifyAsync(
+            "view.input",
+            new
+            {
+                View = view, Focused = focused, Buttons = buttons, MoveKeys = moveKeys,
+                Keys = keys, MouseX = mouseX, MouseY = mouseY, Dx = dx, Dy = dy, Wheel = wheel,
+            });
 
     /// <summary>Fetches the project's assets and registered script types.</summary>
     public Task<Result<AssetCatalogReply>> ListAssetsAsync(CancellationToken ct) =>

@@ -6,7 +6,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// <summary>
 /// Boolean property rendered as a checkbox.
 /// </summary>
-public sealed partial class BoolPropertyViewModel : PropertyViewModelBase
+public sealed partial class BoolPropertyViewModel : PropertyViewModel
 {
     private readonly JsonValueSlot _slot;
 

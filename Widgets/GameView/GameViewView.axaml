@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.GameView"
+             xmlns:viewport="using:Toybox.Studio.Widgets.Viewport"
+             xmlns:gameToolbar="using:Toybox.Studio.Widgets.GameToolbar"
+             x:Class="Toybox.Studio.Widgets.GameView.GameViewView"
+             x:DataType="local:GameViewViewModel">
+
+    <DockPanel>
+        <!-- Transport (Play/Stop/Pause) sits above the game camera frame. -->
+        <Border DockPanel.Dock="Top" Padding="6" Background="{DynamicResource ThemeHeaderBrush}">
+            <gameToolbar:GameToolbarView DataContext="{Binding Transport}"/>
+        </Border>
+
+        <viewport:ViewportView DataContext="{Binding Surface}"/>
+    </DockPanel>
+</UserControl>

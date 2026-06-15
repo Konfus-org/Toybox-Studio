@@ -18,21 +18,27 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
     <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.0.4" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
-    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1">
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.2">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
-    <PackageReference Include="StreamJsonRpc" Version="2.25.25" />
+    <PackageReference Include="StreamJsonRpc" Version="2.25.28" />
     <!-- Security pin: StreamJsonRpc pulls MessagePack 2.5.198 transitively, which has a high-severity
          advisory (GHSA-hv8m-jj95-wg3x). Override it with the patched 2.5.301 from the same line. -->
-    <PackageReference Include="MessagePack" Version="2.5.301" />
+    <PackageReference Include="MessagePack" Version="3.1.7" />
     <PackageReference Include="Dock.Avalonia" Version="12.0.0.2" />
     <PackageReference Include="Dock.Model.Avalonia" Version="12.0.0.2" />
     <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="12.0.0.2" />
     <PackageReference Include="Dock.Serializer.Newtonsoft" Version="12.0.0.2" />
     <PackageReference Include="IconPacks.Avalonia" Version="2.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Shell\Shell.axaml.cs">
+      <DependentUpon>Shell.axaml</DependentUpon>
+    </Compile>
   </ItemGroup>
 
 </Project>

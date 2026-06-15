@@ -17,7 +17,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly Settings _settings;
     private readonly ThemeManager _theme;
-    private readonly ThemeCreatorService _themeCreator;
+    private readonly ThemeCreator _themeCreator;
     private readonly ProjectManager _projects;
     private readonly Logger _log;
     private readonly JsonParser _parser;
@@ -25,7 +25,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(
         Settings settings,
         ThemeManager theme,
-        ThemeCreatorService themeCreator,
+        ThemeCreator themeCreator,
         ProjectManager projects,
         Logger log,
         JsonParser parser)
@@ -39,7 +39,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshProjectSettings);
         RefreshProjectSettings();
-        BuildEditorSettingsGrid();
+        BuildEditorSettings();
     }
 
     // Theme selection lives in the editor-settings grid (the Variant and per-variant theme pickers,
@@ -49,7 +49,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task CreateThemeAsync()
     {
-        await _themeCreator.CreateThemeAsync().ContinueOnSameContext();
+        await _themeCreator.CreateAsync().ContinueOnSameContext();
         // Pick up the newly created theme (and current selection) in the pickers.
         RefreshThemes();
     }
@@ -58,7 +58,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// Rebuilds the editor-settings grid so the theme pickers pick up a newly created theme and the
     /// current selection.
     /// </summary>
-    public void RefreshThemes() => BuildEditorSettingsGrid();
+    public void RefreshThemes() => BuildEditorSettings();
 
     [RelayCommand]
     private void OpenThemesFolder()
@@ -70,10 +70,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool HasProject { get; private set; }
 
+    /// <summary>Settings search; filters both the Editor and Project grids by header or value.</summary>
+    [ObservableProperty]
+    public partial string Search { get; set; } = "";
+
     private void RefreshProjectSettings()
     {
         HasProject = _projects.CurrentProject is not null;
-        BuildProjectSettingsGrid();
+        BuildProjectSettings();
     }
 
     // The same type-driven grid used by the entity inspector, pointed at the project's AppSettings.json
@@ -86,14 +90,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// All of the current project's settings, edited through the generic property grid.
     /// </summary>
-    public ObservableCollection<PropertyViewModelBase> ProjectSettingsProperties { get; } = [];
+    public ObservableCollection<PropertyViewModel> ProjectSettingsProperties { get; } = [];
 
     /// <summary>
     /// All editor settings, edited through the generic property grid.
     /// </summary>
-    public ObservableCollection<PropertyViewModelBase> EditorSettingsProperties { get; } = [];
+    public ObservableCollection<PropertyViewModel> EditorSettingsProperties { get; } = [];
 
-    private void BuildProjectSettingsGrid()
+    private void BuildProjectSettings()
     {
         ProjectSettingsProperties.Clear();
         _projectSettingsJson = _settings.ReadProjectSettingsJson(_projects.CurrentProject);
@@ -101,10 +105,10 @@ public sealed partial class SettingsViewModel : ObservableObject
             return;
 
         foreach (var node in _parser.ParseProperties(_projectSettingsJson))
-            ProjectSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveProjectSettingsGrid));
+            ProjectSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveProjectSettings));
     }
 
-    private void SaveProjectSettingsGrid()
+    private void SaveProjectSettings()
     {
         if (_projectSettingsJson is null)
             return;
@@ -115,7 +119,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             _projects.Reopen(); // refresh display name + notify listeners
     }
 
-    private void BuildEditorSettingsGrid()
+    private void BuildEditorSettings()
     {
         EditorSettingsProperties.Clear();
         _editorSettingsJson = JObject.FromObject(_settings.Editor);
@@ -129,7 +133,22 @@ public sealed partial class SettingsViewModel : ObservableObject
         InjectChoices(_editorSettingsJson, "Theme", "DarkTheme", _theme.ThemeNamesFor(ThemeMode.Dark));
         InjectChoices(_editorSettingsJson, "Theme", "LightTheme", _theme.ThemeNamesFor(ThemeMode.Light));
         foreach (var node in _parser.ParseProperties(_editorSettingsJson))
-            EditorSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveEditorSettingsGrid));
+            EditorSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveEditorSettings));
+    }
+
+    private void SaveEditorSettings()
+    {
+        if (_editorSettingsJson is null)
+            return;
+
+        // The live grid document carries typed wrappers (e.g. the compiler enum); collapse them on a
+        // copy so PopulateObject sees plain values, leaving the editable document and its tokens intact.
+        var plain = (JObject)_editorSettingsJson.DeepClone();
+        FlattenTypedWrappers(plain);
+        JsonConvert.PopulateObject(plain.ToString(), _settings.Editor);
+        _settings.Save();
+        // Engine + theme-selection changes here should take effect immediately.
+        _theme.ApplySavedTheme();
     }
 
     /// <summary>
@@ -188,21 +207,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             ["value"] = current,
             ["choices"] = new JArray(choices),
         };
-    }
-
-    private void SaveEditorSettingsGrid()
-    {
-        if (_editorSettingsJson is null)
-            return;
-
-        // The live grid document carries typed wrappers (e.g. the compiler enum); collapse them on a
-        // copy so PopulateObject sees plain values, leaving the editable document and its tokens intact.
-        var plain = (JObject)_editorSettingsJson.DeepClone();
-        FlattenTypedWrappers(plain);
-        JsonConvert.PopulateObject(plain.ToString(), _settings.Editor);
-        _settings.Save();
-        // Engine + theme-selection changes here should take effect immediately.
-        _theme.ApplySavedTheme();
     }
 
     /// <summary>

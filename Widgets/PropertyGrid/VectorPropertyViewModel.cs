@@ -7,7 +7,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// <summary>
 /// Vector/quaternion property — a row of labeled scalar components.
 /// </summary>
-public sealed class VectorPropertyViewModel : PropertyViewModelBase
+public sealed class VectorPropertyViewModel : PropertyViewModel
 {
     private static readonly string[] Labels = ["X", "Y", "Z", "W"];
 

@@ -43,4 +43,13 @@ public sealed class DockableAttribute(string id) : Attribute
 
     /// <summary>Tie-breaker for ordering within a slot and in the Windows menu (lower comes first).</summary>
     public int Order { get; init; }
+
+    /// <summary>
+    /// When <c>true</c> (the default), there is at most one of this dockable: opening it from the
+    /// Windows menu focuses the existing one. When <c>false</c>, every open spawns a fresh instance
+    /// (its own view-model and engine resources) — used by the viewport, where each window drives a
+    /// separate engine camera. Non-singleton view-models are registered transient and disposed when
+    /// their window closes.
+    /// </summary>
+    public bool Singleton { get; init; } = true;
 }

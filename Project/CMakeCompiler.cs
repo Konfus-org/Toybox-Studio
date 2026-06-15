@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using Toybox.Studio.Logging;
+using Toybox.Studio.Shell;
 
 namespace Toybox.Studio.Project;
 
@@ -19,17 +21,19 @@ public enum CompilerPreference
 }
 
 /// <summary>
-/// Generic cross-platform CMake driver: configures and builds any CMake project by shelling out
-/// to the cmake CLI, streaming tool output to a log callback. Knows nothing about Toybox.
+/// Generic cross-platform CMake driver: configures and builds any CMake project by shelling out to the
+/// cmake CLI via <see cref="CommandRunner"/>, which streams tool output to the unified log. Knows nothing
+/// about Toybox.
 /// </summary>
 public sealed class CMakeCompiler
 {
-    /// <summary>
-    /// True when the cmake CLI is reachable on PATH.
-    /// </summary>
-    public static bool IsCMakeAvailable()
+    private readonly CommandRunner _runner;
+    private readonly Logger _log;
+
+    public CMakeCompiler(CommandRunner runner, Logger log)
     {
-        return TryGetToolVersion("cmake") is not null;
+        _runner = runner;
+        _log = log;
     }
 
     /// <summary>
@@ -40,15 +44,14 @@ public sealed class CMakeCompiler
         string buildDirectory,
         IReadOnlyDictionary<string, string> defines,
         CompilerPreference compiler,
-        Action<string, string> log,
         CancellationToken ct)
     {
         var arguments = new List<string> { "-S", sourceDirectory, "-B", buildDirectory };
-        arguments.AddRange(GetGeneratorArguments(compiler));
+        arguments.AddRange(await GetGeneratorArgumentsAsync(compiler, ct).ContinueOnAnyContext());
         foreach (var (name, value) in defines)
             arguments.Add($"-D{name}={value}");
 
-        return await RunCMakeAsync(arguments, log, ct).ContinueOnAnyContext();
+        return await RunCMakeAsync(arguments, ct).ContinueOnAnyContext();
     }
 
     /// <summary>
@@ -59,7 +62,6 @@ public sealed class CMakeCompiler
         string configuration,
         bool parallel,
         bool verbose,
-        Action<string, string> log,
         CancellationToken ct)
     {
         var arguments = new List<string>
@@ -83,29 +85,39 @@ public sealed class CMakeCompiler
         };
         for (var attempt = 0; ; attempt++)
         {
+            // The runner logs the tool output itself, so watch the unified log stream to tell a transient
+            // file lock (worth a retry) apart from a genuine build error.
             var sawLock = false;
-            void TrackLock(string level, string message)
+            void WatchForLock(LogEntry entry)
             {
-                if (LooksLikeFileLock(message))
+                if (LooksLikeFileLock(entry.Message))
                     sawLock = true;
-                log(level, message);
             }
 
-            if (await RunCMakeAsync(arguments, TrackLock, ct).ContinueOnAnyContext())
+            _log.Logged += WatchForLock;
+            bool built;
+            try
+            {
+                built = await RunCMakeAsync(arguments, ct).ContinueOnAnyContext();
+            }
+            finally
+            {
+                _log.Logged -= WatchForLock;
+            }
+
+            if (built)
                 return true;
 
             if (!sawLock || attempt >= retryDelays.Length)
             {
                 if (sawLock)
-                    log(
-                        "error",
+                    _log.Error(
                         "Build output is still locked. Close any running instance of the project "
                             + "(or exclude the build folder from your virus scanner) and try again.");
                 return false;
             }
 
-            log(
-                "warning",
+            _log.Warning(
                 $"Build output was locked (a running engine or virus scan); retrying in "
                     + $"{retryDelays[attempt].TotalSeconds:0.#}s...");
             await Task.Delay(retryDelays[attempt], ct).ContinueOnAnyContext();
@@ -118,20 +130,14 @@ public sealed class CMakeCompiler
         || message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase)
         || message.Contains("Access is denied", StringComparison.OrdinalIgnoreCase);
 
-    // Build tools write most failures to stdout, so a line's stream alone is a poor severity signal.
-    // Recognize the common error shapes — clang/gcc/cmake "error:", a Ninja "FAILED:" step, MSVC
-    // compiler ("error C2065") and linker ("LNK2019"/"LNK1120") codes, and "fatal error".
-    private static readonly Regex ErrorLinePattern = new(
-        @"error:|fatal error|FAILED:|CMake Error|error C[0-9]+|LNK[0-9]+",
+    // The CommandRunner categorizes each logged build line by the first named group that matches. Build
+    // tools write most failures to stdout, so the line text — not its stream — is the severity signal:
+    // the "error" group catches clang/gcc/cmake "error:", a Ninja "FAILED:" step, MSVC compiler
+    // ("error C2065") and linker ("LNK2019"/"LNK1120") codes, and "fatal error"; everything else with a
+    // "warning" is a warning, and the rest is info.
+    private static readonly Regex BuildLogPattern = new(
+        @"(?<error>error:|fatal error|FAILED:|CMake Error|error C[0-9]+|LNK[0-9]+)|(?<warning>warning)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    /// <summary>
-    /// Upgrades a tool line to "error" when it carries a recognizable build-error signature, so real
-    /// failures stand out instead of hiding among the info/warning stream lines; otherwise the line
-    /// keeps its stream's default level.
-    /// </summary>
-    private static string ClassifyLevel(string defaultLevel, string line) =>
-        ErrorLinePattern.IsMatch(line) ? "error" : defaultLevel;
 
     public static bool IsConfigured(string buildDirectory)
     {
@@ -200,41 +206,44 @@ public sealed class CMakeCompiler
     /// uses a Ninja Multi-Config + clang setup. Auto picks MSVC on Windows (when installed) and Clang
     /// elsewhere, falling back to the platform default when neither is available.
     /// </summary>
-    private static IEnumerable<string> GetGeneratorArguments(CompilerPreference compiler)
+    private async Task<IReadOnlyList<string>> GetGeneratorArgumentsAsync(
+        CompilerPreference compiler,
+        CancellationToken ct)
     {
         switch (compiler)
         {
             case CompilerPreference.Msvc:
                 // CMake's default Windows generator is the installed Visual Studio (a multi-config
                 // generator, like the Ninja Multi-Config used for clang), so nothing to add.
-                yield break;
+                return [];
 
             case CompilerPreference.Clang:
-                foreach (var argument in ClangNinjaArguments())
-                    yield return argument;
-                yield break;
+                return ClangNinjaArguments;
 
             default:
                 if (OperatingSystem.IsWindows() && IsVisualStudioToolchainAvailable())
-                    yield break;
-                if (TryGetToolVersion("ninja") is not null && TryGetToolVersion("clang++") is not null)
-                    foreach (var argument in ClangNinjaArguments())
-                        yield return argument;
-                yield break;
+                    return [];
+                if (await IsToolAvailableAsync("ninja", ct).ContinueOnAnyContext()
+                    && await IsToolAvailableAsync("clang++", ct).ContinueOnAnyContext())
+                    return ClangNinjaArguments;
+                return [];
         }
     }
 
-    private static IEnumerable<string> ClangNinjaArguments()
-    {
-        yield return "-G";
-        yield return "Ninja Multi-Config";
-        yield return "-DCMAKE_C_COMPILER=clang";
-        yield return "-DCMAKE_CXX_COMPILER=clang++";
-    }
+    private static readonly IReadOnlyList<string> ClangNinjaArguments =
+    [
+        "-G",
+        "Ninja Multi-Config",
+        "-DCMAKE_C_COMPILER=clang",
+        "-DCMAKE_CXX_COMPILER=clang++",
+    ];
 
     /// <summary>
-    /// True when a Visual Studio C++ toolchain is installed, detected via vswhere (which ships with
-    /// every modern Visual Studio installer) so detection works without a developer command prompt.
+    /// True when a Visual Studio C++ toolchain is installed, detected via vswhere (which ships with every
+    /// modern Visual Studio installer) so detection works without a developer command prompt. This is the
+    /// one command run directly rather than through <see cref="CommandRunner"/>: it needs vswhere's stdout
+    /// (an empty result means "no VC toolchain"), whereas the runner reports only an exit code — and
+    /// vswhere always exits 0.
     /// </summary>
     private static bool IsVisualStudioToolchainAvailable()
     {
@@ -277,92 +286,27 @@ public sealed class CMakeCompiler
         }
     }
 
-    private static async Task<bool> RunCMakeAsync(
-        IReadOnlyList<string> arguments,
-        Action<string, string> log,
-        CancellationToken ct)
+    private async Task<bool> RunCMakeAsync(IReadOnlyList<string> arguments, CancellationToken ct)
     {
-        var startInfo = new ProcessStartInfo("cmake")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
+        var result = await _runner.RunAsync(
+            "cmake",
+            arguments,
+            logOutput: true,
+            logCategoryRegex: BuildLogPattern,
+            ct: ct).ContinueOnAnyContext();
 
-        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-                log(ClassifyLevel("info", e.Data), e.Data);
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data))
-                log(ClassifyLevel("warning", e.Data), e.Data);
-        };
+        // A launch or timeout failure leaves no tool output to explain itself (value -1, "did not run");
+        // a non-zero build exit is already explained by the logged errors, so surface only the former.
+        if (result.Value < 0 && result.Error is { } error)
+            _log.Error(error);
 
-        try
-        {
-            if (!process.Start())
-            {
-                log("error", "Failed to start cmake; is it installed and on PATH?");
-                return false;
-            }
-        }
-        catch (Exception exception)
-        {
-            log("error", $"Failed to start cmake: {exception.Message}");
-            return false;
-        }
-
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        try
-        {
-            await process.WaitForExitAsync(ct).ContinueOnAnyContext();
-        }
-        catch (OperationCanceledException)
-        {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (Exception)
-            {
-                // Already exited.
-            }
-
-            throw;
-        }
-
-        return process.ExitCode == 0;
+        return result;
     }
 
-    private static string? TryGetToolVersion(string tool)
-    {
-        try
-        {
-            using var process = Process.Start(
-                new ProcessStartInfo(tool, "--version")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                });
-            if (process is null)
-                return null;
+    private static readonly TimeSpan ToolDetectionTimeout = TimeSpan.FromSeconds(5);
 
-            var firstLine = process.StandardOutput.ReadLine();
-            process.WaitForExit(5000);
-            return process.ExitCode == 0 ? firstLine : null;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
+    /// <summary>True when <paramref name="tool"/> runs (<c>--version</c> exits 0), i.e. it is on PATH.</summary>
+    private async Task<bool> IsToolAvailableAsync(string tool, CancellationToken ct) =>
+        await _runner.RunAsync(tool, ["--version"], timeout: ToolDetectionTimeout, ct: ct)
+            .ContinueOnAnyContext();
 }

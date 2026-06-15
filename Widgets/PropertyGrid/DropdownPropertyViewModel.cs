@@ -8,7 +8,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// dropdown and the theme picker). Owns the choice list and the commit-on-change wiring; subclasses
 /// exist only to give each its own <c>[View]</c> routing and room to diverge (e.g. swatches) later.
 /// </summary>
-public abstract partial class DropdownPropertyViewModel : PropertyViewModelBase
+public abstract partial class DropdownPropertyViewModel : PropertyViewModel
 {
     private readonly JsonValueSlot _slot;
 

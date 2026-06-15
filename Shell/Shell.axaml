@@ -2,9 +2,9 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:shell="using:Toybox.Studio.Shell"
                  xmlns:status="using:Toybox.Studio.Widgets.Status"
-                 xmlns:gameToolbar="using:Toybox.Studio.Widgets.GameToolbar"
                  xmlns:workspace="using:Toybox.Studio.Workspace"
                  xmlns:dock="using:Dock.Avalonia.Controls"
+                 xmlns:dockModel="using:Dock.Model.Avalonia.Controls"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="850"
@@ -20,9 +20,6 @@
             <Menu HorizontalAlignment="Left" VerticalAlignment="Center">
                 <MenuItem Header="File">
                     <MenuItem Header="Open Project…" Command="{Binding OpenProjectCommand}"/>
-                    <Separator/>
-                    <MenuItem Header="Settings"
-                              Command="{Binding Workspace.OpenDockableCommand}" CommandParameter="Settings"/>
                 </MenuItem>
                 <MenuItem Header="Build">
                     <MenuItem Header="Compile" Command="{Binding CompileCommand}"/>
@@ -33,6 +30,7 @@
                     </MenuItem>
                 </MenuItem>
                 <MenuItem Header="Debug">
+                    <MenuItem Header="Avalonia Dev Tools" Command="{Binding DebugEditorCommand}"/>
                     <MenuItem Header="Attach to Running Instance" Command="{Binding AttachCommand}"/>
                 </MenuItem>
                 <!-- Data-driven: one item per registered [Dockable], opened (or focused) by Id. -->
@@ -51,17 +49,21 @@
                     <MenuItem Header="Reset Layout" Command="{Binding Workspace.ResetLayoutCommand}"/>
                 </MenuItem>
             </Menu>
-            <Border HorizontalAlignment="Center" VerticalAlignment="Center">
-                <gameToolbar:GameToolbarView
-                    DataContext="{Binding #RootWindow.((shell:ShellViewModel)DataContext).GameToolbar}"/>
-            </Border>
+            <!-- The Play/Stop/Pause transport now lives on the Game view, not the title bar. -->
         </Panel>
 
         <Border Classes="StatusBar" DockPanel.Dock="Bottom">
             <status:StatusView DataContext="{Binding Status}"/>
         </Border>
 
-        <!-- Factory + Layout are assigned in code from Workspace; the layout is data-driven, saved on exit. -->
-        <dock:DockControl x:Name="DockHost" Margin="6"/>
+        <!-- Factory + the real (saved or default) layout are assigned in code from Workspace; the layout is
+             data-driven, saved on exit. The inline empty RootDock is just a placeholder so the dock chrome
+             has a non-null Layout to bind against during construction (otherwise Layout.* binds log errors
+             before Workspace.Bind runs); it's replaced the moment the shell DataContext arrives. -->
+        <dock:DockControl x:Name="DockHost" Margin="6">
+            <dock:DockControl.Layout>
+                <dockModel:RootDock/>
+            </dock:DockControl.Layout>
+        </dock:DockControl>
     </DockPanel>
 </Window>

@@ -22,14 +22,27 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- Label gutter -->
-                            <Border Grid.Column="0" Background="{DynamicResource ThemeWellBrush}">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                            Margin="{TemplateBinding Depth,
+                            <!-- Label gutter. A DockPanel (not a StackPanel) so the label is the fill child:
+                                 that constrains its width to whatever the gutter has left, which is what makes
+                                 CharacterEllipsis actually trigger. ClipToBounds backs it up so nothing ever
+                                 spills into the value column when the splitter is dragged narrow. -->
+                            <Border Grid.Column="0" Background="{DynamicResource ThemeWellBrush}"
+                                    ClipToBounds="True">
+                                <DockPanel LastChildFill="True" VerticalAlignment="Center"
+                                           Margin="{TemplateBinding Depth,
                                                 Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                                    <!-- Nesting elbow first (connects the row to its parent's indent line),
+                                         then this row's own disclosure chevron. Only on nested rows. -->
+                                    <Border DockPanel.Dock="Left" Width="9" Height="8" Margin="2,0,0,0"
+                                            VerticalAlignment="Center"
+                                            BorderBrush="{DynamicResource ThemeBorderBrush}"
+                                            BorderThickness="1.5,0,0,1.5"
+                                            IsVisible="{TemplateBinding Depth,
+                                                Converter={x:Static local:PositiveIntConverter.Instance}}"/>
                                     <!-- Collapse chevron, shown only on parent (object/array) rows; the slot
                                          is always reserved so every label aligns. -->
-                                    <Border Width="15" VerticalAlignment="Center" Margin="2,0,0,0">
+                                    <Border DockPanel.Dock="Left" Width="15" VerticalAlignment="Center"
+                                            Margin="2,0,0,0">
                                         <ToggleButton x:Name="PART_Chevron" Classes="rowChevron"
                                                       Width="15" Height="15" Padding="0"
                                                       IsVisible="{TemplateBinding IsParent}"
@@ -42,13 +55,8 @@
                                                   RenderTransformOrigin="50%,50%"/>
                                         </ToggleButton>
                                     </Border>
-                                    <Border Width="9" Height="8" Margin="2,0,7,0" VerticalAlignment="Center"
-                                            BorderBrush="{DynamicResource ThemeBorderBrush}"
-                                            BorderThickness="1.5,0,0,1.5"
-                                            IsVisible="{TemplateBinding Depth,
-                                                Converter={x:Static local:PositiveIntConverter.Instance}}"/>
-                                    <local:IconView Width="15" Height="15" Margin="6,0,6,0"
-                                                    VerticalAlignment="Center"
+                                    <local:IconView DockPanel.Dock="Left" Width="15" Height="15"
+                                                    Margin="6,0,6,0" VerticalAlignment="Center"
                                                     IconName="{TemplateBinding IconName}"
                                                     IconColor="{TemplateBinding IconColor}"/>
                                     <TextBlock x:Name="PART_Label" Text="{TemplateBinding HeaderText}"
@@ -56,40 +64,27 @@
                                                TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource ThemeTextBrush}" Opacity="0.85"
                                                ToolTip.Tip="{TemplateBinding Description}"/>
-                                </StackPanel>
+                                </DockPanel>
                             </Border>
 
-                            <!-- Drag handle: resizes the shared label column for every row at once. -->
-                            <GridSplitter Grid.Column="1" Width="3" ResizeDirection="Columns"
-                                          Background="Transparent"/>
+                            <!-- Drag handle: resizes the shared label column for every row at once. The
+                                 west-east cursor signals the edge is draggable on hover and while dragging. -->
+                            <GridSplitter Grid.Column="1" Width="5" ResizeDirection="Columns"
+                                          Cursor="SizeWestEast" Background="Transparent"/>
 
-                            <!-- Value side: a fixed state slot (read-only lock / "set" dot) then the editor. -->
+                            <!-- Value side: the editor, with a state indicator pinned to the right (no
+                                 separator border, so the slot never reads as a resizable column edge). The
+                                 row's PropertyState picks the control via PropertyStateToIndicatorConverter:
+                                 lock = read-only, filled circle = non-default, hollow circle = at default. -->
                             <Border Grid.Column="2" Background="{DynamicResource ThemeWellBrush}">
                                 <DockPanel>
-                                    <Border DockPanel.Dock="Left" Width="26"
-                                            BorderBrush="{DynamicResource ThemeBorderBrush}"
-                                            BorderThickness="0.5,0,0.5,0">
-                                        <Panel>
-                                            <Ellipse Width="7" Height="7"
-                                                     Fill="{DynamicResource SystemAccentColor}"
-                                                     IsVisible="{ReflectionBinding ShowSetDot}"/>
-                                            <Panel IsVisible="{TemplateBinding IsReadOnly}">
-                                                <local:IconView Width="13" Height="13" IconName="Lock"
-                                                                IconColor="YELLOW"/>
-                                            </Panel>
-                                            <!-- Resettable rows (top-level component properties) swap the
-                                                 "set" dot for a click-to-reset-to-default button. -->
-                                            <Button x:Name="PART_Reset" Classes="rowReset"
-                                                    IsVisible="{ReflectionBinding CanReset}"
-                                                    Command="{ReflectionBinding ResetCommand}"
-                                                    ToolTip.Tip="Reset to default"
-                                                    Width="18" Height="18" Padding="0"
-                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <local:IconView Width="12" Height="12" IconName="RotateCcw"/>
-                                            </Button>
-                                        </Panel>
-                                    </Border>
-                                    <Border Padding="9,2">
+                                    <ContentControl DockPanel.Dock="Right" Width="22" Margin="2,0,6,0"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                    HorizontalContentAlignment="Center"
+                                                    VerticalContentAlignment="Center"
+                                                    Content="{ReflectionBinding State,
+                                                        Converter={x:Static local:PropertyStateToIndicatorConverter.Instance}}"/>
+                                    <Border Padding="9,2,4,2">
                                         <ContentPresenter Content="{TemplateBinding Content}"
                                                           VerticalAlignment="Center"
                                                           HorizontalAlignment="Stretch"/>
@@ -146,20 +141,56 @@
         </Style>
         <Style Selector="GridSplitter">
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="SizeWestEast"/>
         </Style>
-        <!-- Row reset button: chrome-less, dim until hovered. -->
-        <Style Selector="Button.rowReset">
+        <!-- Input-field chrome shared by the non-text editors (handle picker, script link). Mirrors the
+             FluentTheme TextBox resources exactly (same background, border brush, thickness, corner radius
+             and height) so a picker reads as the same boxed control as the TextBox/NumericUpDown fields. -->
+        <Style Selector="Border.fieldHost">
+            <Setter Property="Background" Value="{DynamicResource TextControlBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="{DynamicResource TextControlBorderThemeThickness}"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.fieldHost:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrushPointerOver}"/>
+            <Setter Property="Background" Value="{DynamicResource TextControlBackgroundPointerOver}"/>
+        </Style>
+        <!-- Chrome-less icon button used inside a field (e.g. the picker's browse button). -->
+        <Style Selector="Button.fieldButton">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="0"/>
-            <Setter Property="Opacity" Value="0.55"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="Opacity" Value="0.75"/>
         </Style>
-        <Style Selector="Button.rowReset:pointerover">
+        <Style Selector="Button.fieldButton:pointerover">
             <Setter Property="Opacity" Value="1"/>
         </Style>
-        <Style Selector="Button.rowReset /template/ ContentPresenter#PART_ContentPresenter">
+        <Style Selector="Button.fieldButton /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <!-- Right-hand state indicators, produced by PropertyStateToIndicatorConverter. -->
+        <Style Selector="Ellipse.stateFilled">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="Fill" Value="{DynamicResource ThemeTextBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Ellipse.stateHollow">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="StrokeThickness" Value="1.2"/>
+            <Setter Property="Stroke" Value="{DynamicResource ThemeTextBrush}"/>
+            <Setter Property="Fill" Value="Transparent"/>
+            <Setter Property="Opacity" Value="0.5"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="GridSplitter:pointerover">
             <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
@@ -252,6 +283,9 @@
         <DataTemplate DataType="local:HandlePickerPropertyViewModel">
             <local:HandlePickerPropertyView/>
         </DataTemplate>
+        <DataTemplate DataType="local:EntityPickerPropertyViewModel">
+            <local:EntityPickerPropertyView/>
+        </DataTemplate>
         <DataTemplate DataType="local:ScriptLinkPropertyViewModel">
             <local:ScriptLinkPropertyView/>
         </DataTemplate>
@@ -267,7 +301,7 @@
                 <ItemsControl ItemsSource="{Binding #Root.Groups}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="local:PropertyCategoryGroup">
-                            <StackPanel>
+                            <StackPanel IsVisible="{Binding Visible}">
                                 <StackPanel IsVisible="{Binding HasHeader}">
                                     <ToggleButton x:Name="CatToggle" Classes="categoryHeader" IsChecked="True">
                                         <DockPanel>

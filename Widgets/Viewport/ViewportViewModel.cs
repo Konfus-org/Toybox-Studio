@@ -1,80 +1,171 @@
-using System.Runtime.InteropServices;
-using Avalonia;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.EngineApi;
+using Toybox.Studio.Logging;
 
 namespace Toybox.Studio.Widgets.Viewport;
 
-public sealed partial class ViewportViewModel : ObservableObject
+/// <summary>
+/// The reusable "frame surface": shows one engine view (an editor camera or the game camera) by
+/// handing its shared GPU texture to a <see cref="CompositionInteropViewport"/>, which the
+/// compositor samples directly — no CPU readback, no per-frame upload. Each instance owns its own
+/// <see cref="ViewportStream"/>, so several can stream side by side; disposing it stops the engine
+/// view. Used directly by every editor viewport instance and embedded by the game view.
+/// </summary>
+public sealed partial class ViewportViewModel : ObservableObject, IDisposable, IViewportInputSink
 {
-    public ViewportViewModel(ViewportStream viewport, Session session)
+    private readonly ViewportStream _stream;
+    private readonly EngineRpc _engine;
+    private readonly Action<ConnectionState> _onStateChanged;
+    private readonly Action<EngineState> _onWatcherStateChanged;
+    private readonly Action<string>? _onMouseLockChanged;
+    private readonly Session _session;
+    private readonly EngineWatcher _watcher;
+    private readonly Logger _logger;
+
+    private readonly ViewKind _kind;
+
+    public ViewportViewModel(
+        Session session, EngineRpc engine, Logger logger, EngineWatcher watcher, ViewKind kind = ViewKind.Editor)
     {
-        viewport.FrameArrived += frame => Dispatch.To(DispatchContext.UI, () => Render(frame));
-        session.StateChanged += state => Dispatch.To(DispatchContext.UI, () =>
+        _session = session;
+        _engine = engine;
+        _watcher = watcher;
+        _logger = logger;
+        _kind = kind;
+        _stream = new ViewportStream(session, engine, kind);
+        _stream.SurfaceArrived += OnSurfaceArrived;
+        _stream.SurfaceLost += OnSurfaceLost;
+
+        _onStateChanged = state => Dispatch.To(DispatchContext.UI, () =>
         {
             if (state != ConnectionState.Connected)
-                HasFrames = false;
+            {
+                ClearSurface();
+                RelativeMouse = false;
+            }
         });
-        session.BusyChanged += busy => Dispatch.To(DispatchContext.UI, () => IsBusy = busy);
+        // The watcher already raises on the UI thread; re-derive the ghost state whenever it changes.
+        _onWatcherStateChanged = _ => Dispatch.To(DispatchContext.UI, OnLoadingChanged);
+        session.StateChanged += _onStateChanged;
+        watcher.StateChanged += _onWatcherStateChanged;
+
+        // Only the game panel mirrors the game's mouse-lock mode; editor viewports keep a normal cursor.
+        if (IsGame)
+        {
+            _onMouseLockChanged = mode =>
+                Dispatch.To(DispatchContext.UI, () => RelativeMouse = mode == "relative");
+            engine.MouseLockModeChanged += _onMouseLockChanged;
+        }
     }
 
-    [ObservableProperty]
-    public partial WriteableBitmap? Frame { get; private set; }
+    /// <summary>Stops this surface's engine view and unhooks from the session.</summary>
+    public void Dispose()
+    {
+        _stream.SurfaceArrived -= OnSurfaceArrived;
+        _stream.SurfaceLost -= OnSurfaceLost;
+        _session.StateChanged -= _onStateChanged;
+        _watcher.StateChanged -= _onWatcherStateChanged;
+        if (_onMouseLockChanged is not null)
+            _engine.MouseLockModeChanged -= _onMouseLockChanged;
+        _stream.Dispose();
+    }
+
+    /// <summary>Whether this surface shows the game (vs an editor viewport).</summary>
+    public bool IsGame => _kind == ViewKind.Game;
 
     /// <summary>
-    /// Bumped after each frame's pixels are written. The view binds it through the FrameInvalidation
-    /// behavior to repaint the image — the bitmap is mutated in place, so its reference never changes.
+    /// Whether the playing game has requested relative-mouse (mouselook) mode. The game panel hides and
+    /// re-centres the cursor while true; always false for editor viewports.
     /// </summary>
     [ObservableProperty]
-    public partial int FrameTick { get; private set; }
+    public partial bool RelativeMouse { get; private set; }
+
+    /// <summary>Forwards captured viewport input to this surface's engine view.</summary>
+    public void ForwardInput(ViewportInputPayload payload) =>
+        _stream.SendInput(
+            payload.Focused, payload.Buttons, payload.MoveKeys, payload.Keys,
+            payload.MouseX, payload.MouseY, payload.Dx, payload.Dy, payload.Wheel);
+
+    /// <summary>Stops play mode (the game view's Esc); the engine and viewports keep running.</summary>
+    public void StopGame() => _session.StopPlayAsync().FireAndForget();
+
+    /// <summary>
+    /// The engine view's shared GPU texture, bound by the view into the interop control. Null while
+    /// there is nothing to show (disconnected, not yet ready, or GPU sharing unavailable).
+    /// </summary>
+    [ObservableProperty]
+    public partial ViewSurface? CurrentSurface { get; private set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
     public partial bool HasFrames { get; private set; }
 
+    /// <summary>
+    /// Set by the interop control (bound one-way to source) when this editor's compositor can't
+    /// import shared GPU textures. Forces the empty ghost so the viewport is never silently black.
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
-    public partial bool IsBusy { get; private set; }
+    public partial bool InteropUnavailable { get; set; }
 
-    /// <summary>The empty-state ghost shows only when there's nothing to draw and we're not busy
-    /// (the loading ghost owns the busy state), so the two never overlap.</summary>
-    public bool ShowEmptyGhost => !HasFrames && !IsBusy;
+    /// <summary>The phase text shown by the loading ghost (e.g. "Compiling project…").</summary>
+    public string LoadingMessage => _watcher.StatusMessage;
 
-    private void Render(ViewportFrame frame)
+    /// <summary>
+    /// The loading ghost shows while compiling or loading. A play transition ("Loading into game…")
+    /// is the game's load, so only the game viewport shows it — editor viewports keep their live frame.
+    /// </summary>
+    public bool ShowLoadingGhost =>
+        (_watcher.State is EngineState.Compiling or EngineState.Loading)
+        && (!_watcher.IsGameLoad || IsGame);
+
+    /// <summary>The empty-state ghost shows when there's nothing to draw (or we can't draw it) and
+    /// the loading ghost isn't up (it owns the busy state), so the two never overlap.</summary>
+    public bool ShowEmptyGhost => (!HasFrames || InteropUnavailable) && !ShowLoadingGhost;
+
+    private void OnLoadingChanged()
     {
-        if (Frame is null
-            || Frame.PixelSize.Width != frame.Width
-            || Frame.PixelSize.Height != frame.Height)
+        OnPropertyChanged(nameof(LoadingMessage));
+        OnPropertyChanged(nameof(ShowLoadingGhost));
+        OnPropertyChanged(nameof(ShowEmptyGhost));
+    }
+
+    partial void OnInteropUnavailableChanged(bool value)
+    {
+        if (value)
+            _logger.Error(
+                "This editor's compositor cannot import shared GPU textures (composition GPU interop "
+                + "unavailable), so engine viewports cannot be displayed. Ensure the editor and engine "
+                + "run on the same GPU adapter.");
+    }
+
+    private void OnSurfaceArrived(ViewSurface surface) =>
+        Dispatch.To(DispatchContext.UI, () => ApplySurface(surface));
+
+    private void OnSurfaceLost() =>
+        Dispatch.To(DispatchContext.UI, ClearSurface);
+
+    private void ApplySurface(ViewSurface surface)
+    {
+        if (surface.Handle == 0)
         {
-            Frame = new WriteableBitmap(
-                new PixelSize(frame.Width, frame.Height),
-                new Vector(96, 96),
-                PixelFormat.Bgra8888,
-                AlphaFormat.Opaque);
+            // The engine logs the underlying reason (and streams it to our console); note it here too
+            // so it's clear the empty viewport is a capability gap, not a missing world.
+            _logger.Warning(
+                $"GPU texture sharing is unavailable for this view; the viewport will stay empty. "
+                + "See the engine log for the driver/adapter reason.");
+            ClearSurface();
+            return;
         }
 
-        using (var pixels = Frame.Lock())
-        {
-            if (pixels.RowBytes == frame.Stride)
-            {
-                Marshal.Copy(frame.Data, 0, pixels.Address, frame.Height * frame.Stride);
-            }
-            else
-            {
-                for (var row = 0; row < frame.Height; row++)
-                {
-                    Marshal.Copy(
-                        frame.Data,
-                        row * frame.Stride,
-                        pixels.Address + row * pixels.RowBytes,
-                        frame.Stride);
-                }
-            }
-        }
-
+        CurrentSurface = surface;
         HasFrames = true;
-        FrameTick++;
+    }
+
+    private void ClearSurface()
+    {
+        CurrentSurface = null;
+        HasFrames = false;
     }
 }

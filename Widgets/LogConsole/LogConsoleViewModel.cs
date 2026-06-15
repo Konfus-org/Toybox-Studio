@@ -18,12 +18,14 @@ public sealed class LogConsoleViewModel
 
     private void OnLogged(LogEntry entry)
     {
+        // Color strictly by level so the console matches the engine's configured log colors
+        // (engine.setLogColors pushes the same Info/Warning/Error palette) regardless of which source
+        // emitted the line. The category is part of the message text ("[Category]…"), not a column.
         var severity = entry switch
         {
             { IsError: true } => ConsoleSeverity.Error,
             { IsWarning: true } => ConsoleSeverity.Warning,
-            { IsStudio: true } => ConsoleSeverity.Accent,
-            _ => ConsoleSeverity.Normal,
+            _ => ConsoleSeverity.Accent,
         };
 
         Console.Append(new ConsoleLine(entry.Message, severity));

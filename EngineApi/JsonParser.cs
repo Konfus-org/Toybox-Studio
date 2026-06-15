@@ -21,8 +21,16 @@ public sealed class JsonParser
 {
     // Mirror the engine's PROPERTY_*_KEY (serialization.h). A std::variant property is tagged with the
     // "variant" token, its value being the variant's own { type, value } alternative.
+    //
+    // Two node shapes are accepted. Persisted/lean data is { "type", "value" } (with the type token and any
+    // metadata at the top level). The describe path (Entity::describe) reshapes each node to
+    // { "attributes": { "type", <metadata> }, "value" }, gathering the type token and all reflection
+    // metadata into one sub-object. Settings files arrive lean; world.describe arrives attributed, so both
+    // must be decoded — see Unwrap.
     private const string TypeKey = "type";
     private const string ValueKey = "value";
+    private const string NestedKey = "nested";
+    private const string AttributesKey = "attributes";
     private const string CategoryKey = "category";
     private const string DescriptionKey = "description";
     private const string ChoicesKey = "choices";
@@ -31,6 +39,9 @@ public sealed class JsonParser
     private const string HiddenKey = "hidden";
     private const string IconKey = "icon";
     private const string IconColorKey = "iconColor";
+    private const string IsDefaultKey = "is_default";
+    private const string OrderKey = "order";
+    private const string ElementTemplateKey = "element_template";
     private const string VariantToken = "variant";
     private const string ArrayToken = "array";
     private const string ObjectToken = "object";
@@ -38,7 +49,9 @@ public sealed class JsonParser
 
     /// <summary>
     /// Flattens a raw world.describe reply into a sorted entity hierarchy, parsing each entity's components
-    /// into their property trees along the way. Pure and CPU-bound — callers run it off the UI thread.
+    /// into their property trees along the way. Pure and CPU-bound — callers run it off the UI thread. Type
+    /// disambiguation (e.g. routing a rotation quaternion to the Euler editor) comes from each property's
+    /// inline attribute metadata, which world.describe already carries — no separate reflection lookup.
     /// </summary>
     public IReadOnlyList<Entity> ParseWorld(JObject reply)
     {
@@ -51,16 +64,8 @@ public sealed class JsonParser
             if (token is not JObject entity)
                 continue;
 
-            var id = Unwrap(entity["id"]).Value.Value<ulong>();
-            var name = Unwrap(entity["name"]).Value.Value<string>();
-            var node = new Entity
-            {
-                Id = id,
-                Name = string.IsNullOrEmpty(name) ? $"Entity {id}" : name,
-                Tag = Unwrap(entity["tag"]).Value.Value<string>() ?? "",
-                Components = ParseComponents(entity["components"] as JObject, componentTypes),
-            };
-            nodes[id] = (node, Unwrap(entity["parent"]).Value.Value<ulong>());
+            var node = BuildEntity(entity, componentTypes);
+            nodes[node.Id] = (node, Unwrap(entity["parent"]).Value.Value<ulong>());
         }
 
         var roots = new List<Entity>();
@@ -76,7 +81,40 @@ public sealed class JsonParser
         return roots;
     }
 
-    private List<Component> ParseComponents(JObject? components, JObject? componentTypes)
+    /// <summary>
+    /// Parses one entity from an <c>entity.describe</c> reply (<c>{ entity, component_types }</c>) into the
+    /// UI snapshot model. Children are not resolved (the tree owns parenting); used to refresh a single
+    /// selected entity's live component values without re-describing the whole world. Returns null if the
+    /// reply has no entity.
+    /// </summary>
+    public Entity? ParseEntity(JObject reply)
+    {
+        if (reply["entity"] is not JObject entity)
+            return null;
+
+        return BuildEntity(entity, reply["component_types"] as JObject);
+    }
+
+    // Builds the UI snapshot for a single serialized entity (id/name/tag/order + parsed components). Shared
+    // by the whole-world parse and the single-entity refresh.
+    private Entity BuildEntity(JObject entity, JObject? componentTypes)
+    {
+        var id = Unwrap(entity["id"]).Value.Value<ulong>();
+        var name = Unwrap(entity["name"]).Value.Value<string>();
+        return new Entity
+        {
+            Id = id,
+            Name = string.IsNullOrEmpty(name) ? $"Entity {id}" : name,
+            Tag = Unwrap(entity["tag"]).Value.Value<string>() ?? "",
+            Order = Unwrap(entity["order"]).Value.Value<int>(),
+            // is_global is a plain describe-only flag at the envelope root (not a typed {type,value} field).
+            IsGlobal = entity.Value<bool?>("is_global") ?? false,
+            Components = ParseComponents(
+                entity["components"] as JObject, componentTypes, entity["component_order"] as JArray),
+        };
+    }
+
+    private List<Component> ParseComponents(JObject? components, JObject? componentTypes, JArray? order)
     {
         var result = new List<Component>();
         if (components is null)
@@ -94,13 +132,31 @@ public sealed class JsonParser
             result.Add(new Component(property.Name, raw, ParseProperties(raw), icon, iconColor));
         }
 
-        result.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+        // Present components in the engine's registration order (component_order), not the alphabetical key
+        // order the JSON map imposes. Any component missing from the list (or no list at all, e.g. settings)
+        // sorts after, keeping a stable result.
+        if (order is { Count: > 0 })
+        {
+            var rank = order
+                .Select((token, index) => (Name: token.Value<string>() ?? "", Index: index))
+                .ToDictionary(entry => entry.Name, entry => entry.Index);
+            result = result
+                .OrderBy(component => rank.TryGetValue(component.Name, out var index) ? index : int.MaxValue)
+                .ToList();
+        }
+
         return result;
     }
 
+    // Entities sort by their explicit engine order (the user's arrangement), falling back to name as a
+    // stable tie-break — so a freshly created or legacy entity with order 0 still lands sensibly.
     private static void SortRecursively(List<Entity> nodes)
     {
-        nodes.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+        nodes.Sort((a, b) =>
+        {
+            var byOrder = a.Order.CompareTo(b.Order);
+            return byOrder != 0 ? byOrder : string.CompareOrdinal(a.Name, b.Name);
+        });
         foreach (var node in nodes)
             SortRecursively(node.Children);
     }
@@ -111,7 +167,9 @@ public sealed class JsonParser
     /// are inferred from the JSON shape. Composite values recurse so nested structs/objects render as
     /// sub-grids either way.
     /// </summary>
-    public IReadOnlyList<PropertyNode> ParseProperties(JObject json)
+    public IReadOnlyList<PropertyNode> ParseProperties(JObject json) => ParsePropertiesCore(json);
+
+    private static IReadOnlyList<PropertyNode> ParsePropertiesCore(JObject json)
     {
         var nodes = new List<PropertyNode>(json.Count);
         foreach (var property in json.Properties())
@@ -123,21 +181,61 @@ public sealed class JsonParser
                 nodes.Add(node);
         }
 
-        return nodes;
+        // Present fields in declaration (source) order, which the alphabetical JSON keys otherwise lose.
+        // OrderBy is stable, so untyped data (no order attribute → all 0) keeps its original JSON order.
+        return nodes.OrderBy(node => node.Order).ToList();
     }
 
-    private PropertyNode Build(string name, Wrapper wrapper)
+    /// <summary>
+    /// Parses a JSON array's elements into property nodes, labelled <c>[0]</c>, <c>[1]</c>, … This is the
+    /// element half of a composite array node; the editable list widget reuses it to rebuild its child
+    /// view-models after an add/remove/reorder mutates the backing array.
+    /// </summary>
+    public static IReadOnlyList<PropertyNode> ParseArrayElements(JArray array)
+    {
+        var children = new List<PropertyNode>(array.Count);
+        for (var index = 0; index < array.Count; index++)
+        {
+            // An element may itself be a typed wrapper (e.g. a struct field) or a bare value.
+            var node = Build($"[{index}]", Unwrap(array[index]));
+            if (!node.Hidden)
+                children.Add(node);
+        }
+
+        return children;
+    }
+
+    private static PropertyNode Build(string name, Wrapper wrapper)
     {
         var type = wrapper.Type;
         var value = wrapper.Value;
 
         if (value is JObject obj && IsComposite(type, obj))
-            return Leaf(name, type is UnknownToken or "" ? ObjectToken : type, value, wrapper, ParseProperties(obj));
+            return Leaf(name, type is UnknownToken or "" ? ObjectToken : type, value, wrapper, ParsePropertiesCore(obj));
 
         if (value is JArray array && IsCompositeArray(type))
-            return Leaf(name, ArrayToken, value, wrapper, BuildElements(array));
+            return Leaf(name, ArrayToken, value, wrapper, ParseArrayElements(array));
 
-        return Leaf(name, type == UnknownToken ? InferToken(value) : type, value, wrapper, children: null);
+        return Leaf(name, ResolveLeafType(wrapper), value, wrapper, children: null);
+    }
+
+    /// <summary>
+    /// The widget token for a leaf value, disambiguated from its inline attribute metadata. Some
+    /// semantically distinct types share a structural token, so the structural <see cref="Wrapper.Type"/>
+    /// alone can't route them: a rotation quaternion arrives under the structural "vec4" token but is tagged
+    /// with nested "quat" (→ the Euler editor), and an enum arrives under its own type-name token but carries
+    /// the selectable <c>choices</c> (→ the dropdown). Everything else keeps its structural token, inferred
+    /// from the JSON shape when the value is untyped.
+    /// </summary>
+    private static string ResolveLeafType(Wrapper wrapper)
+    {
+        if (wrapper.Choices is { Count: > 0 })
+            return "enum";
+
+        if (wrapper.Nested == "quat")
+            return "quat";
+
+        return wrapper.Type == UnknownToken ? InferToken(wrapper.Value) : wrapper.Type;
     }
 
     /// <summary>
@@ -155,10 +253,38 @@ public sealed class JsonParser
     private static bool IsCompositeArray(string type) => type is UnknownToken or "" or ArrayToken;
 
     private static bool IsTypedWrapper(JToken token) =>
-        token is JObject obj
-        && obj.TryGetValue(TypeKey, out var typeToken)
-        && typeToken.Type == JTokenType.String
-        && obj.ContainsKey(ValueKey);
+        token is JObject obj && TryReadWrapper(obj, out _, out _);
+
+    /// <summary>
+    /// Splits a node into its metadata source object and value token, accepting both the attributed describe
+    /// shape (<c>{ "attributes": { "type", … }, "value" }</c>) and the lean/persisted shape
+    /// (<c>{ "type", "value", … }</c>). The metadata source is the object the type token and editor metadata
+    /// keys are read from (the attributes sub-object, or the node itself). Returns false for a bare value.
+    /// </summary>
+    private static bool TryReadWrapper(JObject obj, out JObject metadata, out JToken value)
+    {
+        if (obj.TryGetValue(AttributesKey, out var attributes)
+            && attributes is JObject attributesObject
+            && obj.TryGetValue(ValueKey, out var attributedValue))
+        {
+            metadata = attributesObject;
+            value = attributedValue;
+            return true;
+        }
+
+        if (obj.TryGetValue(TypeKey, out var typeToken)
+            && typeToken.Type == JTokenType.String
+            && obj.TryGetValue(ValueKey, out var leanValue))
+        {
+            metadata = obj;
+            value = leanValue;
+            return true;
+        }
+
+        metadata = obj;
+        value = JValue.CreateNull();
+        return false;
+    }
 
     private static PropertyNode Leaf(
         string name,
@@ -176,40 +302,38 @@ public sealed class JsonParser
             View = wrapper.View,
             ReadOnly = wrapper.ReadOnly,
             Hidden = wrapper.Hidden,
+            Order = wrapper.Order,
             Icon = wrapper.Icon,
             IconColor = wrapper.IconColor,
+            IsDefault = wrapper.IsDefault,
+            ElementTemplate = wrapper.ElementTemplate,
             Choices = children is null ? wrapper.Choices : null,
             Children = children ?? [],
         };
-
-    private IReadOnlyList<PropertyNode> BuildElements(JArray array)
-    {
-        var children = new List<PropertyNode>(array.Count);
-        for (var index = 0; index < array.Count; index++)
-        {
-            // An element may itself be a typed wrapper (e.g. a struct field) or a bare value.
-            var node = Build($"[{index}]", Unwrap(array[index]));
-            if (!node.Hidden)
-                children.Add(node);
-        }
-
-        return children;
-    }
 
     /// <summary>
     /// The pieces of a typed-JSON property wrapper, after splitting off the engine's metadata keys.
     /// </summary>
     private readonly record struct Wrapper(
         string Type,
+        // The unwrapped semantic type name from the describe "nested" attribute (e.g. "quat" for a rotation
+        // that shares the structural "vec4" token). Null on the lean/persisted path, which carries no
+        // attributes. Lets the parser route such a value to the right widget — see ResolveLeafType.
+        string? Nested,
         JToken Value,
         string? Category,
         string? Description,
         string? View,
         bool ReadOnly,
         bool Hidden,
+        int Order,
         string? Icon,
         string? IconColor,
-        IReadOnlyList<string>? Choices);
+        IReadOnlyList<string>? Choices,
+        bool IsDefault,
+        // The describe-only "element_template" for a resizable list: the JSON of one default element,
+        // which the list widget clones to append. Null for everything else.
+        JToken? ElementTemplate);
 
     /// <summary>
     /// The single place the <c>{ "type", "value", metadata… }</c> convention is decoded — used both for the
@@ -218,42 +342,45 @@ public sealed class JsonParser
     /// </summary>
     private static Wrapper Unwrap(JToken? member)
     {
-        if (member is JObject obj
-            && obj.TryGetValue(TypeKey, out var typeToken)
-            && typeToken.Type == JTokenType.String
-            && obj.TryGetValue(ValueKey, out var valueToken))
+        if (member is JObject obj && TryReadWrapper(obj, out var metadata, out var value))
         {
-            var type = typeToken.Value<string>() ?? UnknownToken;
-            var value = valueToken;
+            var type = metadata.Value<string>(TypeKey) ?? UnknownToken;
 
-            // A variant property surfaces as its active alternative: its value is itself a { type, value }
-            // wrapper, so adopt the alternative's type/value while keeping the field's editor metadata
-            // (category/description/etc. live on the outer wrapper).
-            if (type == VariantToken
-                && value is JObject alternative
-                && alternative.TryGetValue(TypeKey, out var altType)
-                && altType.Type == JTokenType.String
-                && alternative.TryGetValue(ValueKey, out var altValue))
+            // A variant property surfaces as its active alternative: its value is itself a typed wrapper
+            // (lean or attributed), so adopt the alternative's type/value while keeping the field's editor
+            // metadata (category/description/etc. live on the outer wrapper).
+            if (type == VariantToken && value is JObject alternative)
             {
-                type = altType.Value<string>() ?? UnknownToken;
-                value = altValue;
+                var alt = Unwrap(alternative);
+                if (alt.Type != UnknownToken)
+                {
+                    type = alt.Type;
+                    value = alt.Value;
+                }
             }
 
             return new Wrapper(
                 type,
+                metadata.Value<string>(NestedKey),
                 value,
-                obj.Value<string>(CategoryKey),
-                obj.Value<string>(DescriptionKey),
-                obj.Value<string>(ViewKey),
-                obj.Value<bool?>(ReadOnlyKey) ?? false,
-                obj.Value<bool?>(HiddenKey) ?? false,
-                obj.Value<string>(IconKey),
-                obj.Value<string>(IconColorKey),
-                ReadChoices(obj[ChoicesKey]));
+                metadata.Value<string>(CategoryKey),
+                metadata.Value<string>(DescriptionKey),
+                metadata.Value<string>(ViewKey),
+                metadata.Value<bool?>(ReadOnlyKey) ?? false,
+                metadata.Value<bool?>(HiddenKey) ?? false,
+                metadata.Value<int?>(OrderKey) ?? 0,
+                metadata.Value<string>(IconKey),
+                metadata.Value<string>(IconColorKey),
+                ReadChoices(metadata[ChoicesKey]),
+                // is_default sits next to attributes/value on the node itself (describe-only), not inside
+                // the attributes object.
+                obj.Value<bool?>(IsDefaultKey) ?? false,
+                metadata[ElementTemplateKey]);
         }
 
         return new Wrapper(
-            UnknownToken, member ?? JValue.CreateNull(), null, null, null, false, false, null, null, null);
+            UnknownToken, null, member ?? JValue.CreateNull(), null, null, null, false, false, 0, null,
+            null, null, false, null);
     }
 
     private static IReadOnlyList<string>? ReadChoices(JToken? token) =>

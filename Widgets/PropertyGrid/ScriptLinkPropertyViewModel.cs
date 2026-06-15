@@ -10,7 +10,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// <see cref="AssetCatalog"/>. Used for [[editor::view("script")]]. Clicking activates the reference
 /// (raising <see cref="AssetCatalog.AssetActivated"/>); the raw id is shown until the catalog loads.
 /// </summary>
-public sealed partial class ScriptLinkPropertyViewModel : PropertyViewModelBase
+public sealed partial class ScriptLinkPropertyViewModel : PropertyViewModel
 {
     private readonly AssetCatalog? _catalog;
     private readonly long _id;

@@ -6,7 +6,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// <summary>
 /// Integer-valued property (also used for uuid/handle/enum tokens).
 /// </summary>
-public sealed partial class IntPropertyViewModel : PropertyViewModelBase
+public sealed partial class IntPropertyViewModel : PropertyViewModel
 {
     private readonly JsonValueSlot _slot;
 

@@ -1,163 +1,110 @@
-using System.IO.MemoryMappedFiles;
+using System.Collections.Generic;
 
 namespace Toybox.Studio.EngineApi;
 
 /// <summary>
-/// One frame read from the engine's shared memory, top-down BGRA8888.
-/// </summary>
-public sealed record ViewportFrame(int Width, int Height, int Stride, byte[] Data);
-
-/// <summary>
-/// Starts the engine's frame streaming on connect, then pumps frames out of the shared memory
-/// region on a background task. The shared layout is a small header plus two slots guarded by
-/// per-slot sequence counters (odd while the engine is writing).
+/// One viewport's link to its engine view. It asks the engine to start a dedicated view (its own
+/// engine camera + shared GPU texture), then surfaces that texture's cross-process handle as it
+/// arrives so the owning control can import and display it directly — no pixels ever cross the
+/// process boundary on the CPU. One of these is owned by each viewport/game-view instance and stops
+/// its engine view on dispose, so multiple viewports stream independently.
 /// </summary>
 public sealed class ViewportStream : IDisposable
 {
-    private const uint FrameMagic = 0x46584254; // "TBXF"
-    private const int LatestSlotOffset = 12;
-    private const int SlotsOffset = 16;
-    private const int SlotSize = 24;
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
-
     private readonly Session _session;
     private readonly EngineRpc _engine;
-    private readonly byte[][] _buffers = [[], []];
-    private int _nextBuffer;
+    private readonly ViewKind _kind;
     private CancellationTokenSource? _cts;
+    private string? _viewName;
 
-    public ViewportStream(Session session, EngineRpc engine)
+    public ViewportStream(Session session, EngineRpc engine, ViewKind kind = ViewKind.Editor)
     {
         _session = session;
         _engine = engine;
+        _kind = kind;
         session.StateChanged += OnSessionStateChanged;
+        engine.SurfaceReceived += OnSurfaceReceived;
+
+        // Opened mid-session (e.g. a new viewport while the engine is already running): start
+        // right away rather than waiting for the next connect.
+        if (session.State == ConnectionState.Connected)
+            StartViewAsync().FireAndForget();
     }
 
     /// <summary>
-    /// Raised from a background thread for every new frame. Buffers are reused.
+    /// Raised (on a background thread) when this view's shared GPU texture is ready. A surface with a
+    /// zero <see cref="ViewSurface.Handle"/> means GPU sharing was unavailable for this view.
     /// </summary>
-    public event Action<ViewportFrame>? FrameArrived;
+    public event Action<ViewSurface>? SurfaceArrived;
+
+    /// <summary>Raised when this view's surface is gone (disconnect or stop) so the control drops it.</summary>
+    public event Action? SurfaceLost;
 
     public void Dispose()
     {
-        // The session outlives the stream, so drop the subscription or its event would keep this
-        // (disposed) instance alive.
+        // The session and engine outlive the stream, so drop subscriptions or their events would keep
+        // this (disposed) instance alive.
         _session.StateChanged -= OnSessionStateChanged;
-        StopReading();
+        _engine.SurfaceReceived -= OnSurfaceReceived;
+        StopView();
+    }
+
+    /// <summary>
+    /// Forwards the owning viewport's input to this stream's engine view (no-op until the view has
+    /// started). Mouse/wheel values are deltas since the last call.
+    /// </summary>
+    public void SendInput(
+        bool focused, int buttons, int moveKeys,
+        IReadOnlyList<int> keys, double mouseX, double mouseY, double dx, double dy, double wheel)
+    {
+        if (_viewName is { } name && _engine.IsConnected)
+            _engine.SendViewInputAsync(name, focused, buttons, moveKeys, keys, mouseX, mouseY, dx, dy, wheel)
+                .FireAndForget();
     }
 
     private void OnSessionStateChanged(ConnectionState state)
     {
         if (state == ConnectionState.Connected)
-            StartReadingAsync().FireAndForget();
+            StartViewAsync().FireAndForget();
         else
-            StopReading();
+            StopView();
     }
 
-    private async Task StartReadingAsync()
+    private void OnSurfaceReceived(ViewSurface surface)
+    {
+        // The engine broadcasts every view's surface; take only this stream's.
+        if (surface.Name == _viewName)
+            SurfaceArrived?.Invoke(surface);
+    }
+
+    private async Task StartViewAsync()
     {
         // The engine may have no rendering service or have gone away; the viewport just stays empty.
-        var result = await _engine.StartViewAsync(CancellationToken.None).ContinueOnAnyContext();
+        var result = await _engine.StartViewAsync(_kind, CancellationToken.None).ContinueOnAnyContext();
         if (result is not { Success: true, Value: { } view })
             return;
 
-        StopReading();
+        StopView();
+        _viewName = view.Name;
         _cts = new CancellationTokenSource();
-        Task.Run(() => ReadLoopAsync(view.Name, _cts.Token)).FireAndForget();
+        // The shared texture follows as a view.surface notification (created on the render lane).
     }
 
-    private void StopReading()
+    private void StopView()
     {
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
-    }
 
-    private async Task ReadLoopAsync(string name, CancellationToken ct)
-    {
-        using var mapping = await TryOpenMappingAsync(name, ct).ContinueOnAnyContext();
-        if (mapping is null)
-            return;
-
-        using var accessor = mapping.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
-        if (accessor.ReadUInt32(0) != FrameMagic)
-            return;
-
-        uint lastSequence = 0;
-        while (!ct.IsCancellationRequested)
+        // Free the engine-side view (camera + shared texture) for this stream. Best-effort: if the
+        // connection is already gone the engine tore its views down on disconnect anyway.
+        if (_viewName is { } name)
         {
-            if (TryReadFrame(accessor, ref lastSequence, out var frame))
-                FrameArrived?.Invoke(frame);
-
-            try
-            {
-                await Task.Delay(PollInterval, ct).ContinueOnAnyContext();
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-        }
-    }
-
-    private bool TryReadFrame(
-        MemoryMappedViewAccessor accessor,
-        ref uint lastSequence,
-        out ViewportFrame frame)
-    {
-        frame = null!;
-        var slotBase = SlotsOffset + (int)accessor.ReadUInt32(LatestSlotOffset) * SlotSize;
-        var sequence = accessor.ReadUInt32(slotBase);
-        if (sequence == 0 || sequence % 2 != 0 || sequence == lastSequence)
-            return false;
-
-        var width = (int)accessor.ReadUInt32(slotBase + 4);
-        var height = (int)accessor.ReadUInt32(slotBase + 8);
-        var stride = (int)accessor.ReadUInt32(slotBase + 12);
-        var offset = (long)accessor.ReadUInt64(slotBase + 16);
-        var byteCount = height * stride;
-        if (width <= 0 || height <= 0 || byteCount <= 0)
-            return false;
-
-        var buffer = _buffers[_nextBuffer];
-        if (buffer.Length < byteCount)
-            _buffers[_nextBuffer] = buffer = new byte[byteCount];
-
-        accessor.ReadArray(offset, buffer, 0, byteCount);
-
-        // The engine bumped the sequence to odd if it started writing while we copied.
-        if (accessor.ReadUInt32(slotBase) != sequence)
-            return false;
-
-        lastSequence = sequence;
-        _nextBuffer = (_nextBuffer + 1) % _buffers.Length;
-        frame = new ViewportFrame(width, height, stride, buffer);
-        return true;
-    }
-
-    private static async Task<MemoryMappedFile?> TryOpenMappingAsync(string name, CancellationToken ct)
-    {
-        // The engine creates the mapping moments after reporting the view, so poll briefly rather than
-        // blocking a pool thread on Thread.Sleep.
-        for (var attempt = 0; attempt < 10; attempt++)
-        {
-            try
-            {
-                return MemoryMappedFile.OpenExisting(name, MemoryMappedFileRights.Read);
-            }
-            catch (FileNotFoundException)
-            {
-                try
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(100), ct).ContinueOnAnyContext();
-                }
-                catch (OperationCanceledException)
-                {
-                    return null;
-                }
-            }
+            _viewName = null;
+            if (_engine.IsConnected)
+                _engine.StopViewAsync(name, CancellationToken.None).FireAndForget();
         }
 
-        return null;
+        SurfaceLost?.Invoke();
     }
 }

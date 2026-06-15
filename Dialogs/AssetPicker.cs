@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Toybox.Studio.Project;
+using Toybox.Studio.Widgets.Ghost;
 
 namespace Toybox.Studio.Dialogs;
 
@@ -51,14 +52,23 @@ public static class AssetPicker
             }, supportsRecycling: false),
         };
 
+        // Shown over the list whenever there's nothing to pick, so an empty picker reads as intentional
+        // rather than broken. The message reflects whether the emptiness is from a search or a bare list.
+        var ghost = new GhostView { IsHitTestVisible = false };
+
         void Refilter()
         {
             var query = search.Text?.Trim() ?? "";
-            list.ItemsSource = query.Length == 0
+            var filtered = query.Length == 0
                 ? options
                 : options
                     .Where(o => o.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
                     .ToList();
+            list.ItemsSource = filtered;
+
+            var isEmpty = filtered.Count == 0;
+            ghost.IsVisible = isEmpty;
+            ghost.Message = query.Length == 0 ? "Nothing to pick here." : "No matches.";
         }
 
         Refilter();
@@ -119,7 +129,7 @@ public static class AssetPicker
         {
             BorderBrush = Avalonia.Media.Brush.Parse("#22FFFFFF"),
             BorderThickness = new Thickness(0.5),
-            Child = new ScrollViewer { Content = list },
+            Child = new Panel { Children = { new ScrollViewer { Content = list }, ghost } },
         });
 
         dialog.Content = layout;

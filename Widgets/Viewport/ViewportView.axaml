@@ -5,16 +5,23 @@
              x:Class="Toybox.Studio.Widgets.Viewport.ViewportView"
              x:DataType="local:ViewportViewModel">
 
-    <Panel>
-        <Image Name="FrameImage" Source="{Binding Frame}" Stretch="Uniform"
-               IsVisible="{Binding HasFrames}"
-               local:FrameInvalidation.Tick="{Binding FrameTick}"/>
-        
+    <!-- ViewportInput captures pointer/keyboard while focused and forwards it to the engine view
+         (editor fly camera). Background must be non-null so the Panel receives pointer events. The cursor
+         hides while the game requests relative (mouselook) mode; the input behavior re-centres it. -->
+    <Panel Background="Transparent" Focusable="True" local:ViewportInput.Enabled="True"
+           Cursor="{Binding RelativeMouse,
+                    Converter={x:Static local:RelativeMouseCursorConverter.Instance}}">
+        <!-- Samples the engine view's shared GPU texture directly (zero copy). Reports back to the
+             view-model if this compositor can't import it, so the ghost shows instead of black. -->
+        <local:CompositionInteropViewport
+            Surface="{Binding CurrentSurface}"
+            InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
+
         <ghost:GhostView Message="No world loaded." IsVisible="{Binding ShowEmptyGhost}"/>
 
         <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
-        <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding IsBusy}">
-            <ghost:LoadingGhostView Message="Working…"/>
+        <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding ShowLoadingGhost}">
+            <ghost:LoadingGhostView Message="{Binding LoadingMessage}"/>
         </Border>
     </Panel>
 </UserControl>

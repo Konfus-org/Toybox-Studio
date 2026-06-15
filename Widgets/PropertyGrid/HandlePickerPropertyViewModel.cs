@@ -12,7 +12,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// opens a modal chooser of assets matching the node's <c>$choices</c> type list, committing the chosen
 /// asset's id back to the backing token. Used for [[editor::view("handle"/"asset")]].
 /// </summary>
-public sealed partial class HandlePickerPropertyViewModel : PropertyViewModelBase
+public sealed partial class HandlePickerPropertyViewModel : PropertyViewModel
 {
     private readonly AssetCatalog? _catalog;
     private readonly IReadOnlyList<string>? _typeFilter;

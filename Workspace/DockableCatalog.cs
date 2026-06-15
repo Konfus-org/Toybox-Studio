@@ -39,8 +39,15 @@ public sealed class DockableCatalog
     /// </summary>
     public static void RegisterDockables(IServiceCollection services)
     {
-        foreach (var (_, _, viewModelType) in Scan())
-            services.TryAddSingleton(viewModelType);
+        foreach (var (_, attribute, viewModelType) in Scan())
+        {
+            // Non-singleton dockables (e.g. the viewport) spawn a fresh view-model per window, so
+            // they must be transient; singletons keep one shared instance.
+            if (attribute.Singleton)
+                services.TryAddSingleton(viewModelType);
+            else
+                services.AddTransient(viewModelType);
+        }
 
         services.AddSingleton<DockableCatalog>();
     }
@@ -91,12 +98,14 @@ public sealed class DockableCatalog
             Slot = attribute.Slot,
             Proportion = attribute.Proportion,
             Order = attribute.Order,
-            CreateView = () =>
+            Singleton = attribute.Singleton,
+            CreateView = viewModel =>
             {
                 var view = (Control)Activator.CreateInstance(viewType)!;
-                view.DataContext = _services.GetRequiredService(viewModelType);
+                view.DataContext = viewModel ?? _services.GetRequiredService(viewModelType);
                 return view;
             },
+            CreateViewModel = () => _services.GetRequiredService(viewModelType),
         };
     }
 }

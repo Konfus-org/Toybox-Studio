@@ -1,10 +1,25 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
+
+/// <summary>
+/// Several bools → true when any is true (a logical OR over the bound inputs). Lets a row stay visible when
+/// either of two independent conditions holds — e.g. a script card shown when its title matches the search
+/// <em>or</em> its override grid still has a matching row.
+/// </summary>
+public sealed class AnyTrueConverter : IMultiValueConverter
+{
+    public static readonly AnyTrueConverter Instance = new();
+
+    public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture) =>
+        values.Any(value => value is true);
+}
 
 /// <summary>
 /// Nesting depth (int) → a near-black overlay brush, so each level reads a notch darker than its parent

@@ -5,7 +5,7 @@
              x:DataType="local:ObjectPropertyViewModel">
     <!-- A nested struct renders as its own header row (type icon + name) followed by its child rows,
          which carry Depth + 1 so they indent and shade one level deeper. Always expanded. -->
-    <StackPanel>
+    <StackPanel IsVisible="{Binding Visible}">
         <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
                            Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
                            IsParent="True" IsExpanded="{Binding IsExpanded, Mode=TwoWay}"

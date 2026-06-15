@@ -97,7 +97,7 @@ public partial class App : Application
             // Give the property grid's custom widgets (asset pickers, script links) the services they
             // need before any inspector or settings grid is built.
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
-            PropertyViewRegistry.Configure(catalog);
+            PropertyViewRegistry.Configure(catalog, _host.Services.GetRequiredService<World>());
 
             // Activating an asset link (e.g. a handle hyperlink) reveals the file in the OS explorer.
             catalog.AssetActivated += id =>
@@ -122,6 +122,8 @@ public partial class App : Application
 
             await StepAsync("Locating engine…").ContinueOnSameContext();
             var session = _host.Services.GetRequiredService<Session>();
+            // Resolve the watcher before any launch so it observes the engine from the very first signal.
+            _host.Services.GetRequiredService<EngineWatcher>();
             var locator = _host.Services.GetRequiredService<Locator>();
             var locatorReport = locator.ResolveAtStartup();
             log.Info(locatorReport);
@@ -214,6 +216,7 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<CommandRunner>();
         services.AddSingleton<Settings>();
         services.AddSingleton<ThemeManager>();
         services.AddSingleton<LogFile>();
@@ -225,12 +228,12 @@ public partial class App : Application
         services.AddSingleton<JsonParser>();
         services.AddSingleton<Selection>();
         services.AddSingleton<Session>();
+        services.AddSingleton<EngineWatcher>();
         services.AddSingleton<InstanceDetector>();
         services.AddSingleton<World>();
         services.AddSingleton<AssetCatalog>();
-        services.AddSingleton<ViewportStream>();
         services.AddSingleton<Locator>();
-        services.AddSingleton<ThemeCreatorService>();
+        services.AddSingleton<ThemeCreator>();
         services.AddSingleton<StatusViewModel>();
         services.AddSingleton<GameToolbarViewModel>();
 

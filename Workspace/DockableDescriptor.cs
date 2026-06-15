@@ -25,9 +25,24 @@ public sealed class DockableDescriptor
     public int Order { get; init; }
 
     /// <summary>
-    /// Builds a brand-new view with its view-model as DataContext. Invoked through Dock's deferred
-    /// template every time the tool materializes, so it must return a new control each call — a single
-    /// live control gets orphaned when re-parented; the shared view-model carries all the state.
+    /// When <c>true</c>, there is at most one instance (focus-or-open); when <c>false</c>, each open
+    /// spawns a fresh instance with its own view-model (registered transient). See
+    /// <see cref="DockableAttribute.Singleton"/>.
     /// </summary>
-    public required Func<Control> CreateView { get; init; }
+    public bool Singleton { get; init; } = true;
+
+    /// <summary>
+    /// Builds a brand-new view. Invoked through Dock's deferred template every time the tool
+    /// materializes, so it must return a new control each call — a single live control gets orphaned
+    /// when re-parented; the view-model carries all the state. Pass <c>null</c> to bind the view-model
+    /// resolved from DI (singletons); pass an explicit instance to bind a specific spawned view-model.
+    /// </summary>
+    public required Func<object?, Control> CreateView { get; init; }
+
+    /// <summary>
+    /// Resolves a fresh view-model from DI. For non-singletons (transient registration) this is a new
+    /// instance each call — the spawned instance is created once on open and reused by
+    /// <see cref="CreateView"/> across re-templating.
+    /// </summary>
+    public required Func<object> CreateViewModel { get; init; }
 }

@@ -27,14 +27,16 @@ public partial class MainWindow : Window
         // track live state. From here on, opening/closing/saving panels all go through the workspace.
         shell.Workspace.Bind(DockHost);
 
+        // The transport itself renders inside the Game view now; the shell only listens for Play so it
+        // can surface that view.
         _toolbar = shell.GameToolbar;
         _toolbar.PlayRequested += OnPlayRequested;
     }
 
-    // Pressing Play opens the viewport if the user had closed it, so the game is always visible on launch.
+    // Pressing Play surfaces the Game view (opening or focusing it), so the running game is always visible.
     private void OnPlayRequested()
     {
         if (DataContext is ShellViewModel shell)
-            shell.Workspace.EnsureOpen("Viewport");
+            shell.Workspace.EnsureOpen("GameView");
     }
 }

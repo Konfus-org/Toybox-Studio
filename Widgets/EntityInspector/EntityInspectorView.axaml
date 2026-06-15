@@ -3,17 +3,29 @@
              xmlns:ecs="using:Toybox.Studio.Widgets.Ecs"
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             xmlns:search="using:Toybox.Studio.Widgets.Searching"
              x:Class="Toybox.Studio.Widgets.EntityInspector.EntityInspectorView"
              x:DataType="ecs:WorldViewModel">
 
     <UserControl.Styles>
-        <!-- Component header: the darkest band, the top of the inspector's tone hierarchy. -->
+        <!-- Top-level inspector tabs (Components / Scripts / Json): compact. -->
+        <Style Selector="TabControl.inspectorTabs">
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="TabControl.inspectorTabs TabItem">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+
+        <!-- Component header: the darkest band, top of the inspector's tone hierarchy. -->
         <Style Selector="ToggleButton.componentHeader">
             <Setter Property="Background" Value="{DynamicResource ThemeHeaderBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
-            <Setter Property="BorderThickness" Value="0,0.5,0,0.5"/>
+            <Setter Property="BorderThickness" Value="0,0,0,0.5"/>
             <Setter Property="CornerRadius" Value="0"/>
-            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Padding" Value="2,6"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
@@ -41,45 +53,95 @@
     </UserControl.Styles>
 
     <DockPanel>
-        <!-- Entity header: a dark band matching the component/footer tone. -->
+        <!-- Entity header: name on the left, id pinned right. Scoped to SelectedEntity so its inner bindings
+             resolve against a null context (not a null SelectedEntity.* path) when nothing is selected. -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource ThemeHeaderBrush}"
                 BorderBrush="{DynamicResource ThemeBorderBrush}"
                 BorderThickness="0,0,0,0.5" Padding="10,7" IsVisible="{Binding HasSelection}">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="{Binding SelectedEntity.Name, FallbackValue=''}" FontWeight="Medium"
+            <DockPanel DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel">
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Subtitle}" Opacity="0.55"
+                           VerticalAlignment="Center" HorizontalAlignment="Right" Margin="8,0,0,0"/>
+                <TextBlock Text="{Binding Name, FallbackValue=''}" FontWeight="Medium"
                            VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding SelectedEntity.Subtitle}" Opacity="0.55" VerticalAlignment="Center"/>
-            </StackPanel>
+            </DockPanel>
         </Border>
 
         <Panel>
             <ghost:GhostView Message="No entity selected." IsVisible="{Binding !HasSelection}"/>
 
-            <ScrollViewer IsVisible="{Binding HasSelection}">
-                <ItemsControl ItemsSource="{Binding SelectedEntity.Components}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="ecs:ComponentViewModel">
-                            <StackPanel>
-                                <ToggleButton x:Name="CompToggle" Classes="componentHeader" IsChecked="True">
-                                    <DockPanel>
-                                        <Path DockPanel.Dock="Left" Classes="compChevron" Width="9" Height="9"
-                                              Stretch="Uniform" Margin="0,0,7,0" VerticalAlignment="Center"
-                                              Fill="{DynamicResource ThemeTextBrush}"
-                                              Data="M 0,0 L 4,4 L 0,8 Z"/>
-                                        <pg:IconView DockPanel.Dock="Left" Width="15" Height="15"
-                                                     Margin="0,0,6,0" VerticalAlignment="Center"
-                                                     IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
-                                        <TextBlock Text="{Binding Name}" FontWeight="Medium"
-                                                   VerticalAlignment="Center"/>
-                                    </DockPanel>
-                                </ToggleButton>
-                                <pg:PropertyGridView Items="{Binding Properties}"
-                                                     IsVisible="{Binding #CompToggle.IsChecked}"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+            <DockPanel IsVisible="{Binding HasSelection}">
+                <!-- One inspector search, above the tabs: filters every property grid (Components and
+                     Scripts) by header or value. A component whose grid has no matching rows hides itself. -->
+                <search:SearchBox DockPanel.Dock="Top" Margin="4,6,4,0"
+                                  Text="{Binding ComponentSearch, Mode=TwoWay}"
+                                  Watermark="Search properties…"/>
+
+                <TabControl Classes="inspectorTabs">
+                <!-- Components: every non-script component, stacked under its own collapsible header. -->
+                <TabItem Header="Components">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding SelectedEntity.Components}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="ecs:ComponentViewModel">
+                                    <StackPanel IsVisible="{Binding #ComponentGrid.HasVisibleItems}">
+                                        <ToggleButton x:Name="CompToggle" Classes="componentHeader" IsChecked="True">
+                                            <DockPanel>
+                                                <Border DockPanel.Dock="Left" Width="15" Margin="2,0,0,0"
+                                                        VerticalAlignment="Center">
+                                                    <Path Classes="compChevron" Width="8" Height="8"
+                                                          Stretch="Uniform" HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Fill="{DynamicResource ThemeTextBrush}"
+                                                          Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                                </Border>
+                                                <pg:IconView DockPanel.Dock="Left" Width="15" Height="15"
+                                                             Margin="6,0,6,0" VerticalAlignment="Center"
+                                                             IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="Medium"
+                                                           VerticalAlignment="Center"/>
+                                            </DockPanel>
+                                        </ToggleButton>
+                                        <pg:PropertyGridView x:Name="ComponentGrid"
+                                                             Items="{Binding Properties}"
+                                                             Filter="{Binding Filter}"
+                                                             IsVisible="{Binding #CompToggle.IsChecked}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- Scripts: the script container, one card per bound script (its overrides as fields). -->
+                <TabItem Header="Scripts">
+                    <Panel>
+                        <!-- Visibility lives on the wrapper so it resolves against the inspector VM; the
+                             inner view overrides its own DataContext to the script container. -->
+                        <Panel IsVisible="{Binding SelectedEntity.HasScripts}">
+                            <ecs:ScriptContainerView DataContext="{Binding SelectedEntity.Scripts}"/>
+                        </Panel>
+                        <ghost:GhostView Message="No scripts on this entity."
+                                         IsVisible="{Binding !SelectedEntity.HasScripts}"/>
+                    </Panel>
+                </TabItem>
+
+                <!-- Json (debug only): the raw component JSON, editable, applied per-component. -->
+                <TabItem Header="Json" IsVisible="{x:Static ecs:EntityViewModel.IsDebug}">
+                    <Grid RowDefinitions="*,Auto" Margin="6"
+                          DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel">
+                        <TextBox Grid.Row="0" Text="{Binding JsonDraft, Mode=TwoWay}"
+                                 AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                                 FontFamily="{DynamicResource ThemeMonoFontFamily}" FontSize="12"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
+                                    HorizontalAlignment="Right" Margin="0,8,0,0">
+                            <Button Content="Apply" Classes="accent" Command="{Binding ApplyJsonCommand}"/>
+                        </StackPanel>
+                    </Grid>
+                </TabItem>
+                </TabControl>
+            </DockPanel>
         </Panel>
     </DockPanel>
 </UserControl>

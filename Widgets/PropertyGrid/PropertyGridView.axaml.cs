@@ -9,7 +9,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>
 /// A reusable, type-driven property grid. Bind <see cref="Items"/> to a collection of
-/// <see cref="PropertyViewModelBase"/>; rows render through the widget DataTemplate matching their type,
+/// <see cref="PropertyViewModel"/>; rows render through the widget DataTemplate matching their type,
 /// share one auto-sized (resizable) name column, and group under their [[tbx::category]] headings.
 /// </summary>
 public partial class PropertyGridView : UserControl
@@ -17,11 +17,19 @@ public partial class PropertyGridView : UserControl
     public static readonly StyledProperty<IEnumerable?> ItemsProperty =
         AvaloniaProperty.Register<PropertyGridView, IEnumerable?>(nameof(Items));
 
+    public static readonly StyledProperty<string?> FilterProperty =
+        AvaloniaProperty.Register<PropertyGridView, string?>(nameof(Filter));
+
     public static readonly DirectProperty<PropertyGridView, bool> IsEmptyProperty =
         AvaloniaProperty.RegisterDirect<PropertyGridView, bool>(nameof(IsEmpty), o => o.IsEmpty);
 
+    public static readonly DirectProperty<PropertyGridView, bool> HasVisibleItemsProperty =
+        AvaloniaProperty.RegisterDirect<PropertyGridView, bool>(
+            nameof(HasVisibleItems), o => o.HasVisibleItems);
+
     private INotifyCollectionChanged? _observed;
     private bool _isEmpty = true;
+    private bool _hasVisibleItems = true;
 
     public PropertyGridView()
     {
@@ -35,12 +43,32 @@ public partial class PropertyGridView : UserControl
     }
 
     /// <summary>
+    /// A header/value search applied to the rows: a row stays visible when its name or value matches, or to
+    /// keep a matching descendant in view. Empty/null shows everything. Owned by the host panel's search box.
+    /// </summary>
+    public string? Filter
+    {
+        get => GetValue(FilterProperty);
+        set => SetValue(FilterProperty, value);
+    }
+
+    /// <summary>
     /// True when there are no rows to show (drives the empty-state ghost).
     /// </summary>
     public bool IsEmpty
     {
         get => _isEmpty;
         private set => SetAndRaise(IsEmptyProperty, ref _isEmpty, value);
+    }
+
+    /// <summary>
+    /// True when at least one row passes the current <see cref="Filter"/>. Lets a host hide a whole grid
+    /// (e.g. an inspector component card) when nothing in it matches the search.
+    /// </summary>
+    public bool HasVisibleItems
+    {
+        get => _hasVisibleItems;
+        private set => SetAndRaise(HasVisibleItemsProperty, ref _hasVisibleItems, value);
     }
 
     /// <summary>
@@ -55,6 +83,10 @@ public partial class PropertyGridView : UserControl
         {
             Rewire();
             RebuildGroups();
+        }
+        else if (change.Property == FilterProperty)
+        {
+            ApplyFilter();
         }
     }
 
@@ -78,10 +110,10 @@ public partial class PropertyGridView : UserControl
 
         // Preserve first-appearance order of categories; the uncategorized group floats to the top.
         var order = new List<string?>();
-        var byCategory = new Dictionary<string, List<PropertyViewModelBase>>();
+        var byCategory = new Dictionary<string, List<PropertyViewModel>>();
         const string none = "\0none";
 
-        foreach (var item in Items.OfType<PropertyViewModelBase>())
+        foreach (var item in Items.OfType<PropertyViewModel>())
         {
             var key = string.IsNullOrEmpty(item.Category) ? none : item.Category!;
             if (!byCategory.TryGetValue(key, out var list))
@@ -101,5 +133,20 @@ public partial class PropertyGridView : UserControl
         }
 
         IsEmpty = Groups.Count == 0;
+
+        // Re-apply the active search to the freshly built rows so filtering survives an Items change.
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        var anyVisible = false;
+        foreach (var item in (Items ?? Enumerable.Empty<object>()).OfType<PropertyViewModel>())
+            anyVisible |= item.ApplyFilter(Filter);
+
+        foreach (var group in Groups)
+            group.RefreshVisibility();
+
+        HasVisibleItems = anyVisible;
     }
 }

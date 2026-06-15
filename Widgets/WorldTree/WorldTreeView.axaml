@@ -2,31 +2,138 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ecs="using:Toybox.Studio.Widgets.Ecs"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             xmlns:search="using:Toybox.Studio.Widgets.Searching"
+             xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:util="using:Toybox.Studio.Widgets.Utils"
+             xmlns:wt="using:Toybox.Studio.Widgets.WorldTree"
              x:Class="Toybox.Studio.Widgets.WorldTree.WorldTreeView"
              x:DataType="ecs:WorldViewModel">
 
+    <UserControl.Styles>
+        <!-- Chrome-less icon button for the per-row add/delete affordances; fades up on hover. -->
+        <Style Selector="Button.rowButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="3,0"/>
+            <Setter Property="Opacity" Value="0.6"/>
+        </Style>
+        <Style Selector="Button.rowButton:pointerover">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <!-- Dim the header add/refresh buttons when disabled (no world): the icon keeps its own
+             foreground otherwise, so a disabled button would still read as active. -->
+        <Style Selector="Button.Basic:disabled">
+            <Setter Property="Opacity" Value="0.35"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Shared row content: a drag handle, the entity name, and a delete button. Used by both the scene
+         tree and the Globals list; the command resolves against the owning WorldViewModel. -->
+    <UserControl.Resources>
+        <DataTemplate x:Key="EntityRow" x:DataType="ecs:EntityViewModel">
+            <DockPanel>
+                <Border DockPanel.Dock="Left" Cursor="SizeAll" Background="Transparent"
+                        Padding="0,0,4,0" VerticalAlignment="Center"
+                        ToolTip.Tip="Drag to reorder, reparent, or move between scene and globals"
+                        wt:EntityTreeDragDrop.Handle="True">
+                    <pg:IconView Width="12" Height="12" IconName="GripVertical" Opacity="0.45"
+                                 Foreground="{DynamicResource ThemeTextBrush}"/>
+                </Border>
+                <Button DockPanel.Dock="Right" Classes="rowButton" ToolTip.Tip="Delete entity"
+                        Command="{Binding $parent[ItemsControl].((ecs:WorldViewModel)DataContext).DeleteEntityCommand}"
+                        CommandParameter="{Binding}">
+                    <pg:IconView Width="12" Height="12" IconName="X"
+                                 Foreground="{DynamicResource ThemeTextBrush}"/>
+                </Button>
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+            </DockPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <DockPanel Margin="4">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-            <Button DockPanel.Dock="Right" Classes="Basic"
+            <Button DockPanel.Dock="Right" Classes="Basic" IsEnabled="{Binding HasWorld}"
                     ToolTip.Tip="Refresh" Command="{Binding RefreshCommand}">
                 <PathIcon Data="{StaticResource RefreshIconGeometry}" Width="13" Height="13"/>
+            </Button>
+            <Button DockPanel.Dock="Right" Classes="Basic" Margin="0,0,4,0" IsEnabled="{Binding HasWorld}"
+                    ToolTip.Tip="Add entity (child of selection)" Command="{Binding AddEntityCommand}">
+                <pg:IconView Width="14" Height="14" IconName="Plus"
+                             Foreground="{DynamicResource ThemeTextBrush}"/>
             </Button>
             <TextBlock Text="{Binding Summary}" Opacity="0.6" VerticalAlignment="Center"/>
         </DockPanel>
 
+        <search:SearchBox DockPanel.Dock="Top" Margin="0,0,0,6"
+                          Text="{Binding EntitySearch, Mode=TwoWay}" Watermark="Search entities…"
+                          IsVisible="{Binding HasWorld}"/>
+
+        <!-- Globals: a flat section pinned above the scene tree. Drop an entity here to make it global; drag
+             a global out into the tree to demote it. The whole bordered area is the drop target. -->
+        <Border DockPanel.Dock="Top" Margin="0,0,0,6" Padding="4" MinHeight="48"
+                CornerRadius="4" Background="{DynamicResource ThemeBandBrush}"
+                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"
+                IsVisible="{Binding ShowGlobals}"
+                wt:EntityTreeDragDrop.GlobalsZone="True">
+            <StackPanel>
+                <TextBlock Text="GLOBALS" FontSize="10" FontWeight="Medium" Opacity="0.6"
+                           Margin="2,0,0,4"/>
+                <ListBox ItemsSource="{Binding Globals}"
+                         util:SharedSelection.Selected="{Binding SelectedEntity, Mode=TwoWay}"
+                         SelectionMode="Single" Background="Transparent" Padding="0"
+                         ItemTemplate="{StaticResource EntityRow}"/>
+                <TextBlock Text="Drag entities here to make them global."
+                           FontSize="11" Opacity="0.45" Margin="2,2,0,0" TextWrapping="Wrap"
+                           IsVisible="{Binding !HasGlobals}"/>
+            </StackPanel>
+        </Border>
+
         <Panel>
+            <!-- Browse the world as a hierarchy when not searching. It behaves like a list: each row has a
+                 drag handle to reorder/reparent and an x to delete. -->
             <TreeView ItemsSource="{Binding RootEntities}"
-                      SelectedItem="{Binding SelectedEntity}"
+                      util:SharedSelection.Selected="{Binding SelectedEntity, Mode=TwoWay}"
                       SelectionMode="Single"
-                      IsVisible="{Binding HasWorld}">
+                      IsVisible="{Binding ShowTree}"
+                      wt:EntityTreeDragDrop.Enabled="True">
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="ecs:EntityViewModel">
-                        <TextBlock Text="{Binding Name}"/>
+                        <DockPanel>
+                            <Border DockPanel.Dock="Left" Cursor="SizeAll" Background="Transparent"
+                                    Padding="0,0,4,0" VerticalAlignment="Center"
+                                    ToolTip.Tip="Drag to reorder, reparent, or move between scene and globals"
+                                    wt:EntityTreeDragDrop.Handle="True">
+                                <pg:IconView Width="12" Height="12" IconName="GripVertical" Opacity="0.45"
+                                             Foreground="{DynamicResource ThemeTextBrush}"/>
+                            </Border>
+                            <Button DockPanel.Dock="Right" Classes="rowButton" ToolTip.Tip="Delete entity"
+                                    Command="{Binding $parent[TreeView].((ecs:WorldViewModel)DataContext).DeleteEntityCommand}"
+                                    CommandParameter="{Binding}">
+                                <pg:IconView Width="12" Height="12" IconName="X"
+                                             Foreground="{DynamicResource ThemeTextBrush}"/>
+                            </Button>
+                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                        </DockPanel>
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
 
+            <!-- …and as a flat, name-filtered list while a search is active. -->
+            <ListBox ItemsSource="{Binding SearchResults}"
+                     SelectedItem="{Binding SelectedEntity}"
+                     SelectionMode="Single"
+                     IsVisible="{Binding ShowResults}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="ecs:EntityViewModel">
+                        <TextBlock Text="{Binding Name}"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
             <ghost:GhostView Message="No world loaded." IsVisible="{Binding !HasWorld}"/>
+            <ghost:GhostView Message="No matching entities." IsVisible="{Binding ShowNoResults}"/>
         </Panel>
     </DockPanel>
 </UserControl>

@@ -6,6 +6,7 @@
     <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
                        Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
         <NumericUpDown Classes="field" ShowButtonSpinner="False" FormatString="0" Increment="1"
+                       local:NumericScrub.Enabled="True" local:NumericScrub.Step="1"
                        Value="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"/>
     </local:PropertyRow>
 </UserControl>

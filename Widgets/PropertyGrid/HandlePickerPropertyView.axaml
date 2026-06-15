@@ -5,19 +5,18 @@
              x:DataType="local:HandlePickerPropertyViewModel">
     <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
                        Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
-        <Border Background="{DynamicResource ThemeWellBrush}"
-                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0.5" CornerRadius="2"
-                MinHeight="22" Padding="7,0">
+        <Border Classes="fieldHost">
             <DockPanel>
-                <!-- Picker: opens the asset chooser filtered to this handle's type. -->
-                <Button DockPanel.Dock="Right" Command="{Binding PickCommand}" Padding="2" Margin="4,0,0,0"
-                        Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
-                        ToolTip.Tip="Pick from asset database">
-                    <local:IconView Width="15" Height="15" IconName="Database"/>
+                <!-- Picker: opens the asset chooser filtered to this handle's type. The icon needs an
+                     explicit foreground — an IconView with no colour leaves its glyph unpainted. -->
+                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding PickCommand}"
+                        VerticalAlignment="Stretch" ToolTip.Tip="Pick from asset database">
+                    <local:IconView Width="14" Height="14" IconName="Search"
+                                    Foreground="{DynamicResource ThemeTextBrush}"/>
                 </Button>
                 <!-- Current reference as a hyperlink; clicking reveals it in the catalog. -->
                 <Button Command="{Binding OpenCommand}" IsEnabled="{Binding HasReference}"
-                        HorizontalAlignment="Left" HorizontalContentAlignment="Left"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Left" Margin="7,0,0,0"
                         Padding="0" Background="Transparent" BorderThickness="0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding DisplayName}" FontSize="12"
                                Foreground="{DynamicResource SystemAccentColor}" TextDecorations="Underline"/>

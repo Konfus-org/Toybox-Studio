@@ -15,42 +15,40 @@ public sealed partial class GameToolbarViewModel : ObservableObject
     /// </summary>
     public event Action? PlayRequested;
 
-    public GameToolbarViewModel(Session session)
+    public GameToolbarViewModel(Session session, EngineWatcher watcher)
     {
         _session = session;
-        session.StateChanged += state => Dispatch.To(DispatchContext.UI, () => State = state);
-        session.BusyChanged += busy => Dispatch.To(DispatchContext.UI, () => IsBusy = busy);
+        // The watcher is the single source of "what is the engine doing"; pause is orthogonal and
+        // still comes straight off the session.
+        watcher.StateChanged += state => Dispatch.To(DispatchContext.UI, () => State = state);
         session.PausedChanged += paused => Dispatch.To(DispatchContext.UI, () => IsPaused = paused);
     }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(PlayOrStopCommand))]
-    [NotifyCanExecuteChangedFor(nameof(TogglePauseCommand))]
     [NotifyPropertyChangedFor(nameof(IsPlaying))]
     [NotifyPropertyChangedFor(nameof(PlayOrStopTip))]
-    public partial ConnectionState State { get; private set; } = ConnectionState.Disconnected;
-
-    [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(PlayOrStopCommand))]
     [NotifyCanExecuteChangedFor(nameof(TogglePauseCommand))]
-    public partial bool IsBusy { get; private set; }
+    public partial EngineState State { get; private set; } = EngineState.Off;
 
     [ObservableProperty]
     public partial bool IsPaused { get; private set; }
 
-    public bool IsPlaying => State == ConnectionState.Connected;
+    // Play mode (running the game loop), distinct from the engine connection. The engine runs in
+    // editor mode (Ready) while not playing.
+    public bool IsPlaying => State == EngineState.Playing;
 
-    public string PlayOrStopTip => State == ConnectionState.Connected ? "Stop" : "Play (compiles first)";
+    public string PlayOrStopTip => IsPlaying ? "Stop" : "Play";
 
     [RelayCommand(CanExecute = nameof(CanPlayOrStop))]
     private Task PlayOrStopAsync()
     {
-        if (State == ConnectionState.Connected)
-            return _session.StopAsync();
+        if (IsPlaying)
+            return _session.StopPlayAsync();
 
-        // Fire before the await so the viewport opens immediately, not only once the engine connects.
+        // Fire before the await so the game view surfaces immediately as play begins.
         PlayRequested?.Invoke();
-        return _session.LaunchAsync(CancellationToken.None);
+        return _session.StartPlayAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanTogglePause))]
@@ -59,14 +57,15 @@ public sealed partial class GameToolbarViewModel : ObservableObject
         return _session.SetPausedAsync(!IsPaused);
     }
 
+    // Play/Stop is available whenever the engine is running (editor mode or already playing); it
+    // toggles play, it no longer launches or kills the engine.
     private bool CanPlayOrStop()
     {
-        return !IsBusy
-            && State is ConnectionState.Disconnected or ConnectionState.Connected;
+        return State is EngineState.Ready or EngineState.Playing;
     }
 
     private bool CanTogglePause()
     {
-        return !IsBusy && State == ConnectionState.Connected;
+        return IsPlaying;
     }
 }

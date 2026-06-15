@@ -9,7 +9,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// degrees, rotation about X/Y/Z), converting back to the quaternion array in place on every edit so the
 /// commit closure persists the same shape the engine sent.
 /// </summary>
-public sealed class RotationPropertyViewModel : PropertyViewModelBase
+public sealed class RotationPropertyViewModel : PropertyViewModel
 {
     private static readonly string[] Labels = ["X", "Y", "Z"];
 

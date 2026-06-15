@@ -8,7 +8,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public static class PropertyViewModelFactory
 {
-    public static PropertyViewModelBase Create(PropertyNode node, Action? commit = null, int depth = 0)
+    public static PropertyViewModel Create(PropertyNode node, Action? commit = null, int depth = 0)
     {
         // A read-only field withholds the commit action entirely, so any in-place token edit is never
         // persisted; editable leaf views additionally disable their control via IsReadOnly.
@@ -22,13 +22,16 @@ public static class PropertyViewModelFactory
         if (PropertyViewRegistry.TryCreate(node, effectiveCommit, out var custom))
             return Tag(custom, depth);
 
-        PropertyViewModelBase viewModel = node.Type switch
+        PropertyViewModel viewModel = node.Type switch
         {
             // An enum with declared choices gets a dropdown; without them it falls back to its raw value.
             "enum" when node.Choices is { Count: > 0 } => new EnumPropertyViewModel(node),
             // A handle references an asset, so it's known to be pickable purely from its type token —
             // no [[editor::view]] tag needed. (uuid stays a number: it identifies ids, not assets.)
             "handle" => new HandlePickerPropertyViewModel(node, effectiveCommit, PropertyViewRegistry.Assets),
+            // An entity-reference field (tbx::Entity) carries the "entity" token; it picks from the world's
+            // entities rather than the asset database.
+            "entity" => new EntityPickerPropertyViewModel(node, effectiveCommit, PropertyViewRegistry.World),
             "int" or "uuid" or "enum" => new IntPropertyViewModel(node),
             "float" or "double" => new FloatPropertyViewModel(node),
             "bool" => new BoolPropertyViewModel(node),
@@ -45,7 +48,7 @@ public static class PropertyViewModelFactory
         return Tag(viewModel, depth);
     }
 
-    private static PropertyViewModelBase Tag(PropertyViewModelBase viewModel, int depth)
+    private static PropertyViewModel Tag(PropertyViewModel viewModel, int depth)
     {
         viewModel.Depth = depth;
         return viewModel;

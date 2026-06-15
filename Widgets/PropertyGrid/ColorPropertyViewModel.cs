@@ -10,7 +10,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// colour via <c>reflect.set</c>. Tolerant of both the object <c>{r,g,b,a}</c> and array <c>[r,g,b,a]</c>
 /// forms — and of wrapped channels (<c>{ "type":"float", "value":x }</c>) — preserving whichever arrived.
 /// </summary>
-public sealed partial class ColorPropertyViewModel : PropertyViewModelBase
+public sealed partial class ColorPropertyViewModel : PropertyViewModel
 {
     // The live colour value (JObject or JArray) inside the backing document. It is never itself replaced —
     // only its channel tokens are — so re-reading it each edit keeps writes connected to the document.

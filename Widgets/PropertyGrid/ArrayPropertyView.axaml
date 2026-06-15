@@ -3,12 +3,49 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.ArrayPropertyView"
              x:DataType="local:ArrayPropertyViewModel">
-    <StackPanel>
+    <StackPanel IsVisible="{Binding Visible}">
         <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
                            Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
                            IsParent="True" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
-            <TextBlock Text="{Binding Summary}" FontSize="12" Opacity="0.55" VerticalAlignment="Center"/>
+            <!-- The list summary, with an append (+) button for a resizable list (a std::vector). -->
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding AddCommand}"
+                        IsVisible="{Binding IsResizable}" ToolTip.Tip="Add entry">
+                    <local:IconView Width="13" Height="13" IconName="Plus"
+                                    Foreground="{DynamicResource ThemeTextBrush}"/>
+                </Button>
+                <TextBlock Text="{Binding Summary}" FontSize="12" Opacity="0.55" VerticalAlignment="Center"/>
+            </DockPanel>
         </local:PropertyRow>
-        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsExpanded}"/>
+
+        <!-- Each entry: a drag handle to reorder, the element's own widget, and a delete (x) button. The
+             handle/x show only for a resizable list; a fixed list renders just the element rows. -->
+        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsExpanded}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:PropertyViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Border Grid.Column="0" VerticalAlignment="Top" Padding="2,4,0,0"
+                                Cursor="SizeNorthSouth" Background="Transparent"
+                                local:ListReorder.Enabled="True"
+                                ToolTip.Tip="Drag to reorder"
+                                IsVisible="{Binding $parent[ItemsControl].((local:ArrayPropertyViewModel)DataContext).IsResizable}">
+                            <local:IconView Width="12" Height="12" IconName="GripVertical" Opacity="0.5"
+                                            Foreground="{DynamicResource ThemeTextBrush}"/>
+                        </Border>
+
+                        <ContentControl Grid.Column="1" Content="{Binding}"/>
+
+                        <Button Grid.Column="2" Classes="fieldButton" VerticalAlignment="Top"
+                                Margin="0,2,0,0" ToolTip.Tip="Delete entry"
+                                Command="{Binding $parent[ItemsControl].((local:ArrayPropertyViewModel)DataContext).RemoveCommand}"
+                                CommandParameter="{Binding}"
+                                IsVisible="{Binding $parent[ItemsControl].((local:ArrayPropertyViewModel)DataContext).IsResizable}">
+                            <local:IconView Width="12" Height="12" IconName="X"
+                                            Foreground="{DynamicResource ThemeTextBrush}"/>
+                        </Button>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </StackPanel>
 </UserControl>

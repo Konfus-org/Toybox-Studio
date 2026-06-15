@@ -6,7 +6,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// <summary>
 /// Floating-point property (float/double tokens).
 /// </summary>
-public sealed partial class FloatPropertyViewModel : PropertyViewModelBase
+public sealed partial class FloatPropertyViewModel : PropertyViewModel
 {
     private readonly JsonValueSlot _slot;
 

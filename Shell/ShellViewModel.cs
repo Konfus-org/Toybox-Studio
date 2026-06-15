@@ -21,6 +21,7 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly Logger _log;
     private readonly ProjectManager _projects;
     private readonly FilePicker _filePicker;
+    private readonly CommandRunner _commandRunner;
 
     public ShellViewModel(
         StatusViewModel status,
@@ -29,15 +30,18 @@ public sealed partial class ShellViewModel : ObservableObject
         Session session,
         Logger log,
         ProjectManager projects,
-        FilePicker filePicker)
+        FilePicker filePicker,
+        CommandRunner commandRunner)
     {
         Status = status;
         GameToolbar = gameToolbar;
         Workspace = workspace;
+
         _session = session;
         _log = log;
         _projects = projects;
         _filePicker = filePicker;
+        _commandRunner = commandRunner;
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshTitle);
         RefreshTitle();
@@ -53,6 +57,7 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     public partial string Title { get; private set; } = "Toybox Studio";
 
+    // TODO: Make a toolbar VM and widget for these and move the commands there.
     [RelayCommand]
     private async Task OpenProjectAsync()
     {
@@ -85,6 +90,19 @@ public sealed partial class ShellViewModel : ObservableObject
             return;
 
         await _session.ShipAsync(configuration, folder, CancellationToken.None).ContinueOnAnyContext();
+    }
+
+    [RelayCommand]
+    private async Task DebugEditor()
+    {
+        var result = _commandRunner.Run("avdt");
+        if (!result)
+        {
+            _log.Error("Failed to launch the editor debug tool. Make sure avdt is on your PATH.");
+            Popups.ShowErrorAsync(
+                    "Failed To Launch Dev Tools",
+                    "Failed to launch Avalonia Developer Tools. Please ensure you have them installed via: dotnet tool install --global AvaloniaUI.DeveloperTools").FireAndForget();
+        }
     }
 
     private void RefreshTitle()

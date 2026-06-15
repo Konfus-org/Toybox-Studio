@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media;
 using IconPacks.Avalonia.Lucide;
 
@@ -53,6 +54,12 @@ public sealed class IconView : PackIconLucide
         // Hidden until a name resolves, so an un-iconed row shows no stray glyph.
         IsVisible = false;
     }
+
+    // PackIconLucide derives from Avalonia's PathIcon and populates its Data geometry from Kind at runtime.
+    // IconPacks' own packaged Lucide control theme targets an older Avalonia and throws on this version, so
+    // we never include it; instead borrow PathIcon's style key to render Data through FluentTheme's PathIcon
+    // theme (already included, version-matched). Without this the control resolves no theme and draws blank.
+    protected override Type StyleKeyOverride => typeof(PathIcon);
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {

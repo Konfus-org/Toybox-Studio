@@ -14,13 +14,16 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="local:RotationComponentViewModel">
-                    <DockPanel Margin="0,0,6,0">
+                    <!-- Euler degrees; drag to scrub or click to type. -->
+                    <DockPanel Margin="0,0,10,0">
                         <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" FontSize="11"
-                                   FontWeight="Medium" Margin="0,0,4,0" VerticalAlignment="Center"
+                                   FontWeight="SemiBold" Width="11" TextAlignment="Center"
+                                   Margin="0,0,6,0" VerticalAlignment="Center"
                                    ToolTip.Tip="Rotation in degrees"
                                    Foreground="{Binding Label,
                                        Converter={x:Static local:AxisLabelToBrushConverter.Instance}}"/>
                         <NumericUpDown Classes="field" ShowButtonSpinner="False" FormatString="0.######"
+                                       local:NumericScrub.Enabled="True" local:NumericScrub.Step="0.5"
                                        Value="{Binding Value}"/>
                     </DockPanel>
                 </DataTemplate>

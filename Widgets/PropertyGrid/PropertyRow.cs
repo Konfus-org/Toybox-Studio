@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -35,6 +36,14 @@ public sealed class PropertyRow : ContentControl
 
     public static readonly StyledProperty<string?> IconColorProperty =
         AvaloniaProperty.Register<PropertyRow, string?>(nameof(IconColor));
+
+    public PropertyRow()
+    {
+        // A row hides itself when its backing view-model is filtered out by the grid search. Bound here,
+        // in one place, rather than on every widget view; the "Visible" path resolves against the row's
+        // DataContext (the PropertyViewModel), which a ControlTheme setter binding does not reliably do.
+        this.Bind(IsVisibleProperty, new Binding(nameof(PropertyViewModel.Visible)) { FallbackValue = true });
+    }
 
     public string? HeaderText
     {

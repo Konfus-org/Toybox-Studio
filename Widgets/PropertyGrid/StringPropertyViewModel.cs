@@ -6,7 +6,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// <summary>
 /// String property rendered as a text box.
 /// </summary>
-public sealed partial class StringPropertyViewModel : PropertyViewModelBase
+public sealed partial class StringPropertyViewModel : PropertyViewModel
 {
     private readonly JsonValueSlot _slot;
 

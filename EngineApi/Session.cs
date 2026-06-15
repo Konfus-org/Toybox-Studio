@@ -67,8 +67,11 @@ public sealed class Session : IAsyncDisposable
         _engine = engine;
         // The engine is a stable singleton, so wire its streams once: log lines flow into the unified log,
         // and a dropped connection funnels into the same loss handler as a process exit.
-        _engine.LogReceived += entry => _log.IngestEngineLog(entry.Level, entry.Message);
+        _engine.LogReceived += entry => _log.IngestEngine(entry.Level, entry.Message);
         _engine.Disconnected += OnEngineDisconnected;
+        // The engine now runs continuously in editor mode, one per open project: switching projects
+        // relaunches it so its world matches.
+        _projects.ProjectChanged += OnProjectChanged;
     }
 
     public event Action<ConnectionState>? StateChanged;
@@ -80,7 +83,22 @@ public sealed class Session : IAsyncDisposable
     /// </summary>
     public event Action<bool>? BusyChanged;
 
+    /// <summary>
+    /// Raised when a project compile starts (true) or finishes (false). Lets the watcher tell the
+    /// "Compiling" phase apart from the rest of a launch (both of which keep <see cref="IsBusy"/> set).
+    /// </summary>
+    public event Action<bool>? CompilingChanged;
+
     public event Action<bool>? PausedChanged;
+
+    /// <summary>Raised when play mode is entered or exited (drives the transport's play/stop state).</summary>
+    public event Action<bool>? PlayingChanged;
+
+    /// <summary>
+    /// Raised the instant a play request begins, before the engine round-trip — so the watcher can show
+    /// the game-loading phase during the (brief) transition. <see cref="PlayingChanged"/> ends it.
+    /// </summary>
+    public event Action? PlayStarting;
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
 
@@ -89,6 +107,9 @@ public sealed class Session : IAsyncDisposable
     public bool IsBusy { get; private set; }
 
     public bool IsPaused { get; private set; }
+
+    /// <summary>Whether the engine is currently in play mode (running the game loop), vs editor mode.</summary>
+    public bool IsPlaying { get; private set; }
 
     public string? ConnectedAppName { get; private set; }
 
@@ -104,7 +125,7 @@ public sealed class Session : IAsyncDisposable
         var project = _projects.CurrentProject;
         if (project is null)
         {
-            _log.Log("error", "Open a project to launch.");
+            _log.Error("Open a project to launch.");
             return;
         }
 
@@ -127,13 +148,13 @@ public sealed class Session : IAsyncDisposable
             var launcherPath = FindProjectLauncher(project.BuildDirectory, BuildConfiguration);
             if (launcherPath is null)
             {
-                _log.Log("error", "The project build did not produce a Launcher executable.");
+                _log.Error("The project build did not produce a Launcher executable.");
                 await TearDownAsync(killProcess: false).ContinueOnAnyContext();
                 return;
             }
 
             var port = GetFreeLoopbackPort();
-            _log.Log("info", $"Launching project '{project.Name}' on RPC port {port}...");
+            _log.Info($"Launching project '{project.Name}' on RPC port {port}...");
 
             _process = Engine.Start(
                 launcherPath,
@@ -142,7 +163,7 @@ public sealed class Session : IAsyncDisposable
                 _settings.Editor.Engine.HideEngineWindow,
                 port);
             _process.Exited += OnProcessExited;
-            _log.Log("info", $"Engine process started (pid {_process.Id}).");
+            _log.Info($"Engine process started (pid {_process.Id}).");
 
             var connect = await _engine.ConnectAsync(
                 port,
@@ -150,7 +171,7 @@ public sealed class Session : IAsyncDisposable
                 ct).ContinueOnAnyContext();
             if (connect is not { Success: true, Value: { } hello })
             {
-                _log.Log("error", $"Launch failed: {connect.Error}");
+                _log.Error($"Launch failed: {connect.Error}");
                 await TearDownAsync(killProcess: true).ContinueOnAnyContext();
                 return;
             }
@@ -159,7 +180,7 @@ public sealed class Session : IAsyncDisposable
         }
         catch (Exception exception)
         {
-            _log.Log("error", $"Launch failed: {exception.Message}");
+            _log.Error($"Launch failed: {exception.Message}");
             await TearDownAsync(killProcess: true).ContinueOnAnyContext();
         }
     }
@@ -179,27 +200,28 @@ public sealed class Session : IAsyncDisposable
         var project = _projects.CurrentProject;
         if (project is null)
         {
-            _log.Log("error", "Open a project to compile.");
+            _log.Error("Open a project to compile.");
             return false;
         }
 
         var engineSource = _locator.EngineSourcePath;
         if (engineSource is null)
         {
-            _log.Log("error", "Engine source has not been located; use Locate Engine first.");
+            _log.Error("Engine source has not been located; use Locate Engine first.");
             return false;
         }
 
         if (Interlocked.Exchange(ref _isCompiling, 1) == 1)
         {
-            _log.Log("warning", "A compile is already running.");
+            _log.Warning("A compile is already running.");
             return false;
         }
 
         UpdateBusy();
+        CompilingChanged?.Invoke(true);
         try
         {
-            _log.Log("info", $"Compiling project '{project.Name}'...");
+            _log.Info($"Compiling project '{project.Name}'...");
             var build = _settings.Editor.Build;
             var compiler = CMakeCompiler.ParseCompiler(build.Compiler);
 
@@ -208,20 +230,19 @@ public sealed class Session : IAsyncDisposable
             if (CMakeCompiler.IsConfigured(project.BuildDirectory)
                 && !CMakeCompiler.MatchesCompiler(project.BuildDirectory, compiler))
             {
-                _log.Log(
-                    "info",
+                _log.Info(
                     $"Compiler changed to '{build.Compiler}'; reconfiguring from clean "
                         + "(this rebuilds everything)...");
                 if (!TryDeleteDirectory(project.BuildDirectory, out var deleteError))
                 {
-                    _log.Log("error", $"Could not clear the build folder to switch compilers: {deleteError}");
+                    _log.Error($"Could not clear the build folder to switch compilers: {deleteError}");
                     return false;
                 }
             }
 
             if (!CMakeCompiler.IsConfigured(project.BuildDirectory))
             {
-                _log.Log("info", "Configuring the CMake build (the first time can take a while)...");
+                _log.Info("Configuring the CMake build (the first time can take a while)...");
                 var defines = new Dictionary<string, string>
                 {
                     ["TBX_ENGINE_DIR"] = engineSource.Replace('\\', '/'),
@@ -231,28 +252,28 @@ public sealed class Session : IAsyncDisposable
                         project.BuildDirectory,
                         defines,
                         compiler,
-                        _log.Log,
                         ct).ContinueOnAnyContext())
                 {
-                    _log.Log("error", "CMake configure failed.");
+                    _log.Error("CMake configure failed.");
                     return false;
                 }
             }
 
             if (!await _compiler.BuildAsync(
-                    project.BuildDirectory, configuration, build.Parallel, build.Verbose, _log.Log, ct)
+                    project.BuildDirectory, configuration, build.Parallel, build.Verbose, ct)
                     .ContinueOnAnyContext())
             {
-                _log.Log("error", "Project build failed.");
+                _log.Error("Project build failed.");
                 return false;
             }
 
-            _log.Log("info", $"Project '{project.Name}' compiled.");
+            _log.Info($"Project '{project.Name}' compiled.");
             return true;
         }
         finally
         {
             Interlocked.Exchange(ref _isCompiling, 0);
+            CompilingChanged?.Invoke(false);
             UpdateBusy();
         }
     }
@@ -284,13 +305,13 @@ public sealed class Session : IAsyncDisposable
         var project = _projects.CurrentProject;
         if (project is null)
         {
-            _log.Log("error", "Open a project to ship.");
+            _log.Error("Open a project to ship.");
             return;
         }
 
         if (_locator.EngineSourcePath is null)
         {
-            _log.Log("error", "Engine source has not been located; use Locate Engine first.");
+            _log.Error("Engine source has not been located; use Locate Engine first.");
             return;
         }
 
@@ -302,7 +323,7 @@ public sealed class Session : IAsyncDisposable
             var launcherPath = FindProjectLauncher(project.BuildDirectory, configuration);
             if (launcherPath is null)
             {
-                _log.Log("error", $"The {configuration} build did not produce a Launcher executable.");
+                _log.Error($"The {configuration} build did not produce a Launcher executable.");
                 return;
             }
 
@@ -310,7 +331,7 @@ public sealed class Session : IAsyncDisposable
 
             // Copy the engine + launcher output the project runs against.
             var configurationBin = Path.GetDirectoryName(launcherPath)!;
-            _log.Log("info", $"Copying {configuration} build to '{outputDirectory}'...");
+            _log.Info($"Copying {configuration} build to '{outputDirectory}'...");
             CopyDirectory(configurationBin, outputDirectory);
 
             // Bring the project's assets and settings along so the standalone build can run.
@@ -323,13 +344,13 @@ public sealed class Session : IAsyncDisposable
                 File.Copy(project.AppSettingsPath, settingsDestination, overwrite: true);
 
             var exportedLauncher = Path.Combine(outputDirectory, Path.GetFileName(launcherPath));
-            _log.Log("info", $"Launching standalone {configuration} build from '{exportedLauncher}'...");
+            _log.Info($"Launching standalone {configuration} build from '{exportedLauncher}'...");
             Engine.StartStandalone(exportedLauncher, project.ModuleName, settingsDestination);
-            _log.Log("info", $"Standalone {configuration} build launched.");
+            _log.Info($"Standalone {configuration} build launched.");
         }
         catch (Exception exception)
         {
-            _log.Log("error", $"Ship ({configuration}) failed: {exception.Message}");
+            _log.Error($"Ship ({configuration}) failed: {exception.Message}");
         }
     }
 
@@ -372,22 +393,22 @@ public sealed class Session : IAsyncDisposable
         Interlocked.Exchange(ref _connectionLossHandled, 0);
         try
         {
-            _log.Log("info", $"Attaching to running engine on :{port}...");
+            _log.Info($"Attaching to running engine on :{port}...");
             var connect = await _engine.ConnectAsync(port, AttachConnectTimeout, CancellationToken.None)
                 .ContinueOnAnyContext();
             if (connect is not { Success: true, Value: { } hello })
             {
-                _log.Log("error", $"Attach failed: {connect.Error}");
+                _log.Error($"Attach failed: {connect.Error}");
                 await TearDownAsync(killProcess: false).ContinueOnAnyContext();
                 return;
             }
 
             CompleteConnection(hello);
-            _log.Log("info", $"Attached to running engine on :{port}.");
+            _log.Info($"Attached to running engine on :{port}.");
         }
         catch (Exception exception)
         {
-            _log.Log("error", $"Attach failed: {exception.Message}");
+            _log.Error($"Attach failed: {exception.Message}");
             await TearDownAsync(killProcess: false).ContinueOnAnyContext();
         }
     }
@@ -410,7 +431,7 @@ public sealed class Session : IAsyncDisposable
         {
             if (Kind == SessionKind.Attached)
             {
-                _log.Log("info", "Detaching from engine; it keeps running.");
+                _log.Info("Detaching from engine; it keeps running.");
                 if (IsPaused)
                     await SetPausedAsync(false).ContinueOnAnyContext();
 
@@ -421,14 +442,14 @@ public sealed class Session : IAsyncDisposable
             var process = _process;
             if (_engine.IsConnected && process is not null)
             {
-                _log.Log("info", "Requesting engine shutdown...");
+                _log.Info("Requesting engine shutdown...");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 // Best-effort: the engine may drop the connection before replying, so the failure (if any)
                 // is ignored — the process wait below decides whether a kill is still needed.
                 await _engine.ShutdownAsync(cts.Token).ContinueOnAnyContext();
 
                 if (!await process.WaitForExitAsync(GracefulExitTimeout).ContinueOnAnyContext())
-                    _log.Log("warning", "Engine did not exit in time; killing the process.");
+                    _log.Warning("Engine did not exit in time; killing the process.");
             }
 
             await TearDownAsync(killProcess: true).ContinueOnAnyContext();
@@ -455,8 +476,7 @@ public sealed class Session : IAsyncDisposable
         // console's colors track the editor theme.
         _log.SetEngineForwarder(_engine.WriteLogAsync);
         _log.SetLogColorSink(_engine.SetLogColorsAsync);
-        _log.Log(
-            "info",
+        _log.Info(
             $"Connected to {hello.Engine} (app '{hello.App}', protocol v{hello.ProtocolVersion}).");
 
         _pingLoopCts = new CancellationTokenSource();
@@ -484,7 +504,7 @@ public sealed class Session : IAsyncDisposable
     private void OnProcessExited(int exitCode)
     {
         _log.Log(
-            exitCode == 0 ? "info" : "warning",
+            exitCode == 0 ? LogLevel.Info : LogLevel.Warning,
             $"Engine process exited (code {exitCode}).");
         TryHandleConnectionLoss();
     }
@@ -519,12 +539,12 @@ public sealed class Session : IAsyncDisposable
             && DateTime.UtcNow - _lastLaunchTimeUtc > MinimumUptimeForRestart;
         if (shouldRestart)
         {
-            _log.Log("warning", "Engine connection lost; restarting the engine...");
+            _log.Warning("Engine connection lost; restarting the engine...");
             await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
         }
         else if (!wasOwned)
         {
-            _log.Log("info", "Connection to the attached engine was lost.");
+            _log.Info("Connection to the attached engine was lost.");
         }
     }
 
@@ -563,7 +583,7 @@ public sealed class Session : IAsyncDisposable
             process.Exited -= OnProcessExited;
             if (killProcess && process.IsRunning)
             {
-                _log.Log("warning", "Killing engine process.");
+                _log.Warning("Killing engine process.");
                 // Wait for it to actually exit: the engine binaries are built in-tree, so a lingering
                 // handle would make the next compile's relink fail with a permission-denied error.
                 await process.KillAndWaitAsync(GracefulExitTimeout).ContinueOnAnyContext();
@@ -582,6 +602,12 @@ public sealed class Session : IAsyncDisposable
             PausedChanged?.Invoke(false);
         }
 
+        if (IsPlaying)
+        {
+            IsPlaying = false;
+            PlayingChanged?.Invoke(false);
+        }
+
         SetState(ConnectionState.Disconnected);
     }
 
@@ -597,13 +623,72 @@ public sealed class Session : IAsyncDisposable
         var result = await _engine.SetPausedAsync(isPaused, cts.Token).ContinueOnAnyContext();
         if (!result.Success)
         {
-            _log.Log("error", $"Pause request failed: {result.Error}");
+            _log.Error($"Pause request failed: {result.Error}");
             return;
         }
 
         IsPaused = isPaused;
         PausedChanged?.Invoke(isPaused);
-        _log.Log("info", isPaused ? "Engine paused." : "Engine resumed.");
+        _log.Info(isPaused ? "Engine paused." : "Engine resumed.");
+    }
+
+    /// <summary>
+    /// Enters play mode: the engine snapshots its world and starts running the game loop. The engine
+    /// itself keeps running, so the viewports stay live.
+    /// </summary>
+    public Task StartPlayAsync() => SetPlayingAsync(true);
+
+    /// <summary>
+    /// Exits play mode: the engine restores the pre-play world and stops simulating, without stopping
+    /// the engine or the viewports.
+    /// </summary>
+    public Task StopPlayAsync() => SetPlayingAsync(false);
+
+    private async Task SetPlayingAsync(bool isPlaying)
+    {
+        if (!_engine.IsConnected || IsPlaying == isPlaying)
+            return;
+
+        // Surface the game-loading phase before the round-trip so the watcher can show it immediately.
+        if (isPlaying)
+            PlayStarting?.Invoke();
+
+        // Leaving play clears any pause so the next play session starts clean.
+        if (!isPlaying && IsPaused)
+            await SetPausedAsync(false).ContinueOnAnyContext();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await _engine.SetPlayingAsync(isPlaying, cts.Token).ContinueOnAnyContext();
+        if (!result.Success)
+        {
+            _log.Error($"{(isPlaying ? "Play" : "Stop")} request failed: {result.Error}");
+            // Re-announce the unchanged play state so a watcher that entered the game-loading phase on
+            // PlayStarting falls back out of it instead of waiting forever for a transition that failed.
+            if (isPlaying)
+                PlayingChanged?.Invoke(IsPlaying);
+            return;
+        }
+
+        IsPlaying = isPlaying;
+        PlayingChanged?.Invoke(isPlaying);
+        _log.Info(isPlaying ? "Game started." : "Game stopped.");
+    }
+
+    // A project switch relaunches the engine in editor mode so its world matches the new project. The
+    // very first launch at startup is driven by App startup; this only reacts to later changes while an
+    // engine is already live.
+    private void OnProjectChanged(ProjectInfo? project)
+    {
+        if (project is null || State == ConnectionState.Disconnected)
+            return;
+
+        RestartForProjectAsync().FireAndForget();
+    }
+
+    private async Task RestartForProjectAsync()
+    {
+        await StopAsync().ContinueOnAnyContext();
+        await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
     }
 
     /// <summary>

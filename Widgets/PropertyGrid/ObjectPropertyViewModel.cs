@@ -5,7 +5,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// <summary>
 /// Nested struct/object property — a recursive sub-grid of child properties.
 /// </summary>
-public sealed class ObjectPropertyViewModel : PropertyViewModelBase
+public sealed class ObjectPropertyViewModel : PropertyViewModel
 {
     public ObjectPropertyViewModel(PropertyNode node, Action? commit, int depth = 0) : base(node)
     {
@@ -18,7 +18,9 @@ public sealed class ObjectPropertyViewModel : PropertyViewModelBase
 
     public override bool HasChildren => true;
 
-    private bool _isExpanded = true;
+    // Nested items default collapsed (components and category groups default expanded); the user opens the
+    // ones they care about. Keeps a deep component grid compact on selection.
+    private bool _isExpanded;
 
     public bool IsExpanded
     {
@@ -26,5 +28,7 @@ public sealed class ObjectPropertyViewModel : PropertyViewModelBase
         set => SetProperty(ref _isExpanded, value);
     }
 
-    public ObservableCollection<PropertyViewModelBase> Children { get; }
+    public ObservableCollection<PropertyViewModel> Children { get; }
+
+    protected override IEnumerable<PropertyViewModel> FilterChildren => Children;
 }

@@ -51,6 +51,11 @@ public sealed class Engine : IDisposable
         if (hidden)
             startInfo.ArgumentList.Add("--hidden");
 
+        // Inject the studio bridge plugin (added on top of the project's own plugins). It owns all
+        // editor behavior — the RPC server, viewport rendering, and play-mode — so the engine itself
+        // stays a clean game runtime. Standalone launches omit this and never load any editor code.
+        startInfo.ArgumentList.Add("--load-plugins=StudioBridge");
+
         startInfo.ArgumentList.Add($"--app={appModuleName}");
         startInfo.ArgumentList.Add($"--settings={appSettingsPath}");
 

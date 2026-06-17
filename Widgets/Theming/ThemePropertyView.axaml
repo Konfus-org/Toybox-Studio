@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:theming="using:Toybox.Studio.Widgets.Theming"
+             x:Class="Toybox.Studio.Widgets.Theming.ThemePropertyView"
+             x:DataType="theming:ThemePropertyViewModel">
+    <!-- The Themes list is a sibling section of the Engine / Build sections: the shared sectionHeader band
+         then depth-1 child rows. The header's "+" is the list's add affordance — create a new theme or import
+         one from disk; it swallows its own click so adding never collapses the section. -->
+    <StackPanel IsVisible="{Binding Visible}">
+        <ToggleButton Classes="sectionHeader" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                      Background="{Binding Depth, Converter={x:Static pg:DepthToBrushConverter.Instance}}">
+            <DockPanel Margin="{Binding Depth, Converter={x:Static pg:DepthToIndentConverter.Instance}}">
+                <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
+                      Margin="8,0,2,0" VerticalAlignment="Center"
+                      Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                <Button DockPanel.Dock="Right" Classes="fieldButton" ToolTip.Tip="Add a theme">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Header="Create New…" Command="{Binding CreateThemeCommand}"/>
+                            <MenuItem Header="From Disk…" Command="{Binding ImportThemeCommand}"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                    <pg:IconView Width="13" Height="13" IconName="Plus"
+                                 Foreground="{DynamicResource ThemeSuccessBrush}"/>
+                </Button>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" FontSize="12"
+                           Foreground="{DynamicResource ThemeMutedTextBrush}"
+                           VerticalAlignment="Center" Margin="8,0"/>
+                <TextBlock Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
+                           Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
+            </DockPanel>
+        </ToggleButton>
+
+        <!-- One row per theme; tick its radio to apply it. The shared "ToyboxThemeSelection" group makes the
+             radios mutually exclusive across the list. -->
+        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsExpanded}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="theming:ThemeItemViewModel">
+                    <pg:PropertyRow HeaderText="{Binding Name}" Depth="{Binding Depth}">
+                        <RadioButton GroupName="ToyboxThemeSelection" VerticalAlignment="Center"
+                                     HorizontalAlignment="Left"
+                                     IsChecked="{Binding IsActive, Mode=TwoWay}"/>
+                    </pg:PropertyRow>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

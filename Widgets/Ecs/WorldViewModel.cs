@@ -1,11 +1,13 @@
+using Toybox.Studio.Services.World;
+using Toybox.Studio.Utils;
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Toybox.Studio.Dialogs;
-using Toybox.Studio.ECS;
-using Toybox.Studio.EngineApi;
-using Toybox.Studio.Widgets.Utils;
+using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Models.Ecs;
+using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Widgets.Behaviors;
 
 namespace Toybox.Studio.Widgets.Ecs;
 
@@ -22,7 +24,7 @@ public sealed partial class WorldViewModel : ObservableObject
     private static readonly TimeSpan SelectionSyncInterval = TimeSpan.FromMilliseconds(500);
 
     private readonly World _world;
-    private readonly Selection _selection;
+    private readonly WorldSelection _selection;
     private readonly EngineRpc _engine;
     private readonly JsonParser _parser;
     private readonly Dictionary<ulong, EntityViewModel> _entities = [];
@@ -41,7 +43,11 @@ public sealed partial class WorldViewModel : ObservableObject
     // Guards against overlapping syncs when a request outlives the tick interval.
     private bool _syncing;
 
-    public WorldViewModel(World world, Selection selection, EngineRpc engine, JsonParser parser, EngineWatcher watcher)
+    // The id of a just-added entity that should drop into inline rename the moment it is reconciled into the
+    // tree and selected — set by the add commands, consumed (once) by ResolveSelection.
+    private ulong? _pendingRenameId;
+
+    public WorldViewModel(World world, WorldSelection selection, EngineRpc engine, JsonParser parser, EngineWatcher watcher)
     {
         _world = world;
         _selection = selection;
@@ -108,13 +114,20 @@ public sealed partial class WorldViewModel : ObservableObject
     [RelayCommand]
     private Task RefreshAsync() => _world.RefreshAsync();
 
-    // A new entity is parented under the current selection (or added at the root when nothing is selected),
-    // then becomes the selection itself so the user can name/edit it straight away.
+    /// <summary>Adds a streamed (scene) entity from the Streamed section's "+".</summary>
     [RelayCommand]
-    private async Task AddEntityAsync()
+    private Task AddStreamedEntityAsync() => AddEntityAsync(global: false);
+
+    /// <summary>Adds a full-lifetime resident from the Globals section's "+".</summary>
+    [RelayCommand]
+    private Task AddGlobalEntityAsync() => AddEntityAsync(global: true);
+
+    // Creates an entity at the root of its section (so it lands at the end of that list rather than nested
+    // under a possibly-collapsed selection) with a placeholder name, promotes it to global if asked, then
+    // selects it and drops it straight into inline rename so the user can type over the name immediately.
+    private async Task AddEntityAsync(bool global)
     {
-        var parent = SelectedEntity?.Id ?? 0UL;
-        var result = await _engine.CreateEntityAsync(null, parent, CancellationToken.None)
+        var result = await _engine.CreateEntityAsync("Entity", parent: 0UL, CancellationToken.None)
             .ContinueOnSameContext();
         if (!result.Success)
         {
@@ -122,6 +135,17 @@ public sealed partial class WorldViewModel : ObservableObject
             return;
         }
 
+        if (global)
+        {
+            var promote = await _engine.SetEntityGlobalAsync(result.Value, true, CancellationToken.None)
+                .ContinueOnSameContext();
+            if (!promote.Success)
+                await Popups.ShowErrorAsync("Couldn't make entity global", promote.Error!)
+                    .ContinueOnSameContext();
+        }
+
+        // Inline-rename the new entity once it is reconciled into the tree and selected (ResolveSelection).
+        _pendingRenameId = result.Value;
         await _world.RefreshAsync().ContinueOnSameContext();
         _selection.Select(result.Value);
     }
@@ -239,9 +263,14 @@ public sealed partial class WorldViewModel : ObservableObject
                 && _isPlaying
                 && ReferenceEquals(SelectedEntity, entity))
             {
-                entity.UpdateFrom(data);
-                // The component grids were rebuilt; re-apply the active inspector filter to the new rows.
-                ApplyComponentFilter();
+                // Fast path: push the live values into the existing grid rows in place, leaving the controls
+                // (and the active filter) untouched. Only when the entity's shape changed do we pay for a
+                // full rebuild and re-filter.
+                if (!entity.TrySyncValues(data))
+                {
+                    entity.UpdateFrom(data);
+                    ApplyComponentFilter();
+                }
             }
         }
         finally
@@ -271,25 +300,24 @@ public sealed partial class WorldViewModel : ObservableObject
         try
         {
             var seen = new HashSet<ulong>();
-            var newRoots = roots.Select(root => Resolve(root, seen)).ToList();
+
+            // The scene tree and the Globals section are two separate forests, but they share the engine's
+            // single parent/child hierarchy. Each entity belongs to the section matching its globalness and
+            // nests under its same-section parent; an entity whose parent sits in the other section (or that
+            // has no parent) surfaces as a root of its own section. Both forests are gathered in one recursive
+            // pass so globals keep their parent/child structure instead of being flattened.
+            var streamedRoots = new List<EntityViewModel>();
+            var globalRoots = new List<EntityViewModel>();
+            foreach (var root in roots)
+                Resolve(root, parentIsGlobal: null, seen, streamedRoots, globalRoots);
 
             foreach (var goneId in _entities.Keys.Where(id => !seen.Contains(id)).ToList())
                 _entities.Remove(goneId);
 
-            // Global entities live in their own flat section, not the scene tree, so they are pulled out of
-            // the roots here and (via Resolve) out of every node's children.
-            RootEntities.Clear();
-            foreach (var root in newRoots.Where(root => !root.IsGlobal))
-            {
-                root.Parent = null;
-                RootEntities.Add(root);
-            }
-
-            Globals.Clear();
-            foreach (var global in _entities.Values
-                .Where(entity => entity.IsGlobal)
-                .OrderBy(entity => entity.Name, StringComparer.OrdinalIgnoreCase))
-                Globals.Add(global);
+            // Reconcile in place rather than Clear()+Add: a full reset would collapse the tree's expansion and
+            // scroll and flash the list. This way adding or moving one entity touches only that row.
+            ListReconcile.Apply(RootEntities, streamedRoots);
+            ListReconcile.Apply(Globals, globalRoots);
 
             Summary = seen.Count == 0 ? "" : $"{seen.Count} entities";
             OnPropertyChanged(nameof(HasWorld));
@@ -313,7 +341,17 @@ public sealed partial class WorldViewModel : ObservableObject
         }
     }
 
-    private EntityViewModel Resolve(Entity data, HashSet<ulong> seen)
+    // Resolves one entity (and its subtree) into the persistent VM graph, splitting it into the streamed and
+    // global forests. A node roots its own section when it has no parent or its parent lives in the other
+    // section; otherwise it nests under its same-section parent (wired up by that parent's SetChildren). The
+    // Parent link is reset here and re-established only for same-section children, so it always reflects the
+    // section the entity is actually shown in.
+    private EntityViewModel Resolve(
+        Entity data,
+        bool? parentIsGlobal,
+        HashSet<ulong> seen,
+        List<EntityViewModel> streamedRoots,
+        List<EntityViewModel> globalRoots)
     {
         seen.Add(data.Id);
         if (!_entities.TryGetValue(data.Id, out var entity))
@@ -323,15 +361,31 @@ public sealed partial class WorldViewModel : ObservableObject
         }
 
         entity.UpdateFrom(data);
-        // Resolve every child (so its VM exists and is marked seen), but the tree shows only the non-global
-        // ones — globals are surfaced flat in their own section instead.
-        var children = data.Children.Select(child => Resolve(child, seen)).ToList();
-        entity.SetChildren(children.Where(child => !child.IsGlobal).ToList());
+        entity.Parent = null;
+        if (parentIsGlobal != data.IsGlobal)
+            (data.IsGlobal ? globalRoots : streamedRoots).Add(entity);
+
+        // Resolve every child (so its VM exists and is marked seen); a node only displays the children that
+        // share its section, so a cross-section child shows up as a root of the other forest instead.
+        var children = data.Children
+            .Select(child => Resolve(child, data.IsGlobal, seen, streamedRoots, globalRoots))
+            .ToList();
+        entity.SetChildren(children.Where(child => child.IsGlobal == entity.IsGlobal).ToList());
         return entity;
     }
 
-    private void ResolveSelection(ulong? id) =>
+    private void ResolveSelection(ulong? id)
+    {
         SelectedEntity = id is { } value ? _entities.GetValueOrDefault(value) : null;
+
+        // A just-added entity begins inline rename the first time it resolves to a real VM (whichever of the
+        // posted reconcile / selection callbacks lands second finds the flag already cleared).
+        if (SelectedEntity is { } selected && _pendingRenameId == selected.Id)
+        {
+            _pendingRenameId = null;
+            selected.BeginRename();
+        }
+    }
 
     // Rebuilds the flat result list from every entity in the world (any depth) whose name matches the query.
     private void RebuildSearchResults()

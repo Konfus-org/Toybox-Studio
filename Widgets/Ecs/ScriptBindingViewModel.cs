@@ -1,10 +1,11 @@
+using Toybox.Studio.Utils;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Project;
+using Toybox.Studio.Services.Project;
 using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Ecs;

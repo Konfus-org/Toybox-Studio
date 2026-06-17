@@ -1,5 +1,6 @@
+using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.EngineApi;
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.Status;
 

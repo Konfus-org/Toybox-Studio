@@ -1,12 +1,14 @@
+using Toybox.Studio.Services;
+using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Widgets.Status;
 using Toybox.Studio.Widgets.GameToolbar;
-using Toybox.Studio.Dialogs;
-using Toybox.Studio.EngineApi;
-using Toybox.Studio.Logging;
-using Toybox.Studio.Project;
-using Toybox.Studio.Workspace;
+using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Services.Project;
+using Toybox.Studio.Shell.Workspace;
 
 namespace Toybox.Studio.Shell;
 
@@ -57,6 +59,10 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     public partial string Title { get; private set; } = "Toybox Studio";
 
+    /// <summary>Toolbar quick-search text. Reserved for a panel/command quick-open; bound by the toolbar field.</summary>
+    [ObservableProperty]
+    public partial string ToolbarSearch { get; set; } = "";
+
     // TODO: Make a toolbar VM and widget for these and move the commands there.
     [RelayCommand]
     private async Task OpenProjectAsync()
@@ -95,13 +101,13 @@ public sealed partial class ShellViewModel : ObservableObject
     [RelayCommand]
     private async Task DebugEditor()
     {
-        var result = _commandRunner.Run("avdt");
+        var result = await _commandRunner.RunAsync("avdt").ContinueOnAnyContext();
         if (!result)
         {
             _log.Error("Failed to launch the editor debug tool. Make sure avdt is on your PATH.");
-            Popups.ShowErrorAsync(
+            await Popups.ShowErrorAsync(
                     "Failed To Launch Dev Tools",
-                    "Failed to launch Avalonia Developer Tools. Please ensure you have them installed via: dotnet tool install --global AvaloniaUI.DeveloperTools").FireAndForget();
+                    "Failed to launch Avalonia Developer Tools. Please ensure you have them installed via: dotnet tool install --global AvaloniaUI.DeveloperTools").ContinueOnAnyContext();
         }
     }
 

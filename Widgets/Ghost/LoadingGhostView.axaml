@@ -3,18 +3,23 @@
              xmlns:local="using:Toybox.Studio.Widgets.Ghost"
              x:Class="Toybox.Studio.Widgets.Ghost.LoadingGhostView"
              x:Name="Root">
-    <!-- Reusable loading state: a ghost that wiggles back and forth above an indeterminate bar and a
-         message (shown below it and as a tooltip). Fills whatever hosts it and centres its content. -->
+    <!-- Reusable loading state: a ghost that pulses above an indeterminate bar and a message (shown below
+         it and as a tooltip). Fills whatever hosts it and centres its content. -->
     <UserControl.Styles>
+        <!-- Pulse the glyph's opacity to signal activity. Opacity is animated rather than a RotateTransform
+             wiggle on purpose: in Avalonia 12 a keyframe animation of RotateTransform.Angle on a TextBlock
+             logs "Cannot find the appropriate transform" (the animator can't resolve the transform however
+             RenderTransform is seeded), and animating RenderTransform itself throws (no registered animator).
+             Opacity has a registered animator, so it's clean and runs reliably. -->
         <Style Selector="TextBlock.ghostGlyph">
             <Style.Animations>
                 <Animation Duration="0:0:1.1" IterationCount="INFINITE"
                            PlaybackDirection="Alternate" Easing="SineEaseInOut">
                     <KeyFrame Cue="0%">
-                        <Setter Property="RotateTransform.Angle" Value="-12"/>
+                        <Setter Property="Opacity" Value="0.28"/>
                     </KeyFrame>
                     <KeyFrame Cue="100%">
-                        <Setter Property="RotateTransform.Angle" Value="12"/>
+                        <Setter Property="Opacity" Value="0.65"/>
                     </KeyFrame>
                 </Animation>
             </Style.Animations>
@@ -24,9 +29,9 @@
     <Panel ToolTip.Tip="{Binding #Root.Message}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
             <TextBlock Classes="ghostGlyph" Text="👻" FontSize="56" Opacity="0.5"
-                       HorizontalAlignment="Center" RenderTransformOrigin="50%,50%"/>
+                       HorizontalAlignment="Center"/>
             <ProgressBar IsIndeterminate="True" Width="140" HorizontalAlignment="Center"/>
-            <TextBlock Text="{Binding #Root.Message}" Opacity="0.6" HorizontalAlignment="Center"
+            <TextBlock Text="{Binding #Root.Message}" Opacity="0.85" HorizontalAlignment="Center"
                        TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280"/>
         </StackPanel>
     </Panel>

@@ -1,0 +1,331 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.PropertyGridView"
+             x:Name="Root">
+
+    <UserControl.Resources>
+        <!-- Shared chrome for every leaf row: resizable label gutter | state column | value well. -->
+        <ControlTheme x:Key="{x:Type local:PropertyRow}" TargetType="local:PropertyRow">
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <!-- Rows are flat (the card's surface shows through) and separated only by a pressed clay
+                         groove: a faint dark hairline along the bottom with a 1px light highlight beneath it
+                         (the crisp, blur-less BoxShadow). Nested rows add a faint warm depth tint on the inner
+                         Grid so deeper levels read a touch deeper without a per-row gradient. -->
+                    <Border x:Name="PART_RowRoot"
+                            BorderBrush="{DynamicResource ThemeGrooveBrush}" BorderThickness="0,0,0,1"
+                            BoxShadow="0 1 0 0 #2EFFFFFF"
+                            Background="Transparent">
+                        <Grid Background="{TemplateBinding Depth,
+                                          Converter={x:Static local:DepthToBrushConverter.Instance}}">
+                            <Grid.ColumnDefinitions>
+                                <!-- Auto + the shared size group defaults the label column to the widest
+                                     header (so the longest name reads in full); the splitter then lets it be
+                                     dragged down to a sliver. -->
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="PgLabel" MinWidth="20"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Label gutter. A DockPanel (not a StackPanel) so the label is the fill child:
+                                 that constrains its width to whatever the gutter has left, which is what makes
+                                 CharacterEllipsis actually trigger. ClipToBounds backs it up so nothing ever
+                                 spills into the value column when the splitter is dragged narrow. Depth is
+                                 conveyed purely by the per-level shading on the inner Grid (no elbow), with a
+                                 small indent so nested labels still tuck under their parent. -->
+                            <Border Grid.Column="0" Background="Transparent"
+                                    ClipToBounds="True">
+                                <DockPanel LastChildFill="True" VerticalAlignment="Center"
+                                           Margin="{TemplateBinding Depth,
+                                                Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                                    <local:IconView DockPanel.Dock="Left" Width="15" Height="15"
+                                                    Margin="8,0,6,0" VerticalAlignment="Center"
+                                                    IconName="{TemplateBinding IconName}"
+                                                    IconColor="{TemplateBinding IconColor}"/>
+                                    <TextBlock x:Name="PART_Label" Text="{TemplateBinding HeaderText}"
+                                               Margin="6,0,8,0" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource ThemeTextBrush}" Opacity="0.85"
+                                               ToolTip.Tip="{TemplateBinding Description}"/>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Drag handle: resizes the shared label column for every row at once. A visible
+                                 hairline marks the column edge; the wider transparent splitter on top is the
+                                 grab area (west-east cursor), and it brightens to the accent on hover/drag. -->
+                            <Border Grid.Column="1" Width="1" HorizontalAlignment="Center"
+                                    Background="{DynamicResource ThemeBorderBrush}" IsHitTestVisible="False"/>
+                            <GridSplitter Grid.Column="1" Width="7" ResizeDirection="Columns"
+                                          Cursor="SizeWestEast" Background="Transparent"/>
+
+                            <!-- Value side: the editor, with a state indicator pinned to the right (no
+                                 separator border, so the slot never reads as a resizable column edge). The
+                                 row's PropertyState picks the control via PropertyStateToIndicatorConverter:
+                                 lock = read-only, filled circle = non-default, hollow circle = at default.
+                                 When the row supports reset (CanReset), the indicator becomes a click target
+                                 that reverts to default; otherwise it's purely informational (hit-test off so
+                                 it keeps full opacity rather than dimming as a disabled button would). -->
+                            <Border Grid.Column="2" Background="Transparent">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Classes="resetIndicator" Width="22"
+                                            Margin="2,0,6,0" Padding="0"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                            Command="{ReflectionBinding ResetCommand}"
+                                            IsHitTestVisible="{ReflectionBinding CanReset}"
+                                            Cursor="Hand"
+                                            ToolTip.Tip="Reset to default"
+                                            Content="{ReflectionBinding State,
+                                                Converter={x:Static local:PropertyStateToIndicatorConverter.Instance}}"/>
+                                    <Border Padding="9,2,4,2">
+                                        <ContentPresenter Content="{TemplateBinding Content}"
+                                                          VerticalAlignment="Center"
+                                                          HorizontalAlignment="Stretch"/>
+                                    </Border>
+                                </DockPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+
+            <!-- Read-only rows gray their label. -->
+            <Style Selector="^[IsReadOnly=true] /template/ TextBlock#PART_Label">
+                <Setter Property="Opacity" Value="0.5"/>
+            </Style>
+        </ControlTheme>
+    </UserControl.Resources>
+
+    <!-- Compact, unified value-editor styling so every field reads as the same dark box. -->
+    <UserControl.Styles>
+        <Style Selector="NumericUpDown.field">
+            <Setter Property="MinWidth" Value="56"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <!-- Advertise drag-to-scrub: the inner text box shows the ↔ resize cursor on hover so the field
+             reads as draggable, reverting to the I-beam only once it is focused for typing. -->
+        <Style Selector="NumericUpDown.field /template/ TextBox#PART_TextBox">
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <Style Selector="NumericUpDown.field:focus-within /template/ TextBox#PART_TextBox">
+            <Setter Property="Cursor" Value="IBeam"/>
+        </Style>
+        <Style Selector="TextBox.field">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ComboBox.field">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+        <Style Selector="GridSplitter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <!-- Input-field chrome shared by the non-text editors (handle picker, script link). Matches the clay
+             well look of the TextBox/NumericUpDown fields: the recessed well fill plus an inset BoxShadow on
+             the rounded border, so a picker reads as the same pressed-in control. -->
+        <Style Selector="Border.fieldHost">
+            <Setter Property="Background" Value="{DynamicResource ThemeWellFillBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+            <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetShadow}"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- Chrome-less icon button used inside a field (e.g. the picker's browse button). -->
+        <Style Selector="Button.fieldButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="Opacity" Value="0.75"/>
+        </Style>
+        <Style Selector="Button.fieldButton:pointerover">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="Button.fieldButton /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <!-- The reset affordance host: a chromeless button so the dot/lock indicator reads exactly as before
+             but becomes clickable (revert to default) when the row supports it. No fill/shadow in any state —
+             the dot itself just BRIGHTENS on hover (see the stateFilled/stateHollow hover rules below), no
+             grey pill. -->
+        <Style Selector="Button.resetIndicator">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="Button.resetIndicator /template/ ContentPresenter#PART_ContentPresenter,
+                         Button.resetIndicator:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                         Button.resetIndicator:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- Right-hand state indicators, produced by PropertyStateToIndicatorConverter. A value that differs
+             from its default is a small flat accent dot (no shadow); a value at its default is an INSET crater
+             pressed into the surface. Both BRIGHTEN on hover of the reset button rather than gaining a pill. -->
+        <Style Selector="Border.stateFilled">
+            <Setter Property="Width" Value="11"/>
+            <Setter Property="Height" Value="11"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.resetIndicator:pointerover Border.stateFilled">
+            <Setter Property="Background" Value="{DynamicResource ThemeAccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.resetIndicator:pointerover Border.stateHollow">
+            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceFlatBrush}"/>
+        </Style>
+        <Style Selector="Border.stateHollow">
+            <Setter Property="Width" Value="11"/>
+            <Setter Property="Height" Value="11"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeWellFillBrush}"/>
+            <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetShadow}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="GridSplitter:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
+        </Style>
+        <!-- Each property group is a raised clay "pillow": the surface gradient, rounded, lifted off the panel
+             by the card shadow (a dark cast + a light highlight). Rows and the header sit transparent on top,
+             so the whole group reads as one moulded block. ClipToBounds keeps the rounded corners crisp; the
+             card's own BoxShadow still renders outside the clip. -->
+        <Style Selector="Border.clayCard">
+            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Margin" Value="2,0,2,10"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+            <Setter Property="BoxShadow" Value="{DynamicResource ThemeCardShadow}"/>
+        </Style>
+        <!-- Embedded grids (e.g. inside a component card) drop the card chrome so the host's card is the only
+             one — no nested pillows. -->
+        <Style Selector="Border.clayCard.flat">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BoxShadow" Value="0 0 0 0 #00000000"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+        </Style>
+        <!-- Embedded grids drop the shadow-room padding so their rows align flush with the host card, but keep
+             a right inset so the row's right-hand controls (state dot, list delete button) never sit under the
+             host's overlay scrollbar. -->
+        <Style Selector="StackPanel.flat">
+            <Setter Property="Margin" Value="0,0,10,0"/>
+        </Style>
+        <!-- Collapsible section headers (category groups, nested object/array/theme parent rows) share the
+             one ToggleButton.sectionHeader style defined in AppStyles, so every section reads identically. -->
+    </UserControl.Styles>
+
+    <!-- One template per property type; each hosts its own widget view. The single place a new
+         widget gets wired into the grid (alongside PropertyViewModelFactory). -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="local:NumberPropertyViewModel">
+            <local:NumberPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:BoolPropertyViewModel">
+            <local:BoolPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:StringPropertyViewModel">
+            <local:StringPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:EnumPropertyViewModel">
+            <local:EnumPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:VectorPropertyViewModel">
+            <local:VectorPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:RotationPropertyViewModel">
+            <local:RotationPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ColorPropertyViewModel">
+            <local:ColorPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ObjectPropertyViewModel">
+            <local:ObjectPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:MaterialInstancePropertyViewModel">
+            <local:MaterialInstancePropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:MaterialOverridesViewModel">
+            <local:MaterialOverridesView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:MaterialSlotViewModel">
+            <local:MaterialSlotView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ArrayPropertyViewModel">
+            <local:ArrayPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:UnknownPropertyViewModel">
+            <local:UnknownPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:HandlePickerPropertyViewModel">
+            <local:HandlePickerPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:EntityPickerPropertyViewModel">
+            <local:EntityPickerPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ScriptLinkPropertyViewModel">
+            <local:ScriptLinkPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ThemePickerPropertyViewModel">
+            <local:ThemePickerPropertyView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Panel>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <!-- One shared-size scope so every row's label column resizes together via the splitter. The
+                 outer padding leaves room for the cards' shadows and keeps the right-hand controls clear of
+                 the overlay scrollbar; embedded grids drop the card room but keep the right inset. -->
+            <StackPanel Grid.IsSharedSizeScope="True" Margin="6,6,12,2"
+                        Classes.flat="{Binding #Root.Embedded}">
+                <ItemsControl ItemsSource="{Binding #Root.Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:PropertyCategoryGroup">
+                            <Border Classes="clayCard" IsVisible="{Binding Visible}"
+                                    Classes.flat="{Binding $parent[local:PropertyGridView].Embedded}">
+                                <StackPanel>
+                                    <StackPanel IsVisible="{Binding HasHeader}">
+                                        <ToggleButton x:Name="CatToggle" Classes="sectionHeader" IsChecked="True">
+                                            <DockPanel>
+                                                <Path DockPanel.Dock="Right" Classes="sectionChevron"
+                                                      Width="8" Height="8" Stretch="Uniform" Margin="8,0,2,0"
+                                                      VerticalAlignment="Center"
+                                                      Fill="{DynamicResource ThemeAccentSolidBrush}"
+                                                      Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                                <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="12"
+                                                           Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
+                                            </DockPanel>
+                                        </ToggleButton>
+                                        <ItemsControl ItemsSource="{Binding Items}"
+                                                      IsVisible="{Binding #CatToggle.IsChecked}"/>
+                                    </StackPanel>
+                                    <ItemsControl IsVisible="{Binding !HasHeader}" ItemsSource="{Binding Items}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <ghost:GhostView Message="Nothing to show here yet." IsVisible="{Binding #Root.IsEmpty}"/>
+    </Panel>
+</UserControl>

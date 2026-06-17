@@ -1,7 +1,8 @@
+using Toybox.Studio.Utils;
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Toybox.Studio.EngineApi;
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.GameToolbar;
 

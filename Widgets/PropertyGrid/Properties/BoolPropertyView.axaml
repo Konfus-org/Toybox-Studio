@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.BoolPropertyView"
+             x:DataType="local:BoolPropertyViewModel">
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <ToggleSwitch IsChecked="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"
+                      OnContent="" OffContent="" MinHeight="0" Padding="0"
+                      HorizontalAlignment="Left" VerticalAlignment="Center"/>
+    </local:PropertyRow>
+</UserControl>

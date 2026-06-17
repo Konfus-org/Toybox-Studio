@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.MaterialSlotView"
+             x:DataType="local:MaterialSlotViewModel">
+    <!-- One material slot: the leaf widget editing its value (rebuilt on reset), rendered through the same
+         ambient property-row DataTemplates as every other field. -->
+    <ContentControl Content="{Binding Editor}" IsVisible="{Binding Editor.Visible}"/>
+</UserControl>

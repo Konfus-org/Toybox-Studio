@@ -8,7 +8,7 @@
     <Panel ToolTip.Tip="{Binding #Root.Message}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
             <TextBlock Text="👻" FontSize="56" Opacity="0.35" HorizontalAlignment="Center"/>
-            <TextBlock Text="{Binding #Root.Message}" Opacity="0.5" HorizontalAlignment="Center"
+            <TextBlock Text="{Binding #Root.Message}" Opacity="0.75" HorizontalAlignment="Center"
                        TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280"/>
         </StackPanel>
     </Panel>

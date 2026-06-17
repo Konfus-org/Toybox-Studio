@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using Toybox.Studio.Widgets.Ecs;
-using Toybox.Studio.Workspace;
+using Toybox.Studio.Shell.Workspace;
 
 namespace Toybox.Studio.Widgets.WorldTree;
 

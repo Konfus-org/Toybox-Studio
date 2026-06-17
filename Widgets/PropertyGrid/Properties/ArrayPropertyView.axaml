@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.ArrayPropertyView"
+             x:DataType="local:ArrayPropertyViewModel">
+    <StackPanel IsVisible="{Binding Visible}">
+        <!-- A ROOT-level list renders as the accent section band; its summary and the append (+) button sit to
+             the right, before the chevron, and the button swallows its own click so adding never collapses. -->
+        <ToggleButton Classes="sectionHeader" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                      IsVisible="{Binding !IsNested}"
+                      Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
+            <DockPanel Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
+                      Margin="8,0,2,0" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding AddCommand}"
+                        IsVisible="{Binding IsResizable}" ToolTip.Tip="Add entry">
+                    <local:IconView Width="13" Height="13" IconName="Plus"
+                                    Foreground="{DynamicResource ThemeSuccessBrush}"/>
+                </Button>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}" FontSize="12"
+                           Foreground="{DynamicResource ThemeMutedTextBrush}"
+                           VerticalAlignment="Center" Margin="8,0"/>
+                <local:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="2,0,6,0"
+                                VerticalAlignment="Center"
+                                IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
+                <TextBlock Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
+                           ToolTip.Tip="{Binding Description}"/>
+            </DockPanel>
+        </ToggleButton>
+
+        <!-- A NESTED list renders as an ordinary property row (matching its sibling rows), toggling on a tap
+             anywhere; the summary, the (+) add button, and the disclosure chevron sit in the value area. -->
+        <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                           Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
+                           IconName="{Binding Icon}" IconColor="{Binding IconColor}"
+                           IsVisible="{Binding IsNested}"
+                           util:ToggleOnTap.Enabled="True"
+                           util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}">
+            <DockPanel>
+                <Path DockPanel.Dock="Right" Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
+                      Width="8" Height="8" Stretch="Uniform" Margin="6,0,0,0" VerticalAlignment="Center"
+                      Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding AddCommand}"
+                        IsVisible="{Binding IsResizable}" ToolTip.Tip="Add entry">
+                    <local:IconView Width="13" Height="13" IconName="Plus"
+                                    Foreground="{DynamicResource ThemeSuccessBrush}"/>
+                </Button>
+                <TextBlock Text="{Binding Summary}" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+            </DockPanel>
+        </local:PropertyRow>
+
+        <!-- Each entry: the element's own widget spans from the left so its label gutter and resize bar line
+             up with the regular rows at this depth; the drag handle is OVERLAID in the element's empty left
+             indent (so it doesn't nudge the row over) and the delete (x) sits in a trailing column. The handle
+             stays transparent (the element's own per-depth tint shows through) and the delete column carries
+             that same tint, so the whole item reads as one continuous surface. -->
+        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsExpanded}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:PropertyViewModel">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <ContentControl Grid.Column="0" Content="{Binding}"/>
+
+                        <Border Grid.Column="0" HorizontalAlignment="Left" Background="Transparent"
+                                Padding="2,0,0,0" Cursor="SizeNorthSouth"
+                                local:ListReorder.Enabled="True"
+                                ToolTip.Tip="Drag to reorder"
+                                IsVisible="{Binding $parent[ItemsControl].((local:ArrayPropertyViewModel)DataContext).IsResizable}">
+                            <local:IconView Width="12" Height="12" IconName="GripVertical" Opacity="0.5"
+                                            VerticalAlignment="Center"
+                                            Foreground="{DynamicResource ThemeTextBrush}"/>
+                        </Border>
+
+                        <Border Grid.Column="1"
+                                Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
+                            <Button Classes="fieldButton" VerticalAlignment="Center" ToolTip.Tip="Delete entry"
+                                    Command="{Binding $parent[ItemsControl].((local:ArrayPropertyViewModel)DataContext).RemoveCommand}"
+                                    CommandParameter="{Binding}"
+                                    IsVisible="{Binding $parent[ItemsControl].((local:ArrayPropertyViewModel)DataContext).IsResizable}">
+                                <local:IconView Width="12" Height="12" IconName="X"
+                                                Foreground="{DynamicResource ThemeErrorBrush}"/>
+                            </Button>
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

@@ -5,7 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Toybox.Studio.Widgets.Ecs;
-using Toybox.Studio.Widgets.Utils;
+using Toybox.Studio.Widgets.Behaviors;
 
 namespace Toybox.Studio.Widgets.WorldTree;
 
@@ -181,20 +181,18 @@ public static class EntityTreeDragDrop
     private static async void OnDrop(object? sender, DragEventArgs args)
     {
         DropIndicator.Clear();
-        if (sender is not TreeView { DataContext: WorldViewModel world })
+        if (sender is not TreeView { DataContext: WorldViewModel world } tree)
             return;
         if (args.DataTransfer?.TryGetValue(EntityFormat) is not { } dragged)
             return;
 
         args.Handled = true;
 
-        // A global dragged back into the scene tree is demoted to an ordinary entity; it keeps its current
-        // parent/order, so it simply reappears in the tree.
-        if (dragged.IsGlobal)
-        {
-            await world.SetEntityGlobalAsync(dragged.Id, false);
-            return;
-        }
+        // Which forest this tree shows. Both trees use the same reorder/reparent logic; dropping into the
+        // other bucket also flips the entity's global flag so it lands where it was dropped (reorder within
+        // globals, drag a streamed entity into a globals slot, or drag a global out into a streamed slot).
+        var targetIsGlobal = ReferenceEquals(tree.ItemsSource, world.Globals);
+        var bucketRoots = targetIsGlobal ? world.Globals : world.RootEntities;
 
         var row = (args.Source as Visual)?.FindAncestorOfType<TreeViewItem>();
         var target = row?.DataContext as EntityViewModel;
@@ -203,12 +201,15 @@ public static class EntityTreeDragDrop
         int index;
         if (target is null)
         {
-            // Dropped on empty space → move to the root and append.
+            // Dropped on empty space → move to the root of this bucket and append.
             parentId = 0UL;
             index = int.MaxValue;
         }
         else if (ReferenceEquals(target, dragged))
         {
+            // No move needed, but still honour a bucket change (e.g. dropped onto itself in the other list).
+            if (dragged.IsGlobal != targetIsGlobal)
+                await world.SetEntityGlobalAsync(dragged.Id, targetIsGlobal);
             return;
         }
         else if (Classify(row!, args) == DropPosition.Onto)
@@ -221,7 +222,7 @@ public static class EntityTreeDragDrop
         {
             // Dropped on a row edge → become a sibling, before or after the target. Index is computed in
             // the sibling list with the dragged entity removed, matching the engine's renumber.
-            var siblings = (target.Parent?.Children ?? world.RootEntities)
+            var siblings = (target.Parent?.Children ?? bucketRoots)
                 .Where(sibling => !ReferenceEquals(sibling, dragged))
                 .ToList();
             var slot = siblings.IndexOf(target);
@@ -231,6 +232,9 @@ public static class EntityTreeDragDrop
             parentId = target.Parent?.Id ?? 0UL;
         }
 
+        // Match the destination bucket first (so the move positions it within that forest), then position it.
+        if (dragged.IsGlobal != targetIsGlobal)
+            await world.SetEntityGlobalAsync(dragged.Id, targetIsGlobal);
         await world.MoveEntityAsync(dragged.Id, parentId, index);
     }
 

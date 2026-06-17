@@ -2,7 +2,8 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:shell="using:Toybox.Studio.Shell"
                  xmlns:status="using:Toybox.Studio.Widgets.Status"
-                 xmlns:workspace="using:Toybox.Studio.Workspace"
+                 xmlns:searching="using:Toybox.Studio.Widgets.Searching"
+                 xmlns:workspace="using:Toybox.Studio.Shell.Workspace"
                  xmlns:dock="using:Dock.Avalonia.Controls"
                  xmlns:dockModel="using:Dock.Model.Avalonia.Controls"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -16,11 +17,17 @@
                  Width="1440" Height="850">
 
     <DockPanel>
-        <Panel DockPanel.Dock="Top" Margin="8,2">
+        <Border Classes="Toolbar" DockPanel.Dock="Top" Padding="8,3">
+          <!-- Menu on the left; the quick-search is centred in the middle of the window (overlaid in the same
+               grid cell, so it centres on the window rather than the space left of/right of the menu). -->
+          <Grid VerticalAlignment="Center">
+            <!-- A clay-groove Separator sits between each top-level option (styled via "Border.Toolbar Menu
+                 > Separator" in AppStyles). Separators inside the dropdowns are unaffected. -->
             <Menu HorizontalAlignment="Left" VerticalAlignment="Center">
                 <MenuItem Header="File">
                     <MenuItem Header="Open Project…" Command="{Binding OpenProjectCommand}"/>
                 </MenuItem>
+                <Separator/>
                 <MenuItem Header="Build">
                     <MenuItem Header="Compile" Command="{Binding CompileCommand}"/>
                     <Separator/>
@@ -29,10 +36,12 @@
                         <MenuItem Header="Release" Command="{Binding ShipCommand}" CommandParameter="Release"/>
                     </MenuItem>
                 </MenuItem>
+                <Separator/>
                 <MenuItem Header="Debug">
                     <MenuItem Header="Avalonia Dev Tools" Command="{Binding DebugEditorCommand}"/>
                     <MenuItem Header="Attach to Running Instance" Command="{Binding AttachCommand}"/>
                 </MenuItem>
+                <Separator/>
                 <!-- Data-driven: one item per registered [Dockable], opened (or focused) by Id. -->
                 <MenuItem Header="Windows" ItemsSource="{Binding Workspace.All}">
                     <MenuItem.ItemContainerTheme>
@@ -45,12 +54,17 @@
                         </ControlTheme>
                     </MenuItem.ItemContainerTheme>
                 </MenuItem>
+                <Separator/>
                 <MenuItem Header="Layout">
                     <MenuItem Header="Reset Layout" Command="{Binding Workspace.ResetLayoutCommand}"/>
                 </MenuItem>
             </Menu>
-            <!-- The Play/Stop/Pause transport now lives on the Game view, not the title bar. -->
-        </Panel>
+
+            <!-- Centred quick-search. (The Play/Stop/Pause transport lives on the Game view, not here.) -->
+            <searching:SearchBox HorizontalAlignment="Center" Width="300" VerticalAlignment="Center"
+                                 Watermark="Search…" Text="{Binding ToolbarSearch}"/>
+          </Grid>
+        </Border>
 
         <Border Classes="StatusBar" DockPanel.Dock="Bottom">
             <status:StatusView DataContext="{Binding Status}"/>

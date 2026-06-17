@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.NumberPropertyView"
+             x:DataType="local:NumberPropertyViewModel">
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <NumericUpDown Classes="field" FormatString="{Binding FormatString}" Increment="{Binding Increment}"
+                       local:NumericScrub.Enabled="True" local:NumericScrub.Step="{Binding Increment}"
+                       Value="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"/>
+    </local:PropertyRow>
+</UserControl>

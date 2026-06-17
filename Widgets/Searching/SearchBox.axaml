@@ -4,9 +4,25 @@
              xmlns:controls="using:Toybox.Studio.Widgets.Searching"
              x:Class="Toybox.Studio.Widgets.Searching.SearchBox">
 
-    <Border Background="{DynamicResource ThemeSurfaceBrush}"
-            BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"
-            CornerRadius="4" Padding="6,0" MinHeight="26">
+    <UserControl.Styles>
+        <!-- The inner TextBox is chrome-less: it must not draw its own border element or cast the global
+             clay shadow (that's what made the search field look like it had a second, mismatched outline +
+             shadow). The visible pill is the outer Border below. -->
+        <Style Selector="TextBox.searchInner /template/ Border#PART_BorderElement">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BoxShadow" Value="0 0 0 0 #00000000"/>
+        </Style>
+        <!-- No shadow on the search field (shadows live on panels/bars/flyouts only); just light the ring on focus. -->
+        <Style Selector="Border.searchPill:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="searchPill"
+            Background="{DynamicResource ThemeSurfaceBrush}"
+            BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1.5"
+            CornerRadius="10" Padding="9,0" MinHeight="30">
         <DockPanel>
             <PathIcon DockPanel.Dock="Left"
                       Data="{StaticResource SearchIconGeometry}"
@@ -22,7 +38,7 @@
                 <PathIcon Data="{StaticResource CloseIconGeometry}" Width="10" Height="10" Opacity="0.6"/>
             </Button>
 
-            <TextBox Name="PART_TextBox"
+            <TextBox Name="PART_TextBox" Classes="searchInner"
                      Background="Transparent" BorderThickness="0"
                      Padding="0" MinHeight="0" VerticalContentAlignment="Center"
                      PlaceholderText="{Binding Watermark, RelativeSource={RelativeSource AncestorType=controls:SearchBox}}"

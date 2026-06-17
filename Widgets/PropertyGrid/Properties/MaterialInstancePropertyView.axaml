@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.MaterialInstancePropertyView"
+             x:DataType="local:MaterialInstancePropertyViewModel">
+    <!-- A material instance shown wherever it nests (a field or a list element): an expandable header row,
+         identical to a nested struct's, above the Base material picker and the base-aware override editor. A
+         ROOT-level instance reads as an accent section band; a NESTED one reads as an ordinary property row
+         that toggles on a tap, with a right-hand chevron showing the open state. -->
+    <StackPanel IsVisible="{Binding Visible}">
+        <ToggleButton Classes="sectionHeader" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                      IsVisible="{Binding !IsNested}"
+                      Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
+            <DockPanel Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
+                      Margin="8,0,2,0" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                <local:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="2,0,6,0"
+                                VerticalAlignment="Center"
+                                IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
+                <TextBlock Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
+                           ToolTip.Tip="{Binding Description}"/>
+            </DockPanel>
+        </ToggleButton>
+
+        <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                           Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
+                           IconName="{Binding Icon}" IconColor="{Binding IconColor}"
+                           IsVisible="{Binding IsNested}"
+                           util:ToggleOnTap.Enabled="True"
+                           util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}">
+            <Path Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
+                  Width="8" Height="8" Stretch="Uniform" HorizontalAlignment="Right"
+                  Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+        </local:PropertyRow>
+
+        <ItemsControl ItemsSource="{Binding Children}" IsVisible="{Binding IsExpanded}"/>
+    </StackPanel>
+</UserControl>

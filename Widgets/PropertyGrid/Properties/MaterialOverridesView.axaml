@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.MaterialOverridesView"
+             x:DataType="local:MaterialOverridesViewModel">
+
+    <StackPanel IsVisible="{Binding Visible}">
+        <!-- Textures first, then Parameters — each is a collapsible section, styled exactly like the grid's
+             other sections via the shared ToggleButton.sectionHeader (chevron pinned right, whole band
+             toggles). A section appears only when the base material defines slots of that kind. Rows are the
+             material's fixed slots; no add/remove (the shape is the material's). -->
+        <StackPanel IsVisible="{Binding HasTextures}">
+            <ToggleButton x:Name="TexturesToggle" Classes="sectionHeader" IsChecked="True">
+                <DockPanel>
+                    <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8"
+                          Stretch="Uniform" Margin="8,0,2,0" VerticalAlignment="Center"
+                          Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                    <TextBlock Text="Textures" FontWeight="Medium" FontSize="12"
+                               Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
+                </DockPanel>
+            </ToggleButton>
+            <ItemsControl ItemsSource="{Binding Textures}" IsVisible="{Binding #TexturesToggle.IsChecked}"/>
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding HasParameters}">
+            <ToggleButton x:Name="ParametersToggle" Classes="sectionHeader" IsChecked="True">
+                <DockPanel>
+                    <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8"
+                          Stretch="Uniform" Margin="8,0,2,0" VerticalAlignment="Center"
+                          Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                    <TextBlock Text="Parameters" FontWeight="Medium" FontSize="12"
+                               Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
+                </DockPanel>
+            </ToggleButton>
+            <ItemsControl ItemsSource="{Binding Parameters}" IsVisible="{Binding #ParametersToggle.IsChecked}"/>
+        </StackPanel>
+
+        <!-- Base material resolved but it exposes nothing to override. -->
+        <TextBlock Text="This material has no editable parameters or textures." FontSize="12" Opacity="0.5"
+                   Margin="10,8" TextWrapping="Wrap" IsVisible="{Binding IsEmpty}"/>
+    </StackPanel>
+</UserControl>

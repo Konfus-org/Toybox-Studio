@@ -5,18 +5,22 @@
              x:DataType="local:GameToolbarViewModel">
 
     <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-        <Button Classes="Basic" Width="36"
+        <!-- One toggle: a green "play" glyph when stopped, a red "stop" glyph while playing. The button is the
+             shared clay surface (like the search pills); only the icon carries the semantic colour. -->
+        <Button Width="36" Classes="clay"
                 AutomationProperties.Name="PlayStop"
                 ToolTip.Tip="{Binding PlayOrStopTip}"
                 Command="{Binding PlayOrStopCommand}">
             <Panel>
                 <PathIcon Data="{StaticResource PlayIconGeometry}" Width="14" Height="14"
+                          Foreground="{DynamicResource ThemeSuccessBrush}"
                           IsVisible="{Binding !IsPlaying}"/>
                 <PathIcon Data="{StaticResource StopIconGeometry}" Width="14" Height="14"
+                          Foreground="{DynamicResource ThemeErrorBrush}"
                           IsVisible="{Binding IsPlaying}"/>
             </Panel>
         </Button>
-        <ToggleButton Width="36"
+        <ToggleButton Width="36" Classes="clay"
                       AutomationProperties.Name="Pause"
                       ToolTip.Tip="Pause"
                       IsVisible="{Binding IsPlaying}"

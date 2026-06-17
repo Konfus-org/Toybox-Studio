@@ -1,11 +1,12 @@
+using Toybox.Studio.Utils;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Dialogs;
-using Toybox.Studio.ECS;
-using Toybox.Studio.EngineApi;
+using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Models.Ecs;
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.Ecs;
 
@@ -21,6 +22,9 @@ public sealed partial class EntityViewModel : ObservableObject
     // The component that holds the entity's scripts; surfaced on its own inspector tab rather than mixed
     // in with ordinary components.
     private const string ScriptComponentName = "script_container";
+
+    // Pinned to the top of the Components tab — it's the component you reach for most often.
+    private const string TransformComponentName = "transform";
 
     private readonly EngineRpc _engine;
     private readonly Func<Task> _resync;
@@ -48,8 +52,53 @@ public sealed partial class EntityViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsGlobal { get; private set; }
 
+    /// <summary>True while the entity's name is being edited inline in the world list.</summary>
+    [ObservableProperty]
+    public partial bool IsRenaming { get; set; }
+
+    /// <summary>The in-progress rename text; committed to the engine on Enter / focus loss.</summary>
+    [ObservableProperty]
+    public partial string RenameDraft { get; set; } = "";
+
+    /// <summary>Enters inline-rename mode, seeding the draft with the current name.</summary>
+    [RelayCommand]
+    public void BeginRename()
+    {
+        RenameDraft = Name;
+        IsRenaming = true;
+    }
+
+    /// <summary>Leaves inline-rename mode without applying the draft.</summary>
+    [RelayCommand]
+    private void CancelRename() => IsRenaming = false;
+
+    /// <summary>Commits the inline-rename draft to the engine (no-op if blank/unchanged), then leaves edit
+    /// mode. The name is updated in place on success so the row refreshes without a tree rebuild.</summary>
+    [RelayCommand]
+    private async Task CommitRenameAsync()
+    {
+        if (!IsRenaming)
+            return;
+        IsRenaming = false;
+
+        var name = RenameDraft.Trim();
+        if (name.Length == 0 || name == Name)
+            return;
+
+        var result = await _engine.SetEntityNameAsync(Id, name, CancellationToken.None)
+            .ContinueOnSameContext();
+        if (result.Success)
+            Name = name;
+        else
+            await Popups.ShowErrorAsync("Couldn't rename entity", result.Error!).ContinueOnSameContext();
+    }
+
     /// <summary>Ordinary components (everything except the script container) — the "Components" tab.</summary>
     public ObservableCollection<ComponentViewModel> Components { get; } = [];
+
+    /// <summary>True when the entity has at least one ordinary component; drives the Components tab's
+    /// empty-state ghost. Re-raised by <see cref="UpdateFrom"/> after the collection is rebuilt.</summary>
+    public bool HasComponents => Components.Count > 0;
 
     /// <summary>The script container, or null when the entity has none — the "Scripts" tab. Presented as
     /// per-script cards (each binding's overrides as ordinary fields) rather than one generic grid.</summary>
@@ -94,7 +143,10 @@ public sealed partial class EntityViewModel : ObservableObject
         Components.Clear();
         ScriptContainerViewModel? scripts = null;
         var rawComponents = new JObject();
-        foreach (var component in data.Components)
+        // Transform sorts to the top; everything else keeps the engine's registration order (OrderBy is stable).
+        var ordered = data.Components.OrderBy(component =>
+            component.Name == TransformComponentName ? 0 : 1);
+        foreach (var component in ordered)
         {
             rawComponents[component.Name] = component.Raw;
             if (component.Name == ScriptComponentName)
@@ -104,8 +156,44 @@ public sealed partial class EntityViewModel : ObservableObject
         }
 
         Scripts = scripts;
+        OnPropertyChanged(nameof(HasComponents));
         Json = rawComponents.ToString(Formatting.Indented);
         JsonDraft = Json;
+    }
+
+    /// <summary>
+    /// Pushes a fresh snapshot of the same entity into the existing component grids in place, without
+    /// rebuilding them — used to track a running game's live values so the inspector doesn't tear down and
+    /// recreate its controls (a visible hitch) on every sync tick. Returns false when the entity's shape
+    /// changed (a component or the script container was added/removed/retyped, or an array changed length),
+    /// in which case the caller should fall back to <see cref="UpdateFrom"/> for a full rebuild.
+    /// Scripts and the raw-JSON tab are deliberately left untouched: script overrides are authored values,
+    /// not live game state, and re-serializing the JSON each tick would clobber an in-progress edit.
+    /// </summary>
+    public bool TrySyncValues(Entity data)
+    {
+        // Same transform-first ordering as UpdateFrom (OrderBy is stable), so the rows zip one to one.
+        var ordered = data.Components
+            .OrderBy(component => component.Name == TransformComponentName ? 0 : 1)
+            .ToList();
+
+        var hasScripts = ordered.Any(component => component.Name == ScriptComponentName);
+        if (hasScripts != (Scripts is not null))
+            return false;
+
+        var ordinary = ordered.Where(component => component.Name != ScriptComponentName).ToList();
+        if (ordinary.Count != Components.Count)
+            return false;
+
+        var synced = true;
+        for (var index = 0; index < Components.Count; index++)
+        {
+            if (!string.Equals(Components[index].Name, ordinary[index].Name, StringComparison.Ordinal))
+                return false;
+            synced &= Components[index].SyncFrom(ordinary[index]);
+        }
+
+        return synced;
     }
 
     /// <summary>
@@ -123,12 +211,10 @@ public sealed partial class EntityViewModel : ObservableObject
     /// <summary>Replaces the child VMs (the persistent instances are reused by the world reconcile).</summary>
     public void SetChildren(IReadOnlyList<EntityViewModel> children)
     {
-        Children.Clear();
         foreach (var child in children)
-        {
             child.Parent = this;
-            Children.Add(child);
-        }
+        // Reconcile in place so an unchanged subtree keeps its expansion/selection and only real changes move.
+        ListReconcile.Apply(Children, children);
     }
 
     /// <summary>

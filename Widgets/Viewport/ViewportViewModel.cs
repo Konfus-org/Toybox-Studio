@@ -1,7 +1,8 @@
+using Toybox.Studio.Utils;
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.EngineApi;
-using Toybox.Studio.Logging;
+using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Logging;
 
 namespace Toybox.Studio.Widgets.Viewport;
 

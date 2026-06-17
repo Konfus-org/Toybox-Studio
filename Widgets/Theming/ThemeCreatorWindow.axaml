@@ -1,0 +1,106 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Toybox.Studio.Widgets.Theming"
+        xmlns:colors="using:Toybox.Studio.Widgets.Colors"
+        xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+        x:Class="Toybox.Studio.Widgets.Theming.ThemeCreatorWindow"
+        x:DataType="shell:ThemeCreatorViewModel"
+        Icon="/Assets/Icons/Toybox.png"
+        Width="620" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="Theme Creator">
+
+    <DockPanel>
+        <!-- Action bar docked to the bottom so it's always visible without scrolling. -->
+        <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource ThemeBorderBrush}"
+                Background="{DynamicResource ThemeHeaderBrush}" Padding="16,10">
+            <DockPanel>
+                <Button DockPanel.Dock="Left" Content="Preview" Classes="clay" MinWidth="80"
+                        Command="{Binding PreviewCommand}"
+                        ToolTip.Tip="Apply this theme to the editor to preview it"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button Content="Cancel" Classes="clay" MinWidth="80" Command="{Binding CancelCommand}"/>
+                    <Button Content="Create" Classes="action" MinWidth="80" Command="{Binding CreateCommand}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer MaxHeight="620" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20" Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <pg:IconView IconName="Palette" Width="22" Height="22" VerticalAlignment="Center"
+                             Foreground="{DynamicResource ThemePrimaryBrush}"/>
+                <TextBlock Text="Create a new theme" FontWeight="SemiBold" FontSize="16"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="Built-in themes can't be edited. This saves a new theme and applies it."
+                       Opacity="0.6" TextWrapping="Wrap"/>
+
+            <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,6,0,0">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,2" Text="{Binding Name}" PlaceholderText="My Theme"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Corner radius" VerticalAlignment="Center"/>
+                <NumericUpDown Grid.Row="1" Grid.Column="1" Margin="0,2" Minimum="0" Maximum="24"
+                               Increment="1" FormatString="0.#" Value="{Binding CornerRadius}"
+                               pg:NumericScrub.Enabled="True" pg:NumericScrub.Step="1"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Shadows" VerticalAlignment="Center"/>
+                <ToggleSwitch Grid.Row="2" Grid.Column="1" Margin="0,2" IsChecked="{Binding ShadowsEnabled}"
+                              OnContent="On" OffContent="Off"/>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Shadow angle" VerticalAlignment="Center"/>
+                <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,2"
+                            IsEnabled="{Binding ShadowsEnabled}">
+                    <Slider Width="200" Minimum="0" Maximum="360" Value="{Binding ShadowAngle}"
+                            VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ShadowAngle, StringFormat='{}{0:0}°'}" VerticalAlignment="Center"
+                               Width="36"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="Typography" FontWeight="SemiBold" Margin="0,6,0,0"/>
+            <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Font" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,2" Text="{Binding FontFamily}"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Font size" VerticalAlignment="Center"/>
+                <NumericUpDown Grid.Row="1" Grid.Column="1" Margin="0,2" Minimum="8" Maximum="32"
+                               Increment="0.5" FormatString="0.#" Value="{Binding FontSize}"
+                               pg:NumericScrub.Enabled="True" pg:NumericScrub.Step="0.5"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Monospace" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Margin="0,2" Text="{Binding MonospaceFamily}"/>
+            </Grid>
+
+            <TextBlock Text="Palette" FontWeight="SemiBold" Margin="0,6,0,0"/>
+            <TextBlock Text="Tick Solid for a flat colour, or untick it for a two-stop gradient (start, end, angle)."
+                       Opacity="0.6" TextWrapping="Wrap"/>
+            <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Primary" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="0" Grid.Column="1" Margin="0,2" DataContext="{Binding Primary}"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Secondary" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="1" Grid.Column="1" Margin="0,2" DataContext="{Binding Secondary}"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Tertiary" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="2" Grid.Column="1" Margin="0,2" DataContext="{Binding Tertiary}"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Error" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="3" Grid.Column="1" Margin="0,2" DataContext="{Binding Error}"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Warning" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="4" Grid.Column="1" Margin="0,2" DataContext="{Binding Warning}"/>
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Info" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="5" Grid.Column="1" Margin="0,2" DataContext="{Binding Info}"/>
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="Success" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="6" Grid.Column="1" Margin="0,2" DataContext="{Binding Success}"/>
+                <TextBlock Grid.Row="7" Grid.Column="0" Text="Background" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="7" Grid.Column="1" Margin="0,2" DataContext="{Binding Background}"/>
+                <TextBlock Grid.Row="8" Grid.Column="0" Text="Surface" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="8" Grid.Column="1" Margin="0,2" DataContext="{Binding Surface}"/>
+                <TextBlock Grid.Row="9" Grid.Column="0" Text="Text" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="9" Grid.Column="1" Margin="0,2" DataContext="{Binding Text}"/>
+            </Grid>
+
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource ThemeErrorBrush}"
+                       TextWrapping="Wrap" IsVisible="{Binding HasError}"/>
+        </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

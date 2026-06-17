@@ -1,7 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.EngineApi;
-using Toybox.Studio.Logging;
+using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Widgets.GameToolbar;
 using Toybox.Studio.Widgets.Viewport;
 

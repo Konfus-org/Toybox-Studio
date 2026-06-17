@@ -1,3 +1,6 @@
+using Toybox.Studio.Services;
+using Toybox.Studio.Services.World;
+using Toybox.Studio.Utils;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -12,14 +15,15 @@ using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;
 using Toybox.Studio.Widgets.GameToolbar;
 using Toybox.Studio.Widgets.PropertyGrid;
-using Toybox.Studio.Workspace;
-using Toybox.Studio.Dialogs;
-using Toybox.Studio.EngineApi;
-using Toybox.Studio.Logging;
-using Toybox.Studio.Project;
-using Toybox.Studio.Theming;
-using Toybox.Studio.ECS;
-using Toybox.Studio.Widgets.Utils;
+using Toybox.Studio.Shell.Workspace;
+using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Theming;
+using Toybox.Studio.Models;
+using Toybox.Studio.Models.Ecs;
+using Toybox.Studio.Widgets.Behaviors;
 
 namespace Toybox.Studio;
 
@@ -97,7 +101,10 @@ public partial class App : Application
             // Give the property grid's custom widgets (asset pickers, script links) the services they
             // need before any inspector or settings grid is built.
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
-            PropertyViewRegistry.Configure(catalog, _host.Services.GetRequiredService<World>());
+            PropertyViewRegistry.Configure(
+                catalog,
+                _host.Services.GetRequiredService<World>(),
+                _host.Services.GetRequiredService<EngineRpc>());
 
             // Activating an asset link (e.g. a handle hyperlink) reveals the file in the OS explorer.
             catalog.AssetActivated += id =>
@@ -138,9 +145,9 @@ public partial class App : Application
             // Launch into a world at startup (the default). With no project open, fall back to the
             // bundled template world (skybox + grass ground + a cube that falls). The compile/launch
             // runs in the background so the editor opens immediately.
-            var settings = _host.Services.GetRequiredService<Settings>();
+            var settings = _host.Services.GetRequiredService<EditorSettings>();
             var projects = _host.Services.GetRequiredService<ProjectManager>();
-            var wantsLaunch = settings.Editor.Engine.AutoLaunchEngine
+            var wantsLaunch = settings.Engine.AutoLaunchEngine
                 || desktop.Args?.Contains("--auto-launch") == true;
             if (wantsLaunch && locator.IsLocated)
             {
@@ -217,7 +224,7 @@ public partial class App : Application
     private static void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<CommandRunner>();
-        services.AddSingleton<Settings>();
+        services.AddSingleton(EditorSettings.Load());
         services.AddSingleton<ThemeManager>();
         services.AddSingleton<LogFile>();
         services.AddSingleton<Logger>();
@@ -226,7 +233,7 @@ public partial class App : Application
         services.AddSingleton<CMakeCompiler>();
         services.AddSingleton<EngineRpc>();
         services.AddSingleton<JsonParser>();
-        services.AddSingleton<Selection>();
+        services.AddSingleton<WorldSelection>();
         services.AddSingleton<Session>();
         services.AddSingleton<EngineWatcher>();
         services.AddSingleton<InstanceDetector>();

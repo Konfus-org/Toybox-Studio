@@ -1,9 +1,11 @@
+using Toybox.Studio.Utils;
 using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Dialogs;
-using Toybox.Studio.ECS;
-using Toybox.Studio.EngineApi;
+using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Models.Ecs;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Ecs;
@@ -23,6 +25,8 @@ public sealed partial class ComponentViewModel : ObservableObject
     // Top-level property name → its view-model, for routing the per-property modified-state refresh.
     private readonly Dictionary<string, PropertyViewModel> _resettable = [];
 
+    private const string MaterialInstanceName = "material_instance";
+
     public ComponentViewModel(
         ulong entityId,
         Component component,
@@ -38,6 +42,11 @@ public sealed partial class ComponentViewModel : ObservableObject
         Icon = component.Icon;
         IconColor = component.IconColor;
         Properties = [];
+
+        // A material instance is not a generic property bag: its "overrides" are edited against the base
+        // material's slots (fetched live), so it gets a dedicated, base-aware editor instead of the grid.
+        if (component.Name == MaterialInstanceName && TryBuildMaterialInstance(component))
+            return;
 
         // A component whose entire payload is a single struct/array repeats itself: the component header and
         // that lone child's header say the same thing (script_container -> Scripts, transform -> Transform).
@@ -70,6 +79,40 @@ public sealed partial class ComponentViewModel : ObservableObject
         }
     }
 
+    // Builds the material-instance editor: a "Base" material picker plus a base-aware override editor that
+    // shows the referenced material's parameter/texture slots. Reuses the same wiring as the nested/list
+    // editor (MaterialInstancePropertyViewModel.Build) but, at the component's top level, flattens the pair
+    // into the component's own rows (so the component header alone names the group) and routes the base and
+    // overrides to their own reflect.set properties — each is a top-level component property here, whereas a
+    // nested instance commits both together. Returns false (falling back to the generic grid) if the component
+    // isn't shaped as expected.
+    private bool TryBuildMaterialInstance(Component component)
+    {
+        var materialNode = component.Properties.FirstOrDefault(node => node.Name == "material");
+        var overridesNode = component.Properties.FirstOrDefault(node => node.Name == "overrides");
+        if (materialNode is null || overridesNode is null)
+            return false;
+
+        var (material, overrides) = MaterialInstancePropertyViewModel.Build(
+            materialNode,
+            overridesNode,
+            _engine,
+            () => MaterialInstancePropertyViewModel.ReadHandleId(_raw["material"]),
+            () => OnPropertyEdited("material"),
+            () => OnPropertyEdited("overrides"),
+            depth: 0);
+
+        if (!materialNode.ReadOnly)
+        {
+            material.ResetToDefault = () => OnPropertyReset("material");
+            _resettable["material"] = material;
+        }
+
+        Properties.Add(material);
+        Properties.Add(overrides);
+        return true;
+    }
+
     public string Name { get; }
 
     /// <summary>The component's display label — its type name humanized to read like the properties below.</summary>
@@ -80,6 +123,39 @@ public sealed partial class ComponentViewModel : ObservableObject
     public string? IconColor { get; }
 
     public ObservableCollection<PropertyViewModel> Properties { get; }
+
+    /// <summary>
+    /// Pushes a fresh snapshot of the same component into the existing property rows in place, without
+    /// rebuilding them — so tracking a running game's live values keeps the grid's controls (and any
+    /// in-progress edit) rather than tearing them down every tick. Returns false when the component's shape
+    /// no longer matches these rows (a property added/removed/retyped, or a value of a type that can't update
+    /// in place actually moved), in which case the host rebuilds the component instead.
+    /// </summary>
+    public bool SyncFrom(Component component)
+    {
+        var nodes = EffectiveNodes(component);
+        if (nodes.Count != Properties.Count)
+            return false;
+
+        var synced = true;
+        for (var index = 0; index < Properties.Count; index++)
+        {
+            if (!string.Equals(Properties[index].RawName, nodes[index].Name, StringComparison.Ordinal))
+                return false;
+            synced &= Properties[index].Sync(nodes[index]);
+        }
+
+        return synced;
+    }
+
+    // The top-level property nodes the grid actually shows: a single-struct component is flattened to its
+    // child's members (see the constructor), so the row set is that child's children; otherwise it's the
+    // component's own properties. Kept in step with the constructor so SyncFrom zips against the same rows.
+    private static IReadOnlyList<PropertyNode> EffectiveNodes(Component component)
+    {
+        var single = component.Properties.Count == 1 ? component.Properties[0] : null;
+        return single is { HasChildren: true } ? single.Children : component.Properties;
+    }
 
     /// <summary>The inspector search pushed in by the host; the component's grid filters its rows by it.</summary>
     [ObservableProperty]

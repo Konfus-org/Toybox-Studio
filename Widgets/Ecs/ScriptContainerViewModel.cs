@@ -1,3 +1,4 @@
+using Toybox.Studio.Utils;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -5,9 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Dialogs;
-using Toybox.Studio.ECS;
-using Toybox.Studio.EngineApi;
+using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Models.Ecs;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Ecs;

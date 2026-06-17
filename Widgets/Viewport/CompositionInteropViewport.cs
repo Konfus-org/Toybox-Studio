@@ -1,3 +1,4 @@
+using Toybox.Studio.Utils;
 using System;
 using System.Linq;
 using System.Numerics;
@@ -6,7 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Rendering.Composition;
-using Toybox.Studio.EngineApi;
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.Viewport;
 

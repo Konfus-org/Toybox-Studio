@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:colors="using:Toybox.Studio.Widgets.Colors"
+             x:Class="Toybox.Studio.Widgets.Colors.ColorGradientView"
+             x:DataType="colors:ColorGradientViewModel">
+
+    <!-- A theme colour editor: a live preview swatch, the start stop, a Solid/Gradient toggle, and (when a
+         gradient) the end stop plus an angle dial. DataContext is a ColorGradientViewModel. -->
+    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Border Width="44" Height="26" CornerRadius="6"
+                Background="{Binding Preview}"
+                BorderThickness="1" BorderBrush="{DynamicResource ThemeBorderBrush}"/>
+
+        <ColorPicker Color="{Binding Start, Mode=TwoWay}"/>
+
+        <CheckBox Content="Solid" IsChecked="{Binding IsSolid, Mode=TwoWay}"
+                  IsVisible="{Binding ShowSolidToggle}"
+                  VerticalAlignment="Center"/>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                    IsVisible="{Binding ShowGradientControls}">
+            <ColorPicker Color="{Binding End, Mode=TwoWay}"/>
+            <Slider Width="90" Minimum="0" Maximum="360" Value="{Binding Angle}"
+                    VerticalAlignment="Center" ToolTip.Tip="Gradient angle"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using Toybox.Studio.Workspace;
+using Toybox.Studio.Shell.Workspace;
 
 namespace Toybox.Studio.Widgets.LogConsole;
 

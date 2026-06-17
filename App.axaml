@@ -11,40 +11,12 @@
         <StreamGeometry x:Key="RefreshIconGeometry">M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z</StreamGeometry>
         <StreamGeometry x:Key="SearchIconGeometry">M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5A4.5 4.5 0 0 1 9.5 14</StreamGeometry>
         <StreamGeometry x:Key="CloseIconGeometry">M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12z</StreamGeometry>
-
-        <!-- Theme token defaults. ThemeManager overwrites these from the active Theme.json at
-             startup; they exist so DynamicResource lookups resolve at design time and on first
-             frame. -->
-        <SolidColorBrush x:Key="ThemePrimaryBrush" Color="#0078D4"/>
-        <SolidColorBrush x:Key="ThemeSecondaryBrush" Color="#6E7B8B"/>
-        <SolidColorBrush x:Key="ThemeTertiaryBrush" Color="#8A63D2"/>
-        <SolidColorBrush x:Key="ThemeErrorBrush" Color="#E74C3C"/>
-        <SolidColorBrush x:Key="ThemeWarningBrush" Color="#F1C40F"/>
-        <SolidColorBrush x:Key="ThemeInfoBrush" Color="#3498DB"/>
-        <SolidColorBrush x:Key="ThemeSuccessBrush" Color="#2ECC71"/>
-        <SolidColorBrush x:Key="ThemeBackgroundBrush" Color="#0E1525"/>
-        <SolidColorBrush x:Key="ThemeSurfaceBrush" Color="#16203A"/>
-        <SolidColorBrush x:Key="ThemeTextBrush" Color="#E8ECF4"/>
-        <!-- Derived neutrals (ThemeManager recomputes these from the palette on apply). Defaults match
-             the dark theme so DynamicResource lookups resolve at design time and on first frame. -->
-        <SolidColorBrush x:Key="ThemeBorderBrush" Color="#2EE8ECF4"/>
-        <SolidColorBrush x:Key="ThemeHeaderBrush" Color="#18E8ECF4"/>
-        <SolidColorBrush x:Key="ThemeBandBrush" Color="#10E8ECF4"/>
-        <SolidColorBrush x:Key="ThemeWellBrush" Color="#0AE8ECF4"/>
-        <SolidColorBrush x:Key="ThemeMutedTextBrush" Color="#868B97"/>
-        <SolidColorBrush x:Key="ThemeScrimBrush" Color="#B00E1525"/>
-        <FontFamily x:Key="ThemeFontFamily">Inter</FontFamily>
-        <FontFamily x:Key="ThemeMonoFontFamily">Cascadia Mono, Consolas, monospace</FontFamily>
-        <x:Double x:Key="ThemeFontSize">13</x:Double>
     </Application.Resources>
 
     <Application.Styles>
         <FluentTheme/>
-        <!-- ColorPicker/ColorView themes ship in their own package and are NOT bundled with FluentTheme;
-             without this include the ColorPicker control has no template and can't be used (e.g. the
-             Theme Creator's palette pickers render dead). -->
-        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
-        <StyleInclude Source="avares://Dock.Avalonia.Themes.Fluent/DockFluentTheme.axaml"/>
-        <StyleInclude Source="/Shell/ShellStyles.axaml"/>
+        <!-- All app styling/theming — design tokens, packaged control themes, and app styles — lives in
+             this single stylesheet. Colors are applied on top at runtime by ThemeManager from Theme.json. -->
+        <StyleInclude Source="/Shell/AppStyles.axaml"/>
     </Application.Styles>
 </Application>

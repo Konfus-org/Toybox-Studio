@@ -311,9 +311,17 @@ public sealed class EngineRpc : IAsyncDisposable
     public Task<Result<AssetCatalogReply>> ListAssetsAsync(CancellationToken ct) =>
         InvokeAsync<AssetCatalogReply>("editor.listAssets", null, ct);
 
-    public Task<Result> SaveWorldAsync(string path, CancellationToken ct) =>
-        Task.FromResult(Result.Fail(
-            "Saving worlds is not supported yet (pending the engine's world.save RPC)."));
+    /// <summary>Persists the active world's current entities back to its chunk + globals asset files.</summary>
+    public Task<Result> SaveWorldAsync(CancellationToken ct) =>
+        InvokeAsync("world.save", null, ct);
+
+    /// <summary>
+    /// Persists an arbitrary registered asset: the engine deserializes <paramref name="json"/> into a fresh
+    /// instance of the named type and writes it (lean) to <paramref name="path"/>. The editor's generic
+    /// data-panel save path.
+    /// </summary>
+    public Task<Result> SaveAssetAsync(string type, string path, JObject json, CancellationToken ct) =>
+        InvokeAsync("asset.save", new { Type = type, Path = path, Json = json }, ct);
 
     public Task<Result> LoadWorldAsync(string path, CancellationToken ct) =>
         Task.FromResult(Result.Fail(

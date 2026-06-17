@@ -1,0 +1,31 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- DROPDOWNS / MENUS / FLYOUTS — the popup is rounded (OverlayCornerRadius) with a soft drop shadow, and
+         each item's highlight (Fluent's square, edge-flush Border#PART_LayoutRoot) is rounded to the theme
+         radius + inset so it never pokes past the dropdown's rounded corners. -->
+    <Style Selector="MenuItem /template/ Border#PART_LayoutRoot, MenuFlyoutPresenter MenuItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+        <Setter Property="Margin" Value="4,1"/>
+    </Style>
+    <!-- …and that highlight uses the PRIMARY colour (a translucent tint) on hover / open / press, not grey. -->
+    <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot,
+                     MenuItem:selected /template/ Border#PART_LayoutRoot,
+                     MenuItem:pressed /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource ThemeMenuHighlightBrush}"/>
+    </Style>
+    <Style Selector="MenuFlyoutPresenter /template/ Border#LayoutRoot, MenuFlyoutPresenter /template/ Border, ContextMenu /template/ Border">
+        <Setter Property="CornerRadius" Value="{DynamicResource OverlayCornerRadius}"/>
+        <Setter Property="BoxShadow" Value="0 6 18 0 #33000000"/>
+    </Style>
+    <!-- ComboBox dropdown items: same rounded, inset hover so it stays within the rounded popup. -->
+    <Style Selector="ComboBoxItem">
+        <Setter Property="CornerRadius" Value="7"/>
+        <Setter Property="Margin" Value="3,1"/>
+    </Style>
+
+    <!-- Flyouts / dropdowns / menus float, so they DO get a soft drop shadow (on the presenter border). -->
+    <Style Selector="FlyoutPresenter /template/ Border, MenuFlyoutPresenter /template/ Border">
+        <Setter Property="BoxShadow" Value="0 6 18 0 #33000000"/>
+    </Style>
+</Styles>

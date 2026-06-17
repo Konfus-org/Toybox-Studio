@@ -16,11 +16,11 @@
                 BorderBrush="{DynamicResource ThemeBorderBrush}"
                 Background="{DynamicResource ThemeHeaderBrush}" Padding="16,10">
             <DockPanel>
-                <Button DockPanel.Dock="Left" Content="Preview" Classes="clay" MinWidth="80"
+                <Button DockPanel.Dock="Left" Content="Preview" Classes="toy" MinWidth="80"
                         Command="{Binding PreviewCommand}"
                         ToolTip.Tip="Apply this theme to the editor to preview it"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                    <Button Content="Cancel" Classes="clay" MinWidth="80" Command="{Binding CancelCommand}"/>
+                    <Button Content="Cancel" Classes="toy" MinWidth="80" Command="{Binding CancelCommand}"/>
                     <Button Content="Create" Classes="action" MinWidth="80" Command="{Binding CreateCommand}"/>
                 </StackPanel>
             </DockPanel>
@@ -96,6 +96,22 @@
                 <colors:ColorGradientView Grid.Row="8" Grid.Column="1" Margin="0,2" DataContext="{Binding Surface}"/>
                 <TextBlock Grid.Row="9" Grid.Column="0" Text="Text" VerticalAlignment="Center"/>
                 <colors:ColorGradientView Grid.Row="9" Grid.Column="1" Margin="0,2" DataContext="{Binding Text}"/>
+            </Grid>
+
+            <TextBlock Text="Buttons" FontWeight="SemiBold" Margin="0,6,0,0"/>
+            <TextBlock Text="Fills for the semantic buttons; Default is the plain (un-classed) button."
+                       Opacity="0.6" TextWrapping="Wrap"/>
+            <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Action" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="0" Grid.Column="1" Margin="0,2" DataContext="{Binding Action}"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Play" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="1" Grid.Column="1" Margin="0,2" DataContext="{Binding Play}"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Stop" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="2" Grid.Column="1" Margin="0,2" DataContext="{Binding Stop}"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Refresh" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="3" Grid.Column="1" Margin="0,2" DataContext="{Binding Refresh}"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Default" VerticalAlignment="Center"/>
+                <colors:ColorGradientView Grid.Row="4" Grid.Column="1" Margin="0,2" DataContext="{Binding Default}"/>
             </Grid>
 
             <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource ThemeErrorBrush}"

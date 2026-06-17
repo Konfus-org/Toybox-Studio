@@ -17,7 +17,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 public static class PropertyViewRegistry
 {
     private static AssetCatalog? _assets;
-    private static World? _world;
+    private static WorldManager? _world;
     private static EngineRpc? _engine;
 
     /// <summary>
@@ -27,10 +27,10 @@ public static class PropertyViewRegistry
     public static AssetCatalog? Assets => _assets;
 
     /// <summary>
-    /// The world snapshot the entity picker chooses from (entity-reference fields route by their "entity"
+    /// The world service the entity picker chooses from (entity-reference fields route by their "entity"
     /// type token).
     /// </summary>
-    public static World? World => _world;
+    public static WorldManager? World => _world;
 
     /// <summary>
     /// The engine RPC the material-instance editor needs to fetch a base material's slots. Exposed so the
@@ -50,7 +50,7 @@ public static class PropertyViewRegistry
     /// Supplies the services the custom widgets depend on. Called once after the app's services are
     /// built; safe to call again if they are rebuilt.
     /// </summary>
-    public static void Configure(AssetCatalog assets, World world, EngineRpc engine)
+    public static void Configure(AssetCatalog assets, WorldManager world, EngineRpc engine)
     {
         _assets = assets;
         _world = world;

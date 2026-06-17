@@ -5,6 +5,10 @@ using Dock.Model.Avalonia;
 using Dock.Model.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
+using Dock.Model.Core.Events;
+using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Shell.Panels;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Shell.Workspace;
 
@@ -29,6 +33,18 @@ public sealed class WindowManager : Factory
     private readonly Dictionary<string, object> _instances = [];
     private int _instanceCounter;
 
+    // Live title bindings keyed by tool id: each ties a DataPanel's TitleChanged to its dock tab's Title so
+    // the '*' tracks dirty state. Held so re-templating / layout restore doesn't double-subscribe and closing
+    // a tool can unsubscribe (a stale handler would keep an abandoned Tool alive).
+    private readonly Dictionary<string, (DataPanel Owner, Action Handler)> _titleBindings = [];
+
+    // Tool ids whose close we've already cleared through the unsaved-changes prompt: the first close attempt is
+    // vetoed to show the prompt, then we re-close, and this lets that second pass through.
+    private readonly HashSet<string> _forceClosing = [];
+
+    // The id of the most recently focused tool, tracked so File ▸ Save can resolve "whatever is focused".
+    private string? _focusedToolId;
+
     public WindowManager(DockableCatalog catalog)
     {
         _dockables = catalog.Dockables;
@@ -43,6 +59,73 @@ public sealed class WindowManager : Factory
         // Closing a spawned tool's window must dispose its view-model so the engine view + frame stream
         // it owns are torn down.
         DockableClosed += (_, args) => DisposeInstance(args.Dockable);
+
+        // A document with unsaved edits prompts before it closes (see OnDockableClosing).
+        DockableClosing += OnDockableClosing;
+
+        // Remember the focused tool so File ▸ Save can target it.
+        FocusedDockableChanged += (_, args) =>
+        {
+            if (args.Dockable is Tool tool)
+                _focusedToolId = tool.Id;
+        };
+    }
+
+    /// <summary>The live view-model of the most recently focused tool, or null. Used by File ▸ Save to save
+    /// "whatever is focused".</summary>
+    public object? FocusedViewModel() =>
+        _focusedToolId is { } id ? ResolveLiveViewModel(id) : null;
+
+    /// <summary>Every open data panel with a live, title-bound view-model, distinct. Used by File ▸ Save All
+    /// and the consolidated app-close prompt. Does not instantiate any not-yet-shown view-model.</summary>
+    public IEnumerable<DataPanel> OpenPanels() =>
+        _titleBindings.Values.Select(binding => binding.Owner).Distinct();
+
+    // The live view-model behind a tool id: a tracked spawned instance, a title-bound owner, or (for an
+    // already-shown singleton) its DI instance. Never starts a not-yet-shown singleton's view-model.
+    private object? ResolveLiveViewModel(string toolId)
+    {
+        if (_instances.TryGetValue(toolId, out var instance))
+            return instance;
+        if (_titleBindings.TryGetValue(toolId, out var binding))
+            return binding.Owner;
+        if (TryResolveDescriptor(toolId, out var descriptor) && descriptor.Singleton)
+            return descriptor.CreateViewModel();
+        return null;
+    }
+
+    // Intercepts a dockable close: a buffered data panel with unsaved edits (e.g. Settings) vetoes the close
+    // and asks Save / Don't Save / Cancel, then re-closes (or stays open on Cancel). Live panels (the world
+    // viewport) and clean panels close immediately.
+    private void OnDockableClosing(object? sender, DockableClosingEventArgs args)
+    {
+        if (args.Dockable is not Tool tool)
+            return;
+
+        // Second pass after the prompt — let it through.
+        if (_forceClosing.Remove(tool.Id))
+            return;
+
+        if (!_titleBindings.TryGetValue(tool.Id, out var binding) || !binding.Owner.HasUnsavedChanges)
+            return;
+
+        args.Cancel = true;
+        PromptThenCloseAsync(tool, binding.Owner).FireAndForget();
+    }
+
+    private async Task PromptThenCloseAsync(Tool tool, DataPanel panel)
+    {
+        var choice = await Popups.ShowSaveChangesAsync([panel.BaseTitle]).ContinueOnSameContext();
+        if (choice == SaveChoice.Cancel)
+            return; // Keep the tab open.
+
+        if (choice == SaveChoice.Save)
+            await panel.SaveAsync().ContinueOnSameContext();
+        else
+            panel.Cancel(); // Discard the buffered edits.
+
+        _forceClosing.Add(tool.Id);
+        CloseDockable(tool);
     }
 
     public override IRootDock CreateLayout() => CreateDefaultLayout();
@@ -89,7 +172,11 @@ public sealed class WindowManager : Factory
         EnsureDockCapabilities(dockable);
 
         if (dockable is Tool tool && TryResolveDescriptor(tool.Id, out var descriptor))
-            tool.Content = DeferredContent(descriptor, ResolveInstance(tool.Id, descriptor));
+        {
+            var viewModel = ResolveViewModelForTool(tool.Id, descriptor);
+            tool.Content = DeferredContent(descriptor, viewModel);
+            BindTitle(tool, viewModel);
+        }
 
         if (dockable is IDock dock && dock.VisibleDockables is { } children)
         {
@@ -237,7 +324,12 @@ public sealed class WindowManager : Factory
         if (descriptor.Singleton)
         {
             var tool = new Tool { Id = descriptor.Id, Title = descriptor.Title, CanClose = true };
-            tool.Content = DeferredContent(descriptor, null);
+            // A title-owning (DataPanel) singleton is resolved eagerly so its tab title can track dirty state;
+            // every other singleton stays lazily resolved by the deferred template (null), so panels with side
+            // effects on construction — e.g. the game view's frame stream — aren't started before they show.
+            var viewModel = OwnsTitle(descriptor) ? descriptor.CreateViewModel() : null;
+            tool.Content = DeferredContent(descriptor, viewModel);
+            BindTitle(tool, viewModel);
             EnsureDockCapabilities(tool);
             return tool;
         }
@@ -252,6 +344,7 @@ public sealed class WindowManager : Factory
         _instances[toolId] = viewModel;
         var tool = new Tool { Id = toolId, Title = descriptor.Title, CanClose = true };
         tool.Content = DeferredContent(descriptor, viewModel);
+        BindTitle(tool, viewModel);
         EnsureDockCapabilities(tool);
         return tool;
     }
@@ -444,6 +537,53 @@ public sealed class WindowManager : Factory
         return false;
     }
 
+    // Whether this dockable's view-model owns its title (a DataPanel that shows a '*'): the cue for the
+    // window manager to resolve it eagerly and mirror its title onto the tab.
+    private static bool OwnsTitle(DockableDescriptor descriptor) =>
+        typeof(DataPanel).IsAssignableFrom(descriptor.ViewModelType);
+
+    // The view-model a tool's title should bind to (and its view should share): the tracked instance for a
+    // non-singleton, the DI singleton for a title-owning singleton, else null (the deferred template resolves
+    // a plain singleton lazily — see CreateToolFor).
+    private object? ResolveViewModelForTool(string toolId, DockableDescriptor descriptor)
+    {
+        if (!descriptor.Singleton)
+            return ResolveInstance(toolId, descriptor);
+
+        return OwnsTitle(descriptor) ? descriptor.CreateViewModel() : null;
+    }
+
+    // Mirrors a DataPanel's Title onto its dock tab, now and on every change. Idempotent across the repeated
+    // AttachContent passes a layout restore / re-templating triggers: re-binding the same owner just re-derives
+    // the title (a serialized Title may carry a stale '*'); a different owner replaces the old subscription.
+    private void BindTitle(Tool tool, object? viewModel)
+    {
+        if (viewModel is not DataPanel owner)
+            return;
+
+        if (_titleBindings.TryGetValue(tool.Id, out var existing))
+        {
+            if (ReferenceEquals(existing.Owner, owner))
+            {
+                tool.Title = owner.Title;
+                return;
+            }
+
+            existing.Owner.TitleChanged -= existing.Handler;
+        }
+
+        void Handler() => Dispatch.To(DispatchContext.UI, () => tool.Title = owner.Title);
+        owner.TitleChanged += Handler;
+        _titleBindings[tool.Id] = (owner, Handler);
+        tool.Title = owner.Title;
+    }
+
+    private void UnbindTitle(string toolId)
+    {
+        if (_titleBindings.Remove(toolId, out var binding))
+            binding.Owner.TitleChanged -= binding.Handler;
+    }
+
     private void ClearInstances()
     {
         foreach (var viewModel in _instances.Values)
@@ -451,13 +591,23 @@ public sealed class WindowManager : Factory
 
         _instances.Clear();
         _instanceCounter = 0;
+
+        // Drop every title binding so a rebuilt layout's fresh tools subscribe cleanly (the old Tool objects
+        // are abandoned; leaving their handlers subscribed would keep them alive and update dead tabs).
+        foreach (var toolId in _titleBindings.Keys.ToList())
+            UnbindTitle(toolId);
     }
 
     private void DisposeInstance(IDockable? dockable)
     {
-        if (dockable is null || !_instances.Remove(dockable.Id, out var viewModel))
+        if (dockable is null)
             return;
 
-        (viewModel as IDisposable)?.Dispose();
+        // Unbind first: a closed tool (singleton or spawned) must release its title subscription even though
+        // only spawned instances carry a disposable view-model.
+        UnbindTitle(dockable.Id);
+
+        if (_instances.Remove(dockable.Id, out var viewModel))
+            (viewModel as IDisposable)?.Dispose();
     }
 }

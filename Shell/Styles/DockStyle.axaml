@@ -1,0 +1,161 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dock="using:Dock.Avalonia.Controls">
+
+    <!-- DOCKING CHROME — panels, drop-target selectors, dock tabs and pinned tabs. Soft, puffy toy chrome.
+         The KEY to shape-correct shadows: put the shadow as a BoxShadow on the exact rounded template border
+         the control draws (PART_BorderElement / PART_ContentPresenter / Background), NOT a DropShadowEffect on
+         the whole control — an Effect shadows the control's full rectangular bounds and so doesn't follow the
+         rounded pill. Surface gradients come from ThemeApplier (it routes the theme's Surface gradient onto
+         FluentTheme's control-background keys). -->
+
+    <Styles.Resources>
+        <!-- Flat, hover-less Button theme for the pinned-tool tab's inner toggle (see the ToolPinItemControl
+             styles below). Avalonia's default Fluent Button re-tints its own ContentPresenter white on
+             pointerover/press via its private resources — not via the Button Background — and that
+             ContentPresenter sits one template level too deep to reach from a ToolPinItemControl selector.
+             Swapping the Button's Theme for this transparent one removes that stray tint so only the
+             ToolPinItemControl's own wash / purple pill shows. Kept in this file so the StaticResource
+             reference below resolves in the same scope. -->
+        <ControlTheme x:Key="PinTabButtonTheme" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Padding="{TemplateBinding Padding}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Background="Transparent"/>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <!-- DROP-TARGET SELECTORS — Dock's drag drop-target squares are baked white PNGs. ThemeApplier
+         multiply-tints them to the primary accent at runtime into these DynamicResource keys; here we point
+         each selector Image (DockTarget + GlobalDockTarget) at the recoloured bitmap, overriding Dock's
+         hardcoded Source. -->
+    <Style Selector="dock|DockTarget /template/ Image#PART_TopSelector, dock|GlobalDockTarget /template/ Image#PART_TopSelector">
+        <Setter Property="Source" Value="{DynamicResource DockSelectorTopImage}"/>
+    </Style>
+    <Style Selector="dock|DockTarget /template/ Image#PART_BottomSelector, dock|GlobalDockTarget /template/ Image#PART_BottomSelector">
+        <Setter Property="Source" Value="{DynamicResource DockSelectorBottomImage}"/>
+    </Style>
+    <Style Selector="dock|DockTarget /template/ Image#PART_LeftSelector, dock|GlobalDockTarget /template/ Image#PART_LeftSelector">
+        <Setter Property="Source" Value="{DynamicResource DockSelectorLeftImage}"/>
+    </Style>
+    <Style Selector="dock|DockTarget /template/ Image#PART_RightSelector, dock|GlobalDockTarget /template/ Image#PART_RightSelector">
+        <Setter Property="Source" Value="{DynamicResource DockSelectorRightImage}"/>
+    </Style>
+    <Style Selector="dock|DockTarget /template/ Image#PART_CenterSelector, dock|GlobalDockTarget /template/ Image#PART_CenterSelector">
+        <Setter Property="Source" Value="{DynamicResource DockSelectorInsideImage}"/>
+    </Style>
+
+    <!-- Each docked panel is a SQUARE card (square title bar, square corners), inset by a small margin so the
+         window's radial background shows between cards. Its DropShadowEffect comes from the theme. -->
+    <Style Selector="dock|ToolChromeControl">
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Margin" Value="5"/>
+        <Setter Property="ClipToBounds" Value="False"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Effect" Value="{DynamicResource ThemePanelShadowEffect}"/>
+    </Style>
+    <!-- Panel header gradient + outline removal are done by overriding the REAL Dock brush keys in
+         ThemeApplier (DockSurfaceHeaderActiveBrush for the active Grid#PART_Grip; DockBorderSubtle/Strong for
+         Border#PART_Border) — so no template-part guessing here. -->
+    <Style Selector="dock|ToolChromeControl /template/ Border">
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <!-- The panel's content border (PART_Border wraps the header AND the content) is square and CLIPS its
+         content, so a panel whose content is a square opaque surface (the viewport texture) stays inside the
+         border instead of painting over it — letting the focus outline ring the WHOLE panel, not just the
+         title bar. The drop shadow still renders: it's an Effect on the control (ClipToBounds=False), not on
+         this inner border. -->
+    <Style Selector="dock|ToolChromeControl /template/ Border#PART_Border">
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="ClipToBounds" Value="True"/>
+    </Style>
+    <!-- The focused (active) docked panel gets a square primary-accent border ringing the entire panel. -->
+    <Style Selector="dock|ToolChromeControl:active /template/ Border#PART_Border">
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+
+    <!-- Dock panel-chrome buttons (pin / menu / close in a title bar, and a tab's close button) are icon
+         buttons. They carry no class, so they get NO shadow; a single /template/ hop flattens their fill to
+         transparent (Fluent binds the presenter background to Button.Background). A faint band shows on hover. -->
+    <Style Selector="dock|ToolChromeControl /template/ Button, dock|ToolTabStripItem /template/ Button, dock|DocumentTabStripItem /template/ Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="7"/>
+    </Style>
+    <Style Selector="dock|ToolChromeControl /template/ Button:pointerover, dock|ToolTabStripItem /template/ Button:pointerover, dock|DocumentTabStripItem /template/ Button:pointerover">
+        <Setter Property="Background" Value="{DynamicResource ThemeBandBrush}"/>
+    </Style>
+    <!-- When a panel is FOCUSED its header fills with the primary gradient; Dock's active state otherwise
+         tints the pin/menu/close glyphs the accent colour (≈ the header colour → invisible). Force them to
+         the on-colour ink so they read on the coloured header. -->
+    <Style Selector="dock|ToolChromeControl:active /template/ Path">
+        <Setter Property="Fill" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+    <!-- …and the title text on the focused (primary-filled) header goes on-primary so it isn't dark-on-dark. -->
+    <Style Selector="dock|ToolChromeControl:active /template/ TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+
+    <!-- Dock tabs: toy tabs with rounded tops, padding, a hover wash, and a raised selected tab. Tool and
+         document tabs share the look. -->
+    <Style Selector="dock|ToolTabStripItem, dock|DocumentTabStripItem">
+        <Setter Property="CornerRadius" Value="10,10,0,0"/>
+        <Setter Property="Padding" Value="12,5"/>
+        <Setter Property="Margin" Value="2,2,0,0"/>
+    </Style>
+    <Style Selector="dock|ToolTabStripItem:pointerover, dock|DocumentTabStripItem:pointerover">
+        <Setter Property="Background" Value="{DynamicResource DockTabHoverBackgroundBrush}"/>
+    </Style>
+    <!-- The SELECTED tab is always a purple (primary) pill with on-primary (white) text. Dock only fills it
+         purple in :active:selected (window focused); the common :selected state would otherwise sit on the
+         cream header colour. Force PART_TabBody purple for any :selected tab so it reads consistently. Note
+         `:active` alone = "window focused" (every tab) — we key off `:selected`, the current tab. -->
+    <!-- The SELECTED tab is always a purple (primary) pill with on-primary (white) text. Verified against
+         Dock 12.0.0.2's DocumentTabStripItem.axaml: PART_TabBody binds {TemplateBinding Background} and the
+         :selected states set the ITEM's Background. So we set the item Background directly (referencing OUR
+         ThemePrimaryBrush) — this overrides Dock's :not(:active):selected / :active:selected states in both
+         window-focused and unfocused cases, without fighting the template binding or Dock's resource scope. -->
+    <Style Selector="dock|DocumentTabStripItem:selected, dock|ToolTabStripItem:selected">
+        <!-- Flat purple (a tab is too small for the gradient to read). -->
+        <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+    <Style Selector="dock|DocumentTabStripItem:selected:pointerover, dock|ToolTabStripItem:selected:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+
+    <!-- Pinned tool tabs (the collapsed auto-hide strip, e.g. "World") mirror the docked tabs above: the same
+         muted tab-text colour, the same cream hover wash, and the same purple pill when focused. Dock's
+         ToolPinItemControl is a transparent Border (binds the control Background) wrapping a Button + title
+         TextBlock, so the wash / purple go on the control Background. The inner Button is swapped to a flat
+         transparent Theme (PinTabButtonTheme) rather than just zeroing its Background: Fluent paints the
+         hover/press tint on the button's ContentPresenter (one template level too deep for a ToolPinItemControl
+         selector to reach), so only replacing the whole Button theme removes that stray white highlight. The
+         title text is set on the TextBlock directly because the inner Button's own Foreground would otherwise
+         win over inheritance. -->
+    <Style Selector="dock|ToolPinItemControl /template/ TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource DockTabForegroundBrush}"/>
+    </Style>
+    <Style Selector="dock|ToolPinItemControl /template/ Button">
+        <Setter Property="Theme" Value="{StaticResource PinTabButtonTheme}"/>
+    </Style>
+    <Style Selector="dock|ToolPinItemControl:pointerover">
+        <Setter Property="Background" Value="{DynamicResource DockTabHoverBackgroundBrush}"/>
+    </Style>
+    <!-- Focused pinned tab → flat purple pill with on-primary text, matching dock|ToolTabStripItem:selected. -->
+    <Style Selector="dock|ToolPinItemControl:focus-within">
+        <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+    <Style Selector="dock|ToolPinItemControl:focus-within /template/ TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+</Styles>

@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:Toybox.Studio.Widgets.Dialogs"
+        xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+        x:Class="Toybox.Studio.Widgets.Dialogs.AddEntityDialog"
+        x:DataType="local:AddEntityDialogViewModel"
+        Icon="/Assets/Icons/Toybox.png"
+        Width="440" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Title="Add entity">
+
+    <StackPanel Margin="18" Spacing="16">
+        <StackPanel Orientation="Horizontal" Spacing="14">
+            <pg:IconView IconName="CirclePlus" IconColor="GREEN"
+                         Width="30" Height="30" VerticalAlignment="Top"/>
+            <StackPanel Spacing="8" VerticalAlignment="Center">
+                <TextBox Name="NameBox" Text="{Binding Name}" PlaceholderText="Entity name" MinWidth="280"/>
+                <CheckBox Content="Global" IsChecked="{Binding IsGlobal}" Margin="0,4,0,0"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Classes="toy" Content="Cancel" MinWidth="80" IsCancel="True"
+                    Command="{Binding CancelCommand}"/>
+            <Button Classes="action" Content="Add" MinWidth="80" IsDefault="True"
+                    Command="{Binding AddCommand}"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

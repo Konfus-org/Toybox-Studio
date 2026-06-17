@@ -57,6 +57,13 @@ public sealed class Engine : IDisposable
         // stays a clean game runtime. Standalone launches omit this and never load any editor code.
         startInfo.ArgumentList.Add("--load-plugins=StudioBridge");
 
+        // Tie the engine's lifetime to ours: if the studio dies (even by a hard crash, where no
+        // managed teardown runs), the engine sees our process exit and shuts itself down instead
+        // of lingering as an orphan that holds the in-tree engine binaries locked. Owned launches
+        // only — StartStandalone deliberately omits this so shipped builds run independently.
+        startInfo.ArgumentList.Add(
+            $"--live-together-die-together={Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}");
+
         startInfo.ArgumentList.Add($"--app={appModuleName}");
         startInfo.ArgumentList.Add($"--settings={appSettingsPath}");
 

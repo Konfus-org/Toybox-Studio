@@ -3,6 +3,9 @@ using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
+using System.Threading.Tasks;
+using Toybox.Studio.Services.World;
+using Toybox.Studio.Shell.Panels;
 
 namespace Toybox.Studio.Widgets.Viewport;
 
@@ -13,30 +16,40 @@ namespace Toybox.Studio.Widgets.Viewport;
 /// <see cref="ViewportStream"/>, so several can stream side by side; disposing it stops the engine
 /// view. Used directly by every editor viewport instance and embedded by the game view.
 /// </summary>
-public sealed partial class ViewportViewModel : ObservableObject, IDisposable, IViewportInputSink
+public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewportInputSink
 {
     private readonly ViewportStream _stream;
     private readonly EngineRpc _engine;
     private readonly Action<ConnectionState> _onStateChanged;
     private readonly Action<EngineState> _onWatcherStateChanged;
     private readonly Action<string>? _onMouseLockChanged;
+    private readonly Action<bool> _onWorldDirtyChanged;
     private readonly Session _session;
     private readonly EngineWatcher _watcher;
+    private readonly WorldManager _world;
     private readonly Logger _logger;
 
     private readonly ViewKind _kind;
 
     public ViewportViewModel(
-        Session session, EngineRpc engine, Logger logger, EngineWatcher watcher, ViewKind kind = ViewKind.Editor)
+        Session session, EngineRpc engine, Logger logger, EngineWatcher watcher, WorldManager world,
+        ViewKind kind = ViewKind.Editor)
     {
         _session = session;
         _engine = engine;
         _watcher = watcher;
+        _world = world;
         _logger = logger;
         _kind = kind;
         _stream = new ViewportStream(session, engine, kind);
         _stream.SurfaceArrived += OnSurfaceArrived;
         _stream.SurfaceLost += OnSurfaceLost;
+
+        // The viewport shows the live world, so its tab carries the world's unsaved-changes '*'. No Save/Cancel
+        // footer: it isn't a document — saving the world is an explicit editor action elsewhere.
+        IsDirty = world.IsDirty;
+        _onWorldDirtyChanged = dirty => Dispatch.To(DispatchContext.UI, () => IsDirty = dirty);
+        world.DirtyChanged += _onWorldDirtyChanged;
 
         _onStateChanged = state => Dispatch.To(DispatchContext.UI, () =>
         {
@@ -60,6 +73,16 @@ public sealed partial class ViewportViewModel : ObservableObject, IDisposable, I
         }
     }
 
+    /// <summary>The dock-tab base title; the '*' is appended by <see cref="DataPanel"/> while the world is dirty.</summary>
+    public override string BaseTitle => "Viewport";
+
+    /// <summary>The viewport is a LIVE panel: world edits commit immediately, so it buffers nothing, has no
+    /// Save/Cancel footer, and never prompts on tab close. Saving persists the live world.</summary>
+    public override bool IsLive => true;
+
+    /// <summary>File ▸ Save on a focused viewport persists the live world.</summary>
+    public override Task SaveAsync() => _world.SaveAsync();
+
     /// <summary>Stops this surface's engine view and unhooks from the session.</summary>
     public void Dispose()
     {
@@ -67,6 +90,7 @@ public sealed partial class ViewportViewModel : ObservableObject, IDisposable, I
         _stream.SurfaceLost -= OnSurfaceLost;
         _session.StateChanged -= _onStateChanged;
         _watcher.StateChanged -= _onWatcherStateChanged;
+        _world.DirtyChanged -= _onWorldDirtyChanged;
         if (_onMouseLockChanged is not null)
             _engine.MouseLockModeChanged -= _onMouseLockChanged;
         _stream.Dispose();

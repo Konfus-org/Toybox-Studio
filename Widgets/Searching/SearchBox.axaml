@@ -6,7 +6,7 @@
 
     <UserControl.Styles>
         <!-- The inner TextBox is chrome-less: it must not draw its own border element or cast the global
-             clay shadow (that's what made the search field look like it had a second, mismatched outline +
+             toy shadow (that's what made the search field look like it had a second, mismatched outline +
              shadow). The visible pill is the outer Border below. -->
         <Style Selector="TextBox.searchInner /template/ Border#PART_BorderElement">
             <Setter Property="BorderThickness" Value="0"/>

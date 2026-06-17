@@ -1,0 +1,73 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- INPUTS — text boxes, combo boxes, numeric fields and toggles, all rendered as PRESSED toy wells: a
+         recessed fill (routed onto the FluentTheme surface keys in ThemeApplier) plus an inset BoxShadow on
+         the exact rounded template border, so they look moulded into the surface. The shadow rides the real
+         border element, so it follows the control's corner radius. -->
+    <Style Selector="TextBox /template/ Border#PART_BorderElement">
+        <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetShadow}"/>
+    </Style>
+    <Style Selector="ComboBox /template/ Border#Background">
+        <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetShadow}"/>
+    </Style>
+
+    <!-- Numeric fields are ONE toy well spanning the text and a pair of compact, flat up/down chevrons tucked
+         at the right — the same slidable field used in the property grid (drag-to-scrub via NumericScrub) and
+         in dialogs. The well + inset shadow live on the ButtonSpinner's own border so they wrap the whole
+         control; the inner TextBox is stripped of its own border/inset so the two don't double up (this
+         overrides the generic TextBox inset rule above, hence it comes after it). -->
+    <Style Selector="ButtonSpinner /template/ Border#border">
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+        <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetSoftShadow}"/>
+    </Style>
+    <Style Selector="NumericUpDown TextBox /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BoxShadow" Value="0 0 0 0 #00000000"/>
+    </Style>
+    <Style Selector="NumericUpDown TextBox:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <!-- Flat toy spinner chevrons: borderless, compact, themed glyph, brightening on hover. -->
+    <Style Selector="ButtonSpinner /template/ RepeatButton">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Width" Value="20"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}"/>
+        <Setter Property="Opacity" Value="0.6"/>
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton:pointerover">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <!-- The chevron's hover/press feedback is the opacity brighten above, NOT a fill. The Fluent
+         RepeatButton template paints a square (un-rounded) background on its inner ContentPresenter when
+         hovered/pressed; keep it transparent in every state so it can't poke out past the well's rounding. -->
+    <Style Selector="ButtonSpinner /template/ RepeatButton /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <!-- The decrease chevron is the rightmost element of the spinner, so its top-right and bottom-right
+         corners sit on the well's outer edge. Round them to the theme radius so the button hugs the well's
+         curve instead of squaring it off (the left corners stay flat against the increase chevron). The
+         inner ContentPresenter inherits this radius via TemplateBinding, but set it explicitly too so any
+         future fill is clipped to the curve. -->
+    <Style Selector="ButtonSpinner /template/ RepeatButton#PART_DecreaseButton">
+        <Setter Property="CornerRadius" Value="{DynamicResource ThemeRightCornerRadius}"/>
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton#PART_DecreaseButton /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="CornerRadius" Value="{DynamicResource ThemeRightCornerRadius}"/>
+    </Style>
+
+    <!-- Bool toggles render as a toy switch (see BoolPropertyView); give the track a touch more roundness. -->
+    <Style Selector="ToggleSwitch">
+        <Setter Property="MinWidth" Value="0"/>
+    </Style>
+</Styles>

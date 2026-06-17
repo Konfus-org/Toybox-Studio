@@ -22,6 +22,10 @@ public sealed partial class ComponentViewModel : ObservableObject
     private readonly EngineRpc _engine;
     private readonly Func<Task> _resync;
 
+    // Invoked after any edit/reset the engine accepts; the host uses it to mark the world dirty and to guard
+    // the live play-mode pull from clobbering a value the user just changed.
+    private readonly Action _onEdited;
+
     // Top-level property name → its view-model, for routing the per-property modified-state refresh.
     private readonly Dictionary<string, PropertyViewModel> _resettable = [];
 
@@ -31,12 +35,14 @@ public sealed partial class ComponentViewModel : ObservableObject
         ulong entityId,
         Component component,
         EngineRpc engine,
-        Func<Task> resync)
+        Func<Task> resync,
+        Action onEdited)
     {
         _entityId = entityId;
         _raw = component.Raw;
         _engine = engine;
         _resync = resync;
+        _onEdited = onEdited;
         Name = component.Name;
         DisplayName = NameHumanizer.Humanize(component.Name);
         Icon = component.Icon;
@@ -200,6 +206,7 @@ public sealed partial class ComponentViewModel : ObservableObject
             // The authoritative isDefault check still runs on the next selection / world refresh.
             if (_resettable.TryGetValue(property, out var viewModel))
                 viewModel.IsModified = true;
+            _onEdited();
             return;
         }
 
@@ -215,7 +222,9 @@ public sealed partial class ComponentViewModel : ObservableObject
         var result = await _engine
             .ResetPropertyAsync(_entityId, Name, property, CancellationToken.None)
             .ContinueOnSameContext();
-        if (!result.Success)
+        if (result.Success)
+            _onEdited();
+        else
         {
             await Popups.ShowErrorAsync(
                 "Couldn't reset",

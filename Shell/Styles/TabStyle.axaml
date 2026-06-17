@@ -1,0 +1,55 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Folder-style tabs (Editor / Project, Components / Scripts / Json): the SELECTED tab is a filled
+         accent pill with on-accent ink — a clearly visible background, no underline pipe — matching the
+         purple selection language used by the docked tabs. Unselected tabs are chrome-less with muted ink
+         and a faint hover band. Dock tabs are dock|ToolTabStripItem (a different type), styled in DockStyle. -->
+    <Style Selector="TabControl">
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
+        <Setter Property="Background" Value="{DynamicResource ThemeSurfaceFlatBrush}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource ThemePanelCornerRadius}"/>
+        <Setter Property="ClipToBounds" Value="True"/>
+    </Style>
+    <Style Selector="TabItem">
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Padding" Value="14,7"/>
+        <Setter Property="Margin" Value="0,0,4,0"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource ThemeTabCornerRadius}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeMutedTextBrush}"/>
+    </Style>
+    <Style Selector="TabItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="CornerRadius" Value="{DynamicResource ThemeTabCornerRadius}"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="TabItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource ThemeBandBrush}"/>
+    </Style>
+    <!-- Selected tab is a filled accent pill with on-accent ink, so its background is clearly visible (not
+         merged into the content surface) and no underline is needed. -->
+    <Style Selector="TabItem:selected /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+    <Style Selector="TabItem:selected">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+    <Style Selector="TabItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+    <Style Selector="TabItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+    <!-- Drop Fluent's selection underline pipe; the filled accent pill conveys selection instead. The
+         :selected selector is essential: Fluent re-shows the pipe via a :selected pseudoclass trigger, which
+         outranks a plain (non-activated) TabItem rule — so we must also match :selected to win on the
+         selected tab (not just hide it on the unselected ones). -->
+    <Style Selector="TabItem /template/ Border#PART_SelectedPipe,
+                     TabItem:selected /template/ Border#PART_SelectedPipe,
+                     TabItem:selected:pointerover /template/ Border#PART_SelectedPipe">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+</Styles>

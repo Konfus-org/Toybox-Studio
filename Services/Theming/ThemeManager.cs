@@ -99,6 +99,18 @@ public sealed class ThemeManager
     /// </summary>
     public void PreviewTheme(Theme theme) => _applier.Apply(theme, notify: false);
 
+    /// <summary>
+    /// Applies a theme by name to the running UI for preview WITHOUT persisting it as the saved selection.
+    /// Used by the Settings panel so a picked theme shows live but only commits on Save (and so Cancel can
+    /// re-apply the previously-saved theme by name).
+    /// </summary>
+    public void PreviewTheme(string name)
+    {
+        var theme = _repository.Find(name);
+        if (theme is not null)
+            _applier.Apply(theme);
+    }
+
     /// <summary>Applies a theme to the live resources, optionally raising <see cref="ThemeChanged"/>.</summary>
     public void Apply(Theme theme, bool notify = true) => _applier.Apply(theme, notify);
 }

@@ -38,7 +38,7 @@
     <DockPanel Margin="4">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6"
                    IsVisible="{Binding #Root.ShowToolbar}">
-            <Button DockPanel.Dock="Right" Classes="clay" Content="Clear" VerticalAlignment="Center"
+            <Button DockPanel.Dock="Right" Classes="toy" Content="Clear" VerticalAlignment="Center"
                     Margin="6,0,0,0" Command="{Binding ClearCommand}"/>
             <TextBlock DockPanel.Dock="Right" Text="{Binding MatchSummary}"
                        Opacity="0.6" VerticalAlignment="Center" Margin="8,0,0,0"/>

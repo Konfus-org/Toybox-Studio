@@ -198,9 +198,10 @@ public sealed class ThemeApplier
 
         // Buttons: a soft top→bottom clay gradient (lighter top, slightly darker bottom) so each reads as a
         // raised pill rather than a flat block; hover brightens and press recesses, both keeping the gradient.
-        resources["ButtonBackground"] = ButtonGradient(colors.Surface, 0.32f, 0.10f);
-        resources["ButtonBackgroundPointerOver"] = ButtonGradient(colors.Surface, 0.48f, 0.04f);
-        resources["ButtonBackgroundPressed"] = ButtonGradient(colors.Surface, 0.16f, 0.16f);
+        // The plain (un-classed) button uses the theme's DEFAULT button colour (which defaults to the surface).
+        resources["ButtonBackground"] = ButtonGradient(colors.Default, 0.32f, 0.10f);
+        resources["ButtonBackgroundPointerOver"] = ButtonGradient(colors.Default, 0.48f, 0.04f);
+        resources["ButtonBackgroundPressed"] = ButtonGradient(colors.Default, 0.16f, 0.16f);
         resources["ButtonBorderBrush"] = transparent;
         resources["ButtonBorderBrushPointerOver"] = transparent;
         resources["ButtonBorderBrushPressed"] = transparent;
@@ -215,11 +216,13 @@ public sealed class ThemeApplier
             resources[key] = disabledInk;
         resources["ThemeDisabledBrush"] = disabledFill;
 
-        // Semantic button colours, all theme-driven and using the SAME top→bottom gradient shading as the
-        // standard button: action = primary (brand), play = success (green), stop = error (red).
-        SetColorButton(resources, "ThemeActionButton", colors.Primary.Start, colors.Primary.End);
-        SetColorButton(resources, "ThemePlayButton", colors.Success.Representative, colors.Success.Representative);
-        SetColorButton(resources, "ThemeStopButton", colors.Error.Representative, colors.Error.Representative);
+        // Semantic button colours, each from its own palette entry and using the SAME top→bottom gradient
+        // shading as the standard button: action (brand), play (green), stop (red), refresh (blue). Their
+        // defaults mirror the brand/semantic colours, so the stock look is unchanged.
+        SetColorButton(resources, "ThemeActionButton", colors.Action.Start, colors.Action.End);
+        SetColorButton(resources, "ThemePlayButton", colors.Play.Start, colors.Play.End);
+        SetColorButton(resources, "ThemeStopButton", colors.Stop.Start, colors.Stop.End);
+        SetColorButton(resources, "ThemeRefreshButton", colors.Refresh.Start, colors.Refresh.End);
 
         // Combo boxes: flat near-white pills like the text inputs (no gradient).
         resources["ComboBoxBackground"] = inputFill;

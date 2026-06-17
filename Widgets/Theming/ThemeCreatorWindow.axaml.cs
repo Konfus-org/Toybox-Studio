@@ -5,7 +5,8 @@ using Toybox.Studio.Services.Theming;
 namespace Toybox.Studio.Widgets.Theming;
 
 /// <summary>
-/// Modal dialog for authoring a new theme. Mirrors <see cref="MessageBoxWindow"/>'s ShowDialog pattern.
+/// Modal dialog for authoring a new theme. Follows the same view-model/CloseRequested ShowDialog pattern as
+/// the dialogs in <c>Widgets/Dialogs</c>.
 /// </summary>
 public partial class ThemeCreatorWindow : Window
 {

@@ -28,12 +28,14 @@ public sealed partial class EntityViewModel : ObservableObject
 
     private readonly EngineRpc _engine;
     private readonly Func<Task> _resync;
+    private readonly Action _onEdited;
 
-    public EntityViewModel(ulong id, EngineRpc engine, Func<Task> resync)
+    public EntityViewModel(ulong id, EngineRpc engine, Func<Task> resync, Action onEdited)
     {
         Id = id;
         _engine = engine;
         _resync = resync;
+        _onEdited = onEdited;
     }
 
     public ulong Id { get; }
@@ -88,7 +90,10 @@ public sealed partial class EntityViewModel : ObservableObject
         var result = await _engine.SetEntityNameAsync(Id, name, CancellationToken.None)
             .ContinueOnSameContext();
         if (result.Success)
+        {
             Name = name;
+            _onEdited();
+        }
         else
             await Popups.ShowErrorAsync("Couldn't rename entity", result.Error!).ContinueOnSameContext();
     }
@@ -150,9 +155,9 @@ public sealed partial class EntityViewModel : ObservableObject
         {
             rawComponents[component.Name] = component.Raw;
             if (component.Name == ScriptComponentName)
-                scripts = new ScriptContainerViewModel(Id, component, _engine, _resync);
+                scripts = new ScriptContainerViewModel(Id, component, _engine, _resync, _onEdited);
             else
-                Components.Add(new ComponentViewModel(Id, component, _engine, _resync));
+                Components.Add(new ComponentViewModel(Id, component, _engine, _resync, _onEdited));
         }
 
         Scripts = scripts;
@@ -235,6 +240,7 @@ public sealed partial class EntityViewModel : ObservableObject
             return;
         }
 
+        var applied = false;
         foreach (var component in parsed.Properties())
         {
             if (component.Value is not JObject value)
@@ -251,7 +257,12 @@ public sealed partial class EntityViewModel : ObservableObject
                     .ContinueOnSameContext();
                 break;
             }
+
+            applied = true;
         }
+
+        if (applied)
+            _onEdited();
 
         await _resync().ContinueOnSameContext();
     }

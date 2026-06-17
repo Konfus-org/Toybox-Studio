@@ -1,3 +1,4 @@
+using Toybox.Studio.Models;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -17,10 +18,10 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
 {
-    private readonly World? _world;
+    private readonly WorldManager? _world;
     private readonly JsonValueSlot _slot;
 
-    public EntityPickerPropertyViewModel(PropertyNode node, Action? commit, World? world) : base(node)
+    public EntityPickerPropertyViewModel(PropertyNode node, Action? commit, WorldManager? world) : base(node)
     {
         _world = world;
         _slot = new JsonValueSlot(node.Value);
@@ -28,7 +29,7 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
         _displayName = ResolveDisplayName();
 
         if (world is not null)
-            world.WorldUpdated += OnWorldUpdated;
+            world.WorldChanged += OnWorldChanged;
     }
 
     [ObservableProperty]
@@ -38,7 +39,7 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
 
     public bool HasReference => CurrentId != 0;
 
-    private void OnWorldUpdated(IReadOnlyList<Entity> _) => Dispatch.To(DispatchContext.UI, RefreshDisplay);
+    private void OnWorldChanged(World _) => Dispatch.To(DispatchContext.UI, RefreshDisplay);
 
     private void RefreshDisplay()
     {
@@ -61,7 +62,7 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
     {
         // Reuse the asset chooser by presenting each entity as an entry (its id, name, and "Entity" kind).
         var options = Flatten()
-            .Select(entity => new AssetEntry(unchecked((long)entity.Id), entity.Name, "Entity", ""))
+            .Select(entity => new Asset(unchecked((long)entity.Id), entity.Name, "Entity", ""))
             .ToList();
 
         var pick = await AssetPicker.ShowAsync("Select entity", options, CurrentId).ContinueOnSameContext();
@@ -83,7 +84,7 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
         if (_world is null)
             yield break;
 
-        var stack = new Stack<Entity>(_world.Roots);
+        var stack = new Stack<Entity>(_world.Current.Roots);
         while (stack.Count > 0)
         {
             var entity = stack.Pop();

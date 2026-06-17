@@ -2,173 +2,51 @@ using Toybox.Studio.Utils;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Layout;
-using Avalonia.Media;
-using Toybox.Studio.Widgets.PropertyGrid;
+using Toybox.Studio.Widgets.Dialogs;
 
 namespace Toybox.Studio.Services.Dialogs;
 
 /// <summary>
-/// Minimal modal message dialog, shown over the main window.
+/// Opens the app's modal dialogs from anywhere, resolving the owner (the main window) so callers don't have
+/// to. Each method is a thin opener over a self-contained MVVM dialog in <c>Widgets/Dialogs</c>.
 /// </summary>
 public static class Popups
 {
-    /// <summary>The app window icon, shown in every dialog's title bar.</summary>
-    private static WindowIcon? AppIcon()
-    {
-        try
-        {
-            using var stream = Avalonia.Platform.AssetLoader.Open(
-                new Uri("avares://Toybox.Studio/Assets/Icons/Toybox.png"));
-            return new WindowIcon(stream);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    /// <summary>The main window, which owns every dialog so it centres and stays modal over the editor.</summary>
+    private static Window? MainWindow() =>
+        (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
-    /// <summary>A large Lucide content icon (e.g. an error or question glyph) for a dialog's header.</summary>
-    private static IconView DialogIcon(string name, string color) => new()
-    {
-        IconName = name,
-        IconColor = color,
-        Width = 30,
-        Height = 30,
-        VerticalAlignment = VerticalAlignment.Top,
-    };
-
+    /// <summary>Shows an error message with an alert icon and an OK button.</summary>
     public static async Task ShowErrorAsync(string title, string message)
     {
-        var lifetime =
-            Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        var owner = lifetime?.MainWindow;
-        if (owner is null)
+        if (MainWindow() is not { } owner)
             return;
-
-        var okButton = new Button
-        {
-            Content = "OK",
-            MinWidth = 80,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-
-        var dialog = new Window
-        {
-            Title = title,
-            Icon = AppIcon(),
-            Width = 440,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-            Content = new StackPanel
-            {
-                Margin = new Thickness(18),
-                Spacing = 16,
-                Children =
-                {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 14,
-                        Children =
-                        {
-                            DialogIcon("CircleAlert", "RED"),
-                            new TextBlock
-                            {
-                                Text = message, TextWrapping = TextWrapping.Wrap,
-                                VerticalAlignment = VerticalAlignment.Center, MaxWidth = 340,
-                            },
-                        },
-                    },
-                    okButton,
-                },
-            },
-        };
-
-        okButton.Click += (_, _) => dialog.Close();
-        await dialog.ShowDialog(owner).ContinueOnAnyContext();
+        await MessageDialog.ShowAsync(owner, title, message, "CircleAlert", "RED").ContinueOnAnyContext();
     }
 
     /// <summary>
-    /// Prompts for a new entity: a name field and an "Add as global" checkbox. Returns the entered name
+    /// Shows a plain informational message with an OK button. Owned by <paramref name="owner"/> when given,
+    /// else the main window; shown standalone if neither exists yet (e.g. during startup).
+    /// </summary>
+    public static Task ShowMessageAsync(string title, string message, Window? owner = null) =>
+        MessageDialog.ShowAsync(owner ?? MainWindow(), title, message);
+
+    /// <summary>
+    /// Prompts for a new entity: a name field and an "add as global" checkbox. Returns the entered name
     /// (trimmed) and global flag, or null if the user cancelled or dismissed the dialog.
     /// </summary>
     public static async Task<(string Name, bool IsGlobal)?> ShowAddEntityAsync(Window? owner = null)
     {
-        var lifetime =
-            Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        owner ??= lifetime?.MainWindow;
+        owner ??= MainWindow();
         if (owner is null)
             return null;
-
-        var nameBox = new TextBox { PlaceholderText = "Entity name", MinWidth = 280 };
-        var globalCheck = new CheckBox { Content = "Global", Margin = new Thickness(0, 4, 0, 0) };
-
-        var addButton = new Button { Content = "Add", MinWidth = 80, IsDefault = true };
-        addButton.Classes.Add("action");
-        var cancelButton = new Button { Content = "Cancel", MinWidth = 80, IsCancel = true };
-
-        (string Name, bool IsGlobal)? result = null;
-
-        var dialog = new Window
-        {
-            Title = "Add entity",
-            Icon = AppIcon(),
-            Width = 440,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-            Content = new StackPanel
-            {
-                Margin = new Thickness(18),
-                Spacing = 16,
-                Children =
-                {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 14,
-                        Children =
-                        {
-                            DialogIcon("CirclePlus", "GREEN"),
-                            new StackPanel
-                            {
-                                Spacing = 8,
-                                VerticalAlignment = VerticalAlignment.Center,
-                                Children = { nameBox, globalCheck },
-                            },
-                        },
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children = { cancelButton, addButton },
-                    },
-                },
-            },
-        };
-
-        addButton.Click += (_, _) =>
-        {
-            result = (nameBox.Text?.Trim() ?? "", globalCheck.IsChecked == true);
-            dialog.Close();
-        };
-        cancelButton.Click += (_, _) => dialog.Close();
-        dialog.Opened += (_, _) => nameBox.Focus();
-
-        await dialog.ShowDialog(owner).ContinueOnAnyContext();
-        return result;
+        return await AddEntityDialog.ShowAsync(owner).ContinueOnAnyContext();
     }
 
     /// <summary>
-    /// Shows a modal yes/no question and returns the user's choice (true = confirmed). Closing the dialog
-    /// any other way counts as not confirmed. Owned by <paramref name="owner"/> when given, else the main
-    /// window — pass the asking window when prompting from inside another dialog so it nests correctly.
+    /// Shows a modal yes/no question and returns the user's choice (true = confirmed). Owned by
+    /// <paramref name="owner"/> when given, else the main window — pass the asking window when prompting from
+    /// inside another dialog so it nests correctly.
     /// </summary>
     public static async Task<bool> ConfirmAsync(
         string title,
@@ -177,65 +55,30 @@ public static class Popups
         string cancelText = "No",
         Window? owner = null)
     {
-        var lifetime =
-            Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-        owner ??= lifetime?.MainWindow;
+        owner ??= MainWindow();
         if (owner is null)
             return false;
+        return await ConfirmDialog.ShowAsync(owner, title, message, confirmText, cancelText)
+            .ContinueOnAnyContext();
+    }
 
-        var confirmed = false;
-        var confirmButton = new Button { Content = confirmText, MinWidth = 80, IsDefault = true };
-        confirmButton.Classes.Add("action");
-        var cancelButton = new Button { Content = cancelText, MinWidth = 80, IsCancel = true };
+    /// <summary>
+    /// Shows a Save / Don't Save / Cancel prompt for the named unsaved items and returns the choice. Used for
+    /// both a single closing panel and the consolidated app-close prompt. With no owner window (e.g. during
+    /// teardown) it returns <see cref="SaveChoice.Discard"/> so it never blocks shutdown.
+    /// </summary>
+    public static async Task<SaveChoice> ShowSaveChangesAsync(
+        IReadOnlyList<string> names,
+        Window? owner = null)
+    {
+        owner ??= MainWindow();
+        if (owner is null)
+            return SaveChoice.Discard;
 
-        var dialog = new Window
-        {
-            Title = title,
-            Icon = AppIcon(),
-            Width = 440,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-            Content = new StackPanel
-            {
-                Margin = new Thickness(18),
-                Spacing = 16,
-                Children =
-                {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 14,
-                        Children =
-                        {
-                            DialogIcon("CircleHelp", "BLUE"),
-                            new TextBlock
-                            {
-                                Text = message, TextWrapping = TextWrapping.Wrap,
-                                VerticalAlignment = VerticalAlignment.Center, MaxWidth = 340,
-                            },
-                        },
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children = { cancelButton, confirmButton },
-                    },
-                },
-            },
-        };
-
-        confirmButton.Click += (_, _) =>
-        {
-            confirmed = true;
-            dialog.Close();
-        };
-        cancelButton.Click += (_, _) => dialog.Close();
-
-        await dialog.ShowDialog(owner).ContinueOnAnyContext();
-        return confirmed;
+        var list = string.Join(", ", names);
+        var message = names.Count == 1
+            ? $"Save changes to {list} before closing?"
+            : $"Save changes to the following before closing?\n\n{list}";
+        return await SaveChangesDialog.ShowAsync(owner, "Unsaved changes", message).ContinueOnAnyContext();
     }
 }

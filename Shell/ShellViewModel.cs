@@ -8,7 +8,10 @@ using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.World;
+using Toybox.Studio.Shell.Panels;
 using Toybox.Studio.Shell.Workspace;
+using Toybox.Studio.Widgets.Ecs;
 
 namespace Toybox.Studio.Shell;
 
@@ -24,6 +27,7 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly ProjectManager _projects;
     private readonly FilePicker _filePicker;
     private readonly CommandRunner _commandRunner;
+    private readonly WorldManager _world;
 
     public ShellViewModel(
         StatusViewModel status,
@@ -33,7 +37,8 @@ public sealed partial class ShellViewModel : ObservableObject
         Logger log,
         ProjectManager projects,
         FilePicker filePicker,
-        CommandRunner commandRunner)
+        CommandRunner commandRunner,
+        WorldManager world)
     {
         Status = status;
         GameToolbar = gameToolbar;
@@ -44,6 +49,7 @@ public sealed partial class ShellViewModel : ObservableObject
         _projects = projects;
         _filePicker = filePicker;
         _commandRunner = commandRunner;
+        _world = world;
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshTitle);
         RefreshTitle();
@@ -62,6 +68,75 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>Toolbar quick-search text. Reserved for a panel/command quick-open; bound by the toolbar field.</summary>
     [ObservableProperty]
     public partial string ToolbarSearch { get; set; } = "";
+
+    /// <summary>Saves whatever is focused: a focused buffered panel (e.g. Settings) commits itself; the
+    /// viewport (a live panel), world tree, or inspector saves the world. A no-op when nothing's dirty.</summary>
+    [RelayCommand]
+    private async Task SaveAsync()
+    {
+        switch (Workspace.FocusedDockable())
+        {
+            case DataPanel { IsLive: false, IsDirty: false }:
+                break; // Clean buffered panel — nothing to save.
+            case DataPanel panel:
+                await panel.SaveAsync().ContinueOnSameContext(); // Dirty buffered panel, or the live viewport.
+                break;
+            case WorldViewModel:
+                await SaveWorldAsync().ContinueOnSameContext(); // World tree / inspector.
+                break;
+        }
+    }
+
+    /// <summary>Saves every open panel plus the world (each only when it has unsaved changes).</summary>
+    [RelayCommand]
+    private async Task SaveAllAsync()
+    {
+        foreach (var panel in Workspace.OpenPanels())
+        {
+            if (panel.HasUnsavedChanges)
+                await panel.SaveAsync().ContinueOnSameContext();
+        }
+
+        await SaveWorldAsync().ContinueOnSameContext();
+    }
+
+    /// <summary>
+    /// The consolidated unsaved-changes gate for app close: gathers every buffered panel with unsaved edits
+    /// plus the world, shows ONE Save All / Discard All / Cancel prompt, and returns whether the app may
+    /// close. Save All saves each item; Cancel keeps the app open.
+    /// </summary>
+    public async Task<bool> RequestCloseAsync()
+    {
+        var unsaved = new List<(string Name, Func<Task> Save)>();
+        foreach (var panel in Workspace.OpenPanels())
+        {
+            if (panel.HasUnsavedChanges)
+                unsaved.Add((panel.BaseTitle, panel.SaveAsync));
+        }
+
+        if (_world.IsDirty)
+            unsaved.Add(("World", () => _world.SaveAsync()));
+
+        if (unsaved.Count == 0)
+            return true;
+
+        var choice = await Popups
+            .ShowSaveChangesAsync([.. unsaved.Select(item => item.Name)])
+            .ContinueOnSameContext();
+        if (choice == SaveChoice.Cancel)
+            return false;
+
+        if (choice == SaveChoice.Save)
+        {
+            foreach (var item in unsaved)
+                await item.Save().ContinueOnSameContext();
+        }
+
+        return true;
+    }
+
+    private Task SaveWorldAsync() =>
+        _world.IsDirty ? _world.SaveAsync() : Task.CompletedTask;
 
     // TODO: Make a toolbar VM and widget for these and move the commands there.
     [RelayCommand]

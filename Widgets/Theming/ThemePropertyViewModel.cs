@@ -20,13 +20,16 @@ public sealed partial class ThemePropertyViewModel : PropertyViewModel
     private readonly ThemeManager _themes;
     private readonly ThemeCreator _creator;
     private readonly FilePicker _files;
+    private readonly Action<string> _onSelect;
 
-    public ThemePropertyViewModel(ThemeManager themes, ThemeCreator creator, FilePicker files)
+    public ThemePropertyViewModel(
+        ThemeManager themes, ThemeCreator creator, FilePicker files, Action<string> onSelect)
         : base(new PropertyNode { Name = "Themes", Label = "Themes", Type = "array" })
     {
         _themes = themes;
         _creator = creator;
         _files = files;
+        _onSelect = onSelect;
         _themes.ThemeChanged += () => Dispatch.To(DispatchContext.UI, Refresh);
         Refresh();
     }
@@ -100,7 +103,7 @@ public sealed partial class ThemePropertyViewModel : PropertyViewModel
                 theme.Name,
                 string.Equals(theme.Name, active, StringComparison.OrdinalIgnoreCase),
                 Depth + 1,
-                _themes.SetActiveTheme));
+                _onSelect));
 
         Summary = $"{Items.Count} theme{(Items.Count == 1 ? "" : "s")}";
     }

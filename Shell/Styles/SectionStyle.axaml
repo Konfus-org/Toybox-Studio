@@ -1,0 +1,75 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- SHARED SECTION HEADER ======================================================================
+         ONE collapsible section header used everywhere a run of properties is grouped: component sections
+         (Inspector), category groups + nested object/array/theme parent rows (PropertyGrid), and script
+         bindings (Scripts). A flat band (a subtle raised tint over the cohesive panel, no gradient, no
+         shadow) with a groove beneath; the icon + label on the LEFT are tinted with the primary accent, and
+         a disclosure chevron is pinned to the RIGHT. The WHOLE button is the toggle, so clicking anywhere on
+         the band collapses/expands — no need to hit the tiny chevron. Interactive children inside the band
+         (an enable checkbox, an add (+) button) swallow their own clicks, so they act without collapsing. -->
+    <Style Selector="ToggleButton.sectionHeader">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeGrooveBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    </Style>
+    <!-- Foreground is pinned across every interaction state, because FluentTheme's ToggleButton:checked flips
+         the foreground to its on-accent (white) ink — which, when a section is expanded, made the label and
+         the "N items" summary unreadable on the light band. The combined selector keeps the accent (neutral
+         for nested) in default/checked/pressed/pointerover alike. -->
+    <Style Selector="ToggleButton.sectionHeader,
+                     ToggleButton.sectionHeader:checked,
+                     ToggleButton.sectionHeader:pressed,
+                     ToggleButton.sectionHeader:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+    <Style Selector="ToggleButton.sectionHeader /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.sectionHeader:checked /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.sectionHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeHeaderRaisedBrush}"/>
+    </Style>
+    <Style Selector="ToggleButton.sectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeBandBrush}"/>
+    </Style>
+    <!-- The ContentPresenter's OWN foreground must be pinned, not just the button's: FluentTheme's :checked
+         sets the presenter foreground to white, and the content label inherits from the presenter — so an
+         expanded (checked) object/array header would otherwise show a white, unreadable label. -->
+    <Style Selector="ToggleButton.sectionHeader /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.sectionHeader:checked /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.sectionHeader:pressed /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.sectionHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+    <!-- Chevron pinned right: points right when collapsed, rotates down when the section is expanded. Its
+         fill follows the header's accent (overridden to neutral for nested sections, below). -->
+    <Style Selector="ToggleButton.sectionHeader Path.sectionChevron">
+        <Setter Property="Opacity" Value="0.6"/>
+        <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+        <Setter Property="Fill" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+    <Style Selector="ToggleButton.sectionHeader:checked Path.sectionChevron">
+        <Setter Property="RenderTransform">
+            <RotateTransform Angle="90"/>
+        </Setter>
+    </Style>
+
+    <!-- Nested structs/arrays are NOT rendered as section bands at all: they render as ordinary property rows
+         (PropertyRow), identical to their sibling leaf rows in gutter, depth tint and alignment, with a tap
+         anywhere toggling them (ToggleOnTap). This is their right-hand disclosure chevron — a plain Path that
+         rotates down when the row is expanded. Only categories and root-level structs keep the accent band. -->
+    <Style Selector="Path.pgChevron">
+        <Setter Property="Opacity" Value="0.7"/>
+        <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+    </Style>
+    <Style Selector="Path.pgChevron.expanded">
+        <Setter Property="RenderTransform">
+            <RotateTransform Angle="90"/>
+        </Setter>
+    </Style>
+</Styles>

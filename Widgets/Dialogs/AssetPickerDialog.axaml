@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:Toybox.Studio.Widgets.Dialogs"
+        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors"
+        xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+        xmlns:models="using:Toybox.Studio.Models"
+        x:Class="Toybox.Studio.Widgets.Dialogs.AssetPickerDialog"
+        x:DataType="local:AssetPickerViewModel"
+        Icon="/Assets/Icons/Toybox.png"
+        Width="420" Height="480" CanResize="True"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Title="{Binding Title}">
+
+    <DockPanel Margin="14">
+        <TextBox DockPanel.Dock="Top" Margin="0,0,0,8" Text="{Binding SearchText}"
+                 PlaceholderText="Search…"/>
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <Button DockPanel.Dock="Left" Classes="toy" Content="Clear" MinWidth="72"
+                    Command="{Binding ClearCommand}"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Classes="toy" Content="Cancel" MinWidth="72" IsCancel="True"
+                        Command="{Binding CancelCommand}"/>
+                <Button Classes="action" Content="Select" MinWidth="72" IsDefault="True"
+                        Command="{Binding SelectCommand}"/>
+            </StackPanel>
+        </DockPanel>
+
+        <Border BorderBrush="#22FFFFFF" BorderThickness="0.5">
+            <Panel>
+                <ListBox SelectionMode="Single"
+                         ItemsSource="{Binding FilteredOptions}"
+                         SelectedItem="{Binding SelectedAsset}"
+                         behaviors:DoubleTapCommand.Command="{Binding SelectCommand}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:Asset">
+                            <StackPanel Margin="2,3">
+                                <TextBlock Text="{Binding Name}"/>
+                                <TextBlock Text="{Binding Type}" Opacity="0.55" FontSize="11"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <ghost:GhostView IsHitTestVisible="False"
+                                 IsVisible="{Binding IsGhostVisible}"
+                                 Message="{Binding GhostMessage}"/>
+            </Panel>
+        </Border>
+    </DockPanel>
+</Window>

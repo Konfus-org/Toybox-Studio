@@ -46,6 +46,20 @@ public sealed class ThemePalette
     public ColorGradient Surface { get; set; } = ColorGradient.Linear(Color.Parse("#2F3450"), Color.Parse("#272B3F"), 90);
 
     public ColorGradient Text { get; set; } = ColorGradient.Solid(Color.Parse("#EEF1FA"));
+
+    // Buttons — the semantic button fills. These default to the matching brand/semantic/surface colours
+    // above, so the out-of-the-box look is unchanged, but each is its own palette entry so a theme can
+    // recolour its buttons independently. Action is the brand action fill; Default is the plain (un-classed)
+    // button.
+    public ColorGradient Action { get; set; } = ColorGradient.Linear(Color.Parse("#7B8CFF"), Color.Parse("#A07BFF"));
+
+    public ColorGradient Play { get; set; } = ColorGradient.Solid(Color.Parse("#4BE08C"));
+
+    public ColorGradient Stop { get; set; } = ColorGradient.Solid(Color.Parse("#FF7B6E"));
+
+    public ColorGradient Refresh { get; set; } = ColorGradient.Solid(Color.Parse("#5BB8FF"));
+
+    public ColorGradient Default { get; set; } = ColorGradient.Linear(Color.Parse("#2F3450"), Color.Parse("#272B3F"), 90);
 }
 
 /// <summary>
@@ -117,6 +131,11 @@ public sealed class Theme
             Background = ColorGradient.Radial(Color.Parse("#FBF4E6"), Color.Parse("#E2CDA4")), // cream pooling to warm tan
             Surface = ColorGradient.Linear(Color.Parse("#FFFCF5"), Color.Parse("#F0E2CB"), 90), // soft clay bulge
             Text = ColorGradient.Solid(Color.Parse("#1C140A")),                       // near-black warm brown
+            Action = ColorGradient.Linear(Color.Parse("#B3A0F5"), Color.Parse("#7E63E0"), 135), // brand lavender clay
+            Play = ColorGradient.Solid(Color.Parse("#86D6AB")),                       // mint
+            Stop = ColorGradient.Solid(Color.Parse("#E27D72")),                       // clay coral
+            Refresh = ColorGradient.Solid(Color.Parse("#7FBFE8")),                    // sky
+            Default = ColorGradient.Linear(Color.Parse("#FFFCF5"), Color.Parse("#F0E2CB"), 90), // matches surface
         },
     };
 
@@ -137,6 +156,11 @@ public sealed class Theme
             Background = ColorGradient.Radial(Color.Parse("#FAFBFE"), Color.Parse("#E3E9F6")),
             Surface = ColorGradient.Linear(Color.Parse("#FFFFFF"), Color.Parse("#F2F5FC"), 90),
             Text = ColorGradient.Solid(Color.Parse("#28304A")),
+            Action = ColorGradient.Linear(Color.Parse("#6C7CF5"), Color.Parse("#9B6CF5")),
+            Play = ColorGradient.Solid(Color.Parse("#34C77B")),
+            Stop = ColorGradient.Solid(Color.Parse("#F26B5E")),
+            Refresh = ColorGradient.Solid(Color.Parse("#3BA7E0")),
+            Default = ColorGradient.Linear(Color.Parse("#FFFFFF"), Color.Parse("#F2F5FC"), 90), // matches surface
         },
     };
 

@@ -45,4 +45,10 @@ public sealed class DockableDescriptor
     /// <see cref="CreateView"/> across re-templating.
     /// </summary>
     public required Func<object> CreateViewModel { get; init; }
+
+    /// <summary>
+    /// The view-model's static type, so the window manager can tell whether this dockable owns its title
+    /// (a <c>DataOwner</c> showing a '*') without eagerly constructing every singleton's view-model.
+    /// </summary>
+    public required Type ViewModelType { get; init; }
 }

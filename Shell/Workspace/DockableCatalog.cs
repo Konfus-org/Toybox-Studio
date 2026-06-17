@@ -106,6 +106,7 @@ public sealed class DockableCatalog
                 return view;
             },
             CreateViewModel = () => _services.GetRequiredService(viewModelType),
+            ViewModelType = viewModelType,
         };
     }
 }

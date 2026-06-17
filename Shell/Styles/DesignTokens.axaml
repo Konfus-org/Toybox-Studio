@@ -1,0 +1,83 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- DESIGN TOKENS — the theme "variables" every other style file keys off. First-frame/design-time
+         fallbacks seeded from the Claymorphism base theme; at runtime ThemeApplier overwrites them from the
+         active Theme.json (including replacing the flat brand/neutral brushes with LinearGradientBrushes
+         where the theme defines gradients). -->
+    <Styles.Resources>
+        <!-- Seed COLOURS that the derived neutral brushes below key off. ThemeApplier overwrites these live
+             from the active Theme.json — the text / on-colour / muted ones are its WCAG auto-contrast results,
+             the rest are representative palette colours. The brushes that derive from them follow
+             automatically via DynamicResource, so the derivation reads in one declarative place. -->
+        <Color x:Key="ThemeTextColor">#4A4036</Color>
+        <Color x:Key="ThemeOnColorColor">#FFFFFF</Color>
+        <Color x:Key="ThemeMutedColor">#8A8073</Color>
+        <Color x:Key="ThemeBackgroundColor">#EFE6D4</Color>
+        <Color x:Key="ThemeSurfaceColor">#F7F0E2</Color>
+        <Color x:Key="ThemePrimaryColor">#9888EB</Color>
+
+        <!-- Brand / neutral FILLS — ThemeApplier replaces these with LinearGradientBrushes where the theme
+             defines gradients; these are the flat first-frame fallbacks. -->
+        <SolidColorBrush x:Key="ThemePrimaryBrush" Color="#A99BF0"/>
+        <SolidColorBrush x:Key="ThemeSecondaryBrush" Color="#C7B8A6"/>
+        <SolidColorBrush x:Key="ThemeTertiaryBrush" Color="#A9E5C5"/>
+        <SolidColorBrush x:Key="ThemeErrorBrush" Color="#E08379"/>
+        <SolidColorBrush x:Key="ThemeWarningBrush" Color="#F2C879"/>
+        <SolidColorBrush x:Key="ThemeInfoBrush" Color="#86C5E8"/>
+        <SolidColorBrush x:Key="ThemeSuccessBrush" Color="#8FD9AE"/>
+        <SolidColorBrush x:Key="ThemeBackgroundBrush" Color="#EFE6D4"/>
+        <SolidColorBrush x:Key="ThemeSurfaceBrush" Color="#F7F0E2"/>
+
+        <!-- Semantic button FILLS (action / play / stop / refresh) — ThemeApplier replaces these with the
+             shaded top→bottom gradients built from the theme's button colours; these are the flat first-frame
+             fallbacks seeded from the Claymorphism base. -->
+        <SolidColorBrush x:Key="ThemeActionButtonBrush" Color="#9888EB"/>
+        <SolidColorBrush x:Key="ThemeActionButtonHoverBrush" Color="#A99BF0"/>
+        <SolidColorBrush x:Key="ThemePlayButtonBrush" Color="#86D6AB"/>
+        <SolidColorBrush x:Key="ThemePlayButtonHoverBrush" Color="#9FE0BD"/>
+        <SolidColorBrush x:Key="ThemeStopButtonBrush" Color="#E27D72"/>
+        <SolidColorBrush x:Key="ThemeStopButtonHoverBrush" Color="#E9968D"/>
+        <SolidColorBrush x:Key="ThemeRefreshButtonBrush" Color="#7FBFE8"/>
+        <SolidColorBrush x:Key="ThemeRefreshButtonHoverBrush" Color="#99CDEE"/>
+
+        <!-- Neutral INKS + TINTS derived from the seed colours above. ThemeApplier no longer writes these —
+             it publishes the colours and these brushes track them live via DynamicResource. Opacity is the
+             former 8-bit alpha as a fraction (e.g. 0x2E/0xFF ≈ 0.18, 0x59/0xFF ≈ 0.349). -->
+        <SolidColorBrush x:Key="ThemeTextBrush" Color="{DynamicResource ThemeTextColor}"/>
+        <SolidColorBrush x:Key="ThemeOnColorTextBrush" Color="{DynamicResource ThemeOnColorColor}"/>
+        <SolidColorBrush x:Key="ThemeMutedTextBrush" Color="{DynamicResource ThemeMutedColor}"/>
+        <SolidColorBrush x:Key="ThemeDisabledTextBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.349"/>
+        <SolidColorBrush x:Key="ThemeAccentSolidBrush" Color="{DynamicResource ThemePrimaryColor}"/>
+        <SolidColorBrush x:Key="ThemeBorderBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.18"/>
+        <SolidColorBrush x:Key="ThemeHeaderBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.094"/>
+        <SolidColorBrush x:Key="ThemeBandBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.063"/>
+        <SolidColorBrush x:Key="ThemeWellBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.039"/>
+        <SolidColorBrush x:Key="ThemeGrooveBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.078"/>
+        <SolidColorBrush x:Key="ThemeHeaderRaisedBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.071"/>
+        <SolidColorBrush x:Key="ThemeScrimBrush" Color="{DynamicResource ThemeBackgroundColor}" Opacity="0.69"/>
+        <SolidColorBrush x:Key="ThemeMenuHighlightBrush" Color="{DynamicResource ThemePrimaryColor}" Opacity="0.227"/>
+        <SolidColorBrush x:Key="ThemeSurfaceFlatBrush" Color="{DynamicResource ThemeSurfaceColor}"/>
+
+        <!-- C#-owned fills kept here only as first-frame fallbacks (ThemeApplier overwrites them live).
+             ThemeWellInsetShadow / ThemeCardShadow are BoxShadows built in code, so they have no XAML
+             fallback — until ThemeApplier runs an input simply shows no inset, which is harmless. -->
+        <SolidColorBrush x:Key="ThemeWellFillBrush" Color="#F0E2CB"/>
+        <SolidColorBrush x:Key="ThemeRowBrush" Color="#FBF6EC"/>
+        <SolidColorBrush x:Key="ThemeAccentBrightBrush" Color="#C9BCF5"/>
+        <!-- Kill Fluent's selected-tab underline pipe at the source: the template paints it with this brush,
+             so a transparent fill removes the underline even when Fluent re-shows the pipe via its :selected
+             trigger (which can outrank a plain IsVisible override). The filled accent pill marks selection. -->
+        <SolidColorBrush x:Key="TabItemHeaderSelectedPipeFill" Color="Transparent"/>
+        <CornerRadius x:Key="ThemeTabCornerRadius">14,14,0,0</CornerRadius>
+        <CornerRadius x:Key="ThemePanelCornerRadius">0</CornerRadius>
+        <!-- Right-edge-only rounding (TR + BR), used by the numeric field's rightmost decrease chevron.
+             ThemeApplier overwrites this live from theme.CornerRadius; this is the first-frame fallback. -->
+        <CornerRadius x:Key="ThemeRightCornerRadius">0,7,7,0</CornerRadius>
+        <!-- Panel drop shadow; ThemeApplier recomputes direction/opacity from the theme's shadow settings. -->
+        <DropShadowEffect x:Key="ThemePanelShadowEffect" Color="#3A000000" BlurRadius="18" OffsetX="4" OffsetY="4"/>
+        <FontFamily x:Key="ThemeFontFamily">Inter</FontFamily>
+        <FontFamily x:Key="ThemeMonoFontFamily">Cascadia Mono, Consolas, monospace</FontFamily>
+        <x:Double x:Key="ThemeFontSize">13</x:Double>
+    </Styles.Resources>
+</Styles>

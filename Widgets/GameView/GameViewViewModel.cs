@@ -2,6 +2,7 @@ using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Services.World;
 using Toybox.Studio.Widgets.GameToolbar;
 using Toybox.Studio.Widgets.Viewport;
 
@@ -15,10 +16,11 @@ namespace Toybox.Studio.Widgets.GameView;
 public sealed class GameViewViewModel : ObservableObject, IDisposable
 {
     public GameViewViewModel(
-        Session session, EngineRpc engine, Logger logger, EngineWatcher watcher, GameToolbarViewModel transport)
+        Session session, EngineRpc engine, Logger logger, EngineWatcher watcher, WorldManager world,
+        GameToolbarViewModel transport)
     {
         Transport = transport;
-        Surface = new ViewportViewModel(session, engine, logger, watcher, ViewKind.Game);
+        Surface = new ViewportViewModel(session, engine, logger, watcher, world, ViewKind.Game);
     }
 
     /// <summary>The frame surface bound to the engine's game-camera mirror.</summary>

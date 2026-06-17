@@ -56,6 +56,11 @@ public sealed partial class ThemeCreatorViewModel : ObservableObject
         Background = new ColorGradientViewModel(source.Colors.Background);
         Surface = new ColorGradientViewModel(source.Colors.Surface);
         Text = new ColorGradientViewModel(source.Colors.Text);
+        Action = new ColorGradientViewModel(source.Colors.Action);
+        Play = new ColorGradientViewModel(source.Colors.Play);
+        Stop = new ColorGradientViewModel(source.Colors.Stop);
+        Refresh = new ColorGradientViewModel(source.Colors.Refresh);
+        Default = new ColorGradientViewModel(source.Colors.Default);
     }
 
     /// <summary>
@@ -111,6 +116,16 @@ public sealed partial class ThemeCreatorViewModel : ObservableObject
 
     public ColorGradientViewModel Text { get; }
 
+    public ColorGradientViewModel Action { get; }
+
+    public ColorGradientViewModel Play { get; }
+
+    public ColorGradientViewModel Stop { get; }
+
+    public ColorGradientViewModel Refresh { get; }
+
+    public ColorGradientViewModel Default { get; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
     public partial string? ErrorMessage { get; set; }
@@ -137,6 +152,11 @@ public sealed partial class ThemeCreatorViewModel : ObservableObject
             Background = Background.ToModel(),
             Surface = Surface.ToModel(),
             Text = Text.ToModel(),
+            Action = Action.ToModel(),
+            Play = Play.ToModel(),
+            Stop = Stop.ToModel(),
+            Refresh = Refresh.ToModel(),
+            Default = Default.ToModel(),
         },
     };
 

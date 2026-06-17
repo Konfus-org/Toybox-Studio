@@ -1,7 +1,6 @@
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Utils;
 using System.Collections.ObjectModel;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Services.Dialogs;
@@ -19,49 +18,39 @@ namespace Toybox.Studio.Widgets.Ecs;
 /// </summary>
 public sealed partial class WorldViewModel : ObservableObject
 {
-    // While the game plays, the selected entity's live state is re-queried on this cadence so the inspector
-    // tracks the running game. Coarse on purpose: enough to feel live without churning the grid every frame.
-    private static readonly TimeSpan SelectionSyncInterval = TimeSpan.FromMilliseconds(500);
+    // The editor-driven live pull (see RefreshSelectedEntityAsync) skips an entity edited within this window:
+    // the user's edit was already pushed to the engine, but a describe issued just before it landed could come
+    // back with a stale value and overwrite what they're scrubbing. The next pull catches up.
+    private static readonly TimeSpan EditGuard = TimeSpan.FromMilliseconds(400);
 
-    private readonly World _world;
+    private readonly WorldManager _world;
     private readonly WorldSelection _selection;
     private readonly EngineRpc _engine;
     private readonly JsonParser _parser;
     private readonly Dictionary<ulong, EntityViewModel> _entities = [];
 
-    // Drives the live re-query of the selected entity while playing. Ticks on the UI thread.
-    private readonly DispatcherTimer _selectionSyncTimer;
-
     // Set while rebuilding RootEntities: clearing the collection transiently nulls the tree's SelectedItem,
     // and we must not let that two-way write clobber the real selection before we restore it.
     private bool _reconciling;
 
-    // True only while the engine is in play mode — selection sync runs only then (a stopped editor world is
-    // static, so there is nothing to keep in sync).
-    private bool _isPlaying;
-
-    // Guards against overlapping syncs when a request outlives the tick interval.
+    // Guards against overlapping pulls when a request outlives the refresh cadence.
     private bool _syncing;
+
+    // When the selected entity was last edited; the live pull defers to a recent edit (see EditGuard).
+    private DateTime _lastEditUtc = DateTime.MinValue;
 
     // The id of a just-added entity that should drop into inline rename the moment it is reconciled into the
     // tree and selected — set by the add commands, consumed (once) by ResolveSelection.
     private ulong? _pendingRenameId;
 
-    public WorldViewModel(World world, WorldSelection selection, EngineRpc engine, JsonParser parser, EngineWatcher watcher)
+    public WorldViewModel(WorldManager world, WorldSelection selection, EngineRpc engine, JsonParser parser)
     {
         _world = world;
         _selection = selection;
         _engine = engine;
         _parser = parser;
-        world.WorldUpdated += roots => Dispatch.To(DispatchContext.UI, () => Reconcile(roots));
+        world.WorldChanged += snapshot => Dispatch.To(DispatchContext.UI, () => Reconcile(snapshot.Roots));
         selection.SelectionChanged += id => Dispatch.To(DispatchContext.UI, () => ResolveSelection(id));
-
-        _selectionSyncTimer = new DispatcherTimer { Interval = SelectionSyncInterval };
-        _selectionSyncTimer.Tick += (_, _) => SyncSelectedEntity();
-
-        // The watcher already raises on the UI thread; play state alone decides whether sync runs.
-        watcher.StateChanged += state => OnEngineStateChanged(state);
-        _isPlaying = watcher.State == EngineState.Playing;
     }
 
     public ObservableCollection<EntityViewModel> RootEntities { get; } = [];
@@ -144,6 +133,8 @@ public sealed partial class WorldViewModel : ObservableObject
                     .ContinueOnSameContext();
         }
 
+        _world.MarkDirty();
+
         // Inline-rename the new entity once it is reconciled into the tree and selected (ResolveSelection).
         _pendingRenameId = result.Value;
         await _world.RefreshAsync().ContinueOnSameContext();
@@ -166,6 +157,7 @@ public sealed partial class WorldViewModel : ObservableObject
             return;
         }
 
+        _world.MarkDirty();
         await _world.RefreshAsync().ContinueOnSameContext();
     }
 
@@ -177,10 +169,10 @@ public sealed partial class WorldViewModel : ObservableObject
     {
         var result = await _engine.MoveEntityAsync(id, parent, index, CancellationToken.None)
             .ContinueOnSameContext();
-        if (!result.Success)
-        {
+        if (result.Success)
+            _world.MarkDirty();
+        else
             await Popups.ShowErrorAsync("Couldn't move entity", result.Error!).ContinueOnSameContext();
-        }
 
         await _world.RefreshAsync().ContinueOnSameContext();
     }
@@ -193,11 +185,11 @@ public sealed partial class WorldViewModel : ObservableObject
     {
         var result = await _engine.SetEntityGlobalAsync(id, global, CancellationToken.None)
             .ContinueOnSameContext();
-        if (!result.Success)
-        {
+        if (result.Success)
+            _world.MarkDirty();
+        else
             await Popups.ShowErrorAsync("Couldn't change global state", result.Error!)
                 .ContinueOnSameContext();
-        }
 
         await _world.RefreshAsync().ContinueOnSameContext();
     }
@@ -213,43 +205,30 @@ public sealed partial class WorldViewModel : ObservableObject
 
         // A freshly selected entity's components start unfiltered; re-apply the active inspector search.
         ApplyComponentFilter();
-
-        // Begin (or stop) keeping the new selection in sync with the running game, and pull its current
-        // state immediately so selecting during play shows live values at once.
-        UpdateSelectionSync();
     }
 
-    private void OnEngineStateChanged(EngineState state)
+    // An edit the engine accepted: mark the world dirty (the viewport shows the '*') and stamp the time so the
+    // live pull defers to it. Routed up from each ComponentViewModel / EntityViewModel via its onEdited hook.
+    private void OnEntityEdited()
     {
-        _isPlaying = state == EngineState.Playing;
-        UpdateSelectionSync();
+        _lastEditUtc = DateTime.UtcNow;
+        _world.MarkDirty();
     }
 
-    // Runs the selection-sync loop exactly when it is useful: the game is playing and an entity is selected.
-    // Starting it also pulls the entity's state once immediately so there is no wait for the first tick.
-    private void UpdateSelectionSync()
+    /// <summary>
+    /// Re-queries the selected entity's live component state from the engine and reconciles it into the
+    /// existing VM in place. This is the editor-driven pull: the editor (the inspector refresh coordinator)
+    /// decides WHEN to call it — while the game plays — rather than the view self-polling. No-ops when nothing
+    /// is selected, when a pull is already in flight, or when the entity was just edited (the engine already
+    /// has that change; pulling now risks overwriting a value mid-scrub with a stale describe).
+    /// </summary>
+    public async Task RefreshSelectedEntityAsync()
     {
-        if (_isPlaying && SelectedEntity is not null)
-        {
-            if (!_selectionSyncTimer.IsEnabled)
-                _selectionSyncTimer.Start();
-            SyncSelectedEntity();
-        }
-        else
-        {
-            _selectionSyncTimer.Stop();
-        }
-    }
-
-    // Re-queries the selected entity's live component state from the engine and reconciles it into the
-    // existing VM. Skips overlapping requests, and bails if play stops or the selection moves mid-flight.
-    private async void SyncSelectedEntity()
-    {
-        if (_syncing || !_isPlaying)
+        if (_syncing)
             return;
 
         var entity = SelectedEntity;
-        if (entity is null)
+        if (entity is null || DateTime.UtcNow - _lastEditUtc < EditGuard)
             return;
 
         _syncing = true;
@@ -260,7 +239,6 @@ public sealed partial class WorldViewModel : ObservableObject
                 .ContinueOnSameContext();
             if (result is { Success: true, Value: { } reply }
                 && _parser.ParseEntity(reply) is { } data
-                && _isPlaying
                 && ReferenceEquals(SelectedEntity, entity))
             {
                 // Fast path: push the live values into the existing grid rows in place, leaving the controls
@@ -356,7 +334,7 @@ public sealed partial class WorldViewModel : ObservableObject
         seen.Add(data.Id);
         if (!_entities.TryGetValue(data.Id, out var entity))
         {
-            entity = new EntityViewModel(data.Id, _engine, () => _world.RefreshAsync());
+            entity = new EntityViewModel(data.Id, _engine, () => _world.RefreshAsync(), OnEntityEdited);
             _entities[data.Id] = entity;
         }
 

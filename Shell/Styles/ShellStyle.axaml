@@ -1,0 +1,52 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- SHELL CHROME — the top toolbar shelf and the bottom status strip, plus the moulded dividers that
+         separate the toolbar's top-level menus. Both shelves read as soft toy surfaces (a Border we own, so
+         the BoxShadow follows their corners). -->
+
+    <!-- The status strip: padded, a hairline top border + header tint, and a soft upper shadow so it reads
+         as its own shelf lifted off the content above it. -->
+    <Style Selector="Border.StatusBar">
+        <Setter Property="Padding" Value="12,6"/>
+        <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource ThemeHeaderBrush}"/>
+        <Setter Property="BoxShadow" Value="0 -2 10 0 #24000000"/>
+    </Style>
+
+    <!-- The top toolbar bar: a toy shelf with the surface gradient + a soft lower shadow. -->
+    <Style Selector="Border.Toolbar">
+        <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
+        <Setter Property="CornerRadius" Value="0,0,12,12"/>
+        <Setter Property="BoxShadow" Value="0 3 12 0 #26000000"/>
+    </Style>
+    <!-- Top-level menu items read as soft toy pills, rounded to the theme radius. -->
+    <Style Selector="Border.Toolbar Menu > MenuItem">
+        <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+        <Setter Property="Padding" Value="12,5"/>
+        <Setter Property="Margin" Value="2,0"/>
+    </Style>
+
+    <!-- A pressed vertical divider for the toolbar: a thin rounded groove (dark hairline + light
+         lower-right highlight) so it reads as moulded into the surface rather than a flat line. -->
+    <Style Selector="Border.toySeparator">
+        <Setter Property="Width" Value="2"/>
+        <Setter Property="Margin" Value="6,5"/>
+        <Setter Property="CornerRadius" Value="1"/>
+        <Setter Property="Background" Value="#26000000"/>
+        <Setter Property="BoxShadow" Value="1 0 0 0 #40FFFFFF"/>
+    </Style>
+
+    <!-- Top-level toolbar menu separators get the same toy-groove look (a thin vertical pressed line),
+         turning the gaps between File / Build / Debug / … into moulded dividers. Dropdown separators (inside
+         a MenuItem) are NOT matched by the direct-child selector, so they keep their normal horizontal rule. -->
+    <Style Selector="Border.Toolbar Menu > Separator">
+        <Setter Property="Width" Value="1"/>
+        <Setter Property="MinHeight" Value="18"/>
+        <Setter Property="Margin" Value="4,4"/>
+        <Setter Property="Background" Value="#26000000"/>
+        <Setter Property="BorderBrush" Value="#40FFFFFF"/>
+        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+    </Style>
+</Styles>

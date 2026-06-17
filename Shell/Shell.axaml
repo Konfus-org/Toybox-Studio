@@ -16,16 +16,25 @@
                  Title="{Binding Title}"
                  Width="1440" Height="850">
 
+    <!-- The menu items' InputGesture only displays the shortcut; these bind the actual hotkeys. -->
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding SaveAllCommand}"/>
+    </Window.KeyBindings>
+
     <DockPanel>
         <Border Classes="Toolbar" DockPanel.Dock="Top" Padding="8,3">
           <!-- Menu on the left; the quick-search is centred in the middle of the window (overlaid in the same
                grid cell, so it centres on the window rather than the space left of/right of the menu). -->
           <Grid VerticalAlignment="Center">
-            <!-- A clay-groove Separator sits between each top-level option (styled via "Border.Toolbar Menu
+            <!-- A toy-groove Separator sits between each top-level option (styled via "Border.Toolbar Menu
                  > Separator" in AppStyles). Separators inside the dropdowns are unaffected. -->
             <Menu HorizontalAlignment="Left" VerticalAlignment="Center">
                 <MenuItem Header="File">
                     <MenuItem Header="Open Project…" Command="{Binding OpenProjectCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Save" InputGesture="Ctrl+S" Command="{Binding SaveCommand}"/>
+                    <MenuItem Header="Save All" InputGesture="Ctrl+Shift+S" Command="{Binding SaveAllCommand}"/>
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="Build">

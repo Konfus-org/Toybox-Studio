@@ -12,11 +12,20 @@ using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.Theming;
 using Toybox.Studio.Widgets.Theming;
 using Toybox.Studio.Models;
+using Toybox.Studio.Shell.Panels;
 
 namespace Toybox.Studio.Widgets.Settings;
 
-public sealed partial class SettingsViewModel : ObservableObject
+/// <summary>
+/// The Settings panel: edits a buffered working copy of the editor + project settings and commits only on
+/// Save (the docked footer), rather than writing to disk on every keystroke. Dirty state (working ≠ last-saved
+/// baseline) shows as a '*' on the tab; Cancel reverts to the baseline. The theme is the one preview-live
+/// value — picking a theme applies it immediately, but it only persists on Save and reverts on Cancel.
+/// </summary>
+public sealed partial class SettingsViewModel : DataPanel
 {
+    public override string BaseTitle => "Settings";
+
     private readonly EditorSettings _editor;
     private readonly ThemeManager _theme;
     private readonly ProjectManager _projects;
@@ -43,8 +52,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         _parser = parser;
         _engine = engine;
         // The Themes section is one more row in the editor grid (a list property), not a separate panel — see
-        // BuildEditorSettings, which appends it after the reflected Engine / Build sections.
-        _themes = new ThemePropertyViewModel(theme, themeCreator, filePicker);
+        // BuildEditorSettings, which appends it after the reflected Engine / Build sections. Picking a theme
+        // routes through OnThemeSelected (preview live + buffer) rather than persisting immediately.
+        _themes = new ThemePropertyViewModel(theme, themeCreator, filePicker, OnThemeSelected);
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshProjectSettings);
         // The project's AppSettings.json is lean (only its overrides); the full settings schema — graphics,
@@ -129,6 +139,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     private JObject? _projectDoc;
     private JObject? _projectDefaults;
 
+    // Dirty tracking: the live document the grid edits (schema path = _projectDoc, flat fallback = _appJson)
+    // and a clone of it at the last save / (re)build. RecomputeDirty diffs working vs baseline for both the
+    // editor and project grids. The editor's working copy is _editorSettingsJson.
+    private JObject? _projectWorking;
+    private JObject? _projectBaseline;
+    private JObject? _editorBaseline;
+
+    // The theme is previewed live but committed only on Save: _pendingTheme is the previewed selection,
+    // _savedTheme the last-committed one. They differ exactly while the theme is a pending (dirty) change.
+    private string _savedTheme = "";
+    private string _pendingTheme = "";
+
     /// <summary>
     /// All of the current project's settings, edited through the generic property grid.
     /// </summary>
@@ -144,8 +166,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         ProjectSettingsProperties.Clear();
         _projectDoc = null;
         _projectDefaults = null;
+        _projectWorking = null;
+        _projectBaseline = null;
         if (_appJson is not { } app)
+        {
+            RecomputeDirty();
             return;
+        }
 
         // Preferred path: render the full engine-described schema (graphics/physics/etc., and a resizable
         // plugins list) with the project's saved values overlaid. The flat file is the fallback used until
@@ -160,10 +187,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         foreach (var node in _parser.ParseProperties(document))
-            ProjectSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveProjectSettings));
+            ProjectSettingsProperties.Add(PropertyViewModelFactory.Create(node, OnEdited));
+
+        // The grid edits `document` in place; snapshot it as the baseline this build's dirty state diffs against.
+        _projectWorking = document;
+        _projectBaseline = (JObject)document.DeepClone();
+        RecomputeDirty();
     }
 
-    private void SaveProjectSettings()
+    private async Task SaveProjectSettingsAsync(CancellationToken ct)
     {
         if (_projects.CurrentProject is not { } project)
             return;
@@ -176,19 +208,37 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (toWrite is null)
             return;
 
-        try
+        // Persist through the engine's generic asset save (it owns the AppSettings serializer) when connected;
+        // fall back to writing the file directly so settings stay editable with no running engine.
+        if (_engine.IsConnected)
         {
-            File.WriteAllText(project.AppSettingsPath, toWrite.ToString(Formatting.Indented));
-            _appJson = toWrite;
-            // Reopen refreshes the display name + notifies listeners; suppress the resulting refresh of THIS
-            // grid (posted via ProjectChanged) so editing a list/struct doesn't rebuild and collapse it.
-            _suppressProjectRefresh = true;
-            _projects.Reopen();
+            var result = await _engine
+                .SaveAssetAsync("AppSettings", project.AppSettingsPath, toWrite, ct)
+                .ContinueOnSameContext();
+            if (!result.Success)
+            {
+                _log.Error($"Failed to save project settings: {result.Error}");
+                return;
+            }
         }
-        catch (Exception exception)
+        else
         {
-            _log.Error($"Failed to save project settings: {exception.Message}");
+            try
+            {
+                File.WriteAllText(project.AppSettingsPath, toWrite.ToString(Formatting.Indented));
+            }
+            catch (Exception exception)
+            {
+                _log.Error($"Failed to save project settings: {exception.Message}");
+                return;
+            }
         }
+
+        _appJson = toWrite;
+        // Reopen refreshes the display name + notifies listeners; suppress the resulting refresh of THIS
+        // grid (posted via ProjectChanged) so editing a list/struct doesn't rebuild and collapse it.
+        _suppressProjectRefresh = true;
+        _projects.Reopen();
     }
 
     private static JObject? ReadAppJson(ProjectInfo? project)
@@ -209,6 +259,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private void BuildEditorSettings()
     {
         EditorSettingsProperties.Clear();
+        // The theme lives outside the reflected JSON; baseline its tracking against the saved selection.
+        _savedTheme = _editor.Theme.Active;
+        _pendingTheme = _savedTheme;
         _editorSettingsJson = JObject.FromObject(_editor);
         // The theme selection renders as its own list-property section (appended below), and the
         // recent-projects bookkeeping is managed by the project system rather than hand-edited — drop both
@@ -219,7 +272,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         // (with its options) here; the grid then renders it as a dropdown instead of a free-text box.
         TagEnum(_editorSettingsJson, "Build", "Compiler", [.. CMakeCompiler.CompilerChoices]);
         foreach (var node in _parser.ParseProperties(_editorSettingsJson))
-            EditorSettingsProperties.Add(PropertyViewModelFactory.Create(node, SaveEditorSettings));
+            EditorSettingsProperties.Add(PropertyViewModelFactory.Create(node, OnEdited));
 
         // Each editable leaf gets a reset-to-default affordance + a "modified" indicator, comparing the live
         // value against a freshly-constructed EditorSettings (the defaults). Mirrors the inspector's revert,
@@ -228,8 +281,13 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         // Themes are the last section of the editor grid — a self-managing list property (its own add /
         // selection workflow), rendered with the same row chrome as the Engine / Build sections above. It
-        // owns no settings JSON, so it sits outside the reflect/WireDefaults path.
+        // owns no settings JSON, so it sits outside the reflect/WireDefaults path (and the Save/Cancel buffer:
+        // theme selection still applies live, as it always has).
         EditorSettingsProperties.Add(_themes);
+
+        // Snapshot the just-built document as the baseline this grid's dirty state diffs against.
+        _editorBaseline = (JObject)_editorSettingsJson.DeepClone();
+        RecomputeDirty();
     }
 
     /// <summary>
@@ -276,6 +334,68 @@ public sealed partial class SettingsViewModel : ObservableObject
         _editor.Save();
         // Engine + theme-selection changes here should take effect immediately.
         _theme.ApplySavedTheme();
+    }
+
+    // A leaf committed an edit (the live document was already mutated in place); re-derive the document's
+    // dirty state. Nothing is written to disk until Save.
+    private void OnEdited() => RecomputeDirty();
+
+    // A theme was picked from the list: apply it live for preview (no persist) and buffer it as the pending
+    // selection so it commits on Save and reverts on Cancel.
+    private void OnThemeSelected(string name)
+    {
+        _theme.PreviewTheme(name);
+        _pendingTheme = name;
+        RecomputeDirty();
+    }
+
+    // Dirty when either grid's working document differs from its last-saved/built baseline, or the previewed
+    // theme differs from the saved one.
+    private void RecomputeDirty()
+    {
+        var editorDirty = _editorSettingsJson is { } editor && _editorBaseline is { } editorBaseline
+            && !JToken.DeepEquals(editor, editorBaseline);
+        var projectDirty = _projectWorking is { } project && _projectBaseline is { } projectBaseline
+            && !JToken.DeepEquals(project, projectBaseline);
+        var themeDirty = !string.Equals(_pendingTheme, _savedTheme, StringComparison.Ordinal);
+        IsDirty = editorDirty || projectDirty || themeDirty;
+    }
+
+    // Re-snapshot both grids' working documents as the new baselines (after a successful Save).
+    private void Rebaseline()
+    {
+        if (_editorSettingsJson is { } editor)
+            _editorBaseline = (JObject)editor.DeepClone();
+        if (_projectWorking is { } project)
+            _projectBaseline = (JObject)project.DeepClone();
+    }
+
+    /// <summary>Commits both grids (editor POCO via C#, project settings via the engine), commits the pending
+    /// theme, then re-baselines. Invoked by the base <see cref="DataPanel.SaveAsync"/> (the footer's Save).</summary>
+    protected override async Task CommitAsync()
+    {
+        // Commit the previewed theme into the persisted editor settings before saving the POCO.
+        _editor.Theme.Active = _pendingTheme;
+        SaveEditorSettings();
+        await SaveProjectSettingsAsync(CancellationToken.None).ContinueOnSameContext();
+        _savedTheme = _pendingTheme;
+        Rebaseline();
+        RecomputeDirty();
+    }
+
+    /// <summary>Discards every unsaved edit: reverts the live theme preview to the saved theme, then rebuilds
+    /// both grids from their unmodified sources (the editor POCO and the on-disk AppSettings.json), which
+    /// re-baselines and clears the dirty flag. Invoked by the base <see cref="DataPanel.Cancel"/>.</summary>
+    protected override void RevertChanges()
+    {
+        if (!string.Equals(_pendingTheme, _savedTheme, StringComparison.Ordinal))
+            _theme.PreviewTheme(_savedTheme);
+
+        BuildEditorSettings();
+        // The flat-fallback grid edits _appJson in place, so re-read it from disk to undo those edits; the
+        // schema path rebuilds _projectDoc fresh from the schema + this re-read file regardless.
+        _appJson = ReadAppJson(_projects.CurrentProject);
+        BuildProjectSettings();
     }
 
     /// <summary>

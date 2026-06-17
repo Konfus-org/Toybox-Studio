@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Shell.Panels;
 
 namespace Toybox.Studio.Shell.Workspace;
 
@@ -122,6 +123,12 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         if (_control?.Layout is IRootDock root)
             _store.SaveLast(root);
     }
+
+    /// <summary>The view-model of the currently focused dockable (or null) — what File ▸ Save targets.</summary>
+    public object? FocusedDockable() => _windows.FocusedViewModel();
+
+    /// <summary>Every open data panel (distinct) — the source for File ▸ Save All and the app-close prompt.</summary>
+    public IEnumerable<DataPanel> OpenPanels() => _windows.OpenPanels();
 
     private DockableDescriptor? Resolve(string id) => _byId.GetValueOrDefault(id);
 

@@ -12,7 +12,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <ControlTemplate>
-                    <!-- Rows are flat (the card's surface shows through) and separated only by a pressed clay
+                    <!-- Rows are flat (the card's surface shows through) and separated only by a pressed toy
                          groove: a faint dark hairline along the bottom with a 1px light highlight beneath it
                          (the crisp, blur-less BoxShadow). Nested rows add a faint warm depth tint on the inner
                          Grid so deeper levels read a touch deeper without a per-row gradient. -->
@@ -132,7 +132,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Cursor" Value="SizeWestEast"/>
         </Style>
-        <!-- Input-field chrome shared by the non-text editors (handle picker, script link). Matches the clay
+        <!-- Input-field chrome shared by the non-text editors (handle picker, script link). Matches the toy
              well look of the TextBox/NumericUpDown fields: the recessed well fill plus an inset BoxShadow on
              the rounded border, so a picker reads as the same pressed-in control. -->
         <Style Selector="Border.fieldHost">
@@ -204,11 +204,11 @@
         <Style Selector="GridSplitter:pointerover">
             <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
         </Style>
-        <!-- Each property group is a raised clay "pillow": the surface gradient, rounded, lifted off the panel
+        <!-- Each property group is a raised toy "pillow": the surface gradient, rounded, lifted off the panel
              by the card shadow (a dark cast + a light highlight). Rows and the header sit transparent on top,
              so the whole group reads as one moulded block. ClipToBounds keeps the rounded corners crisp; the
              card's own BoxShadow still renders outside the clip. -->
-        <Style Selector="Border.clayCard">
+        <Style Selector="Border.toyCard">
             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
             <Setter Property="CornerRadius" Value="14"/>
             <Setter Property="Margin" Value="2,0,2,10"/>
@@ -217,7 +217,7 @@
         </Style>
         <!-- Embedded grids (e.g. inside a component card) drop the card chrome so the host's card is the only
              one — no nested pillows. -->
-        <Style Selector="Border.clayCard.flat">
+        <Style Selector="Border.toyCard.flat">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BoxShadow" Value="0 0 0 0 #00000000"/>
             <Setter Property="Margin" Value="0"/>
@@ -299,7 +299,7 @@
                 <ItemsControl ItemsSource="{Binding #Root.Groups}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="local:PropertyCategoryGroup">
-                            <Border Classes="clayCard" IsVisible="{Binding Visible}"
+                            <Border Classes="toyCard" IsVisible="{Binding Visible}"
                                     Classes.flat="{Binding $parent[local:PropertyGridView].Embedded}">
                                 <StackPanel>
                                     <StackPanel IsVisible="{Binding HasHeader}">

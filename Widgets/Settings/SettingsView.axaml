@@ -4,6 +4,7 @@
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:theming="using:Toybox.Studio.Widgets.Theming"
              xmlns:search="using:Toybox.Studio.Widgets.Searching"
+             xmlns:panels="using:Toybox.Studio.Shell.Panels"
              x:Class="Toybox.Studio.Widgets.Settings.SettingsView"
              x:DataType="shell:SettingsViewModel">
 
@@ -20,6 +21,9 @@
         <!-- One search for the settings panel: filters both the Editor and Project grids by header or value. -->
         <search:SearchBox DockPanel.Dock="Top" Margin="0,0,0,10"
                           Text="{Binding Search, Mode=TwoWay}" Watermark="Search settings…"/>
+
+        <!-- Save/Cancel for the buffered settings panel; docked below the grids so edits are explicit. -->
+        <panels:DataPanelFooterView DockPanel.Dock="Bottom" Margin="0,8,0,0"/>
 
         <!-- Folder-style tabs fade into the cohesive content panel; the grids embed (flat) so they read as
              sections of that one panel rather than separate cards. -->

@@ -1,0 +1,120 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- BUTTON SYSTEM — every button shares the SAME top→bottom gradient shading (from ButtonBackground in
+         ThemeApplier, whose PointerOver brush is just a brighter copy) and carries NO shadow. Standard buttons
+         brighten on hover via that resource. The semantic classes only swap the colour and must override the
+         PRESENTER background in every state (Fluent sets hover/press on the presenter directly, which would
+         otherwise beat a plain Button.Background and revert the colour — that was the "hover changes" bug):
+           • .action — brand action colour    • .play — green    • .stop — red    • .refresh — blue
+         (each from its own theme button colour). The plain, un-classed button uses the theme's Default button
+         colour via ButtonBackground.
+         Hover BRIGHTENS the current colour (a lighter gradient of the same hue) rather than changing it. -->
+    <Style Selector="Button.action, Button.play, Button.stop, Button.refresh">
+        <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+    </Style>
+    <Style Selector="Button.action /template/ ContentPresenter#PART_ContentPresenter, Button.action:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeActionButtonBrush}"/>
+    </Style>
+    <Style Selector="Button.action:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeActionButtonHoverBrush}"/>
+    </Style>
+    <Style Selector="Button.play /template/ ContentPresenter#PART_ContentPresenter, Button.play:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemePlayButtonBrush}"/>
+    </Style>
+    <Style Selector="Button.play:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemePlayButtonHoverBrush}"/>
+    </Style>
+    <Style Selector="Button.stop /template/ ContentPresenter#PART_ContentPresenter, Button.stop:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeStopButtonBrush}"/>
+    </Style>
+    <Style Selector="Button.stop:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeStopButtonHoverBrush}"/>
+    </Style>
+    <Style Selector="Button.refresh /template/ ContentPresenter#PART_ContentPresenter, Button.refresh:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeRefreshButtonBrush}"/>
+    </Style>
+    <Style Selector="Button.refresh:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeRefreshButtonHoverBrush}"/>
+    </Style>
+
+    <!-- Toy "popout" buttons (the console's Clear, the Game transport): the SAME soft surface gradient,
+         hairline border and rounding as the search pills — so a button reads as a raised toy surface — and
+         they DIM on hover/press (like the chrome-less buttons) instead of brightening or flipping their icon
+         to a dark ink. Icon colour is left to the button's content (e.g. a green play / red stop glyph), and
+         since that's a local value it survives hover rather than going black. -->
+    <Style Selector="Button.toy, ToggleButton.toy">
+        <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}"/>
+        <Setter Property="Padding" Value="12,5"/>
+    </Style>
+    <Style Selector="Button.toy /template/ ContentPresenter#PART_ContentPresenter,
+                     Button.toy:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                     Button.toy:pressed /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.toy /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.toy:checked /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.toy:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.toy:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}"/>
+    </Style>
+    <Style Selector="Button.toy:pointerover, ToggleButton.toy:pointerover">
+        <Setter Property="Opacity" Value="0.8"/>
+    </Style>
+    <Style Selector="Button.toy:pressed, ToggleButton.toy:pressed, ToggleButton.toy:checked">
+        <Setter Property="Opacity" Value="0.65"/>
+    </Style>
+
+    <!-- Consistent disabled look for EVERY button (so the Game transport and the World add/refresh match):
+         the theme's muted fill + ink, no shadow. -->
+    <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource ThemeDisabledBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeDisabledTextBrush}"/>
+        <Setter Property="BoxShadow" Value="0 0 0 0 #00000000"/>
+    </Style>
+    <!-- Icon-only buttons (Basic): just the glyph — no fill and no hover background. Slightly dimmed at rest,
+         brightening on hover (and dimmer still when disabled, below), exactly like the list "+" affordances.
+         The presenter background is forced transparent in every interaction state so neither Fluent's hover
+         fill nor the standard button gradient shows through. -->
+    <Style Selector="Button.Basic">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Opacity" Value="0.7"/>
+    </Style>
+    <Style Selector="Button.Basic:pointerover">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="Button.Basic /template/ ContentPresenter#PART_ContentPresenter,
+                     Button.Basic:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                     Button.Basic:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <!-- Chrome-less icon buttons (Basic / row affordances) just dim when disabled — no fill. -->
+    <Style Selector="Button.Basic:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.rowButton:disabled /template/ ContentPresenter#PART_ContentPresenter, Button.fieldButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.Basic:disabled">
+        <Setter Property="Opacity" Value="0.4"/>
+    </Style>
+
+    <!-- A continuous rotation for "busy" affordances — add Classes="spin" (typically bound to a command's
+         IsRunning) to a refresh icon and it turns while the work is in flight. -->
+    <Style Selector="PathIcon.spin">
+        <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+        <Style.Animations>
+            <Animation Duration="0:0:0.8" IterationCount="Infinite" Easing="LinearEasing">
+                <KeyFrame Cue="0%">
+                    <Setter Property="RotateTransform.Angle" Value="0"/>
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="RotateTransform.Angle" Value="360"/>
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+</Styles>

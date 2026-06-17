@@ -29,14 +29,17 @@ public sealed class ScriptContainerViewModel : ObservableObject
     private readonly JObject _raw;
     private readonly EngineRpc _engine;
     private readonly Func<Task> _resync;
+    private readonly Action _onEdited;
 
-    public ScriptContainerViewModel(ulong entityId, Component component, EngineRpc engine, Func<Task> resync)
+    public ScriptContainerViewModel(
+        ulong entityId, Component component, EngineRpc engine, Func<Task> resync, Action onEdited)
     {
         _entityId = entityId;
         _componentName = component.Name;
         _raw = component.Raw;
         _engine = engine;
         _resync = resync;
+        _onEdited = onEdited;
 
         Bindings = [];
         var scripts = component.Properties.FirstOrDefault(property => property.Name == ScriptsProperty);
@@ -82,7 +85,10 @@ public sealed class ScriptContainerViewModel : ObservableObject
             .SetPropertyAsync(_entityId, _componentName, ScriptsProperty, bare, CancellationToken.None)
             .ContinueOnSameContext();
         if (result.Success)
+        {
+            _onEdited();
             return;
+        }
 
         await Popups.ShowErrorAsync(
             "Couldn't apply change",

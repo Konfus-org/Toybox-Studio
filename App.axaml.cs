@@ -11,6 +11,7 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Toybox.Studio.Shell;
+using Toybox.Studio.Widgets.Ecs;
 using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;
 using Toybox.Studio.Widgets.GameToolbar;
@@ -35,6 +36,9 @@ public partial class App : Application
     private static readonly TimeSpan StepPause = TimeSpan.FromMilliseconds(140);
 
     private IHost? _host;
+
+    // Set once the user has answered the unsaved-changes prompt so the programmatic re-close goes through.
+    private bool _closeConfirmed;
 
     public override void Initialize()
     {
@@ -103,7 +107,7 @@ public partial class App : Application
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
             PropertyViewRegistry.Configure(
                 catalog,
-                _host.Services.GetRequiredService<World>(),
+                _host.Services.GetRequiredService<WorldManager>(),
                 _host.Services.GetRequiredService<EngineRpc>());
 
             // Activating an asset link (e.g. a handle hyperlink) reveals the file in the OS explorer.
@@ -117,9 +121,10 @@ public partial class App : Application
             await StepAsync("Building workspace…").ContinueOnSameContext();
             // The shell (and its console widget) must exist before discovery so startup log
             // lines land in the console.
+            var shell = _host.Services.GetRequiredService<ShellViewModel>();
             var mainWindow = new MainWindow
             {
-                DataContext = _host.Services.GetRequiredService<ShellViewModel>(),
+                DataContext = shell,
                 IsVisible = false, // Revealed only after the splash closes.
             };
             desktop.MainWindow = mainWindow;
@@ -127,10 +132,27 @@ public partial class App : Application
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
             desktop.Exit += OnExit;
 
+            // One consolidated unsaved-changes prompt on app close: veto the first close, ask once for every
+            // dirty panel + the world, then close for real (or stay open on Cancel).
+            mainWindow.Closing += async (_, args) =>
+            {
+                if (_closeConfirmed)
+                    return;
+                args.Cancel = true;
+                if (await shell.RequestCloseAsync().ContinueOnSameContext())
+                {
+                    _closeConfirmed = true;
+                    mainWindow.Close();
+                }
+            };
+
             await StepAsync("Locating engine…").ContinueOnSameContext();
             var session = _host.Services.GetRequiredService<Session>();
             // Resolve the watcher before any launch so it observes the engine from the very first signal.
             _host.Services.GetRequiredService<EngineWatcher>();
+            // Bring the inspector's live-refresh coordinator to life so it drives the play-mode pull (it holds
+            // the shared inspector view-model and the play/selection subscriptions).
+            _host.Services.GetRequiredService<InspectorRefreshCoordinator>();
             var locator = _host.Services.GetRequiredService<Locator>();
             var locatorReport = locator.ResolveAtStartup();
             log.Info(locatorReport);
@@ -178,11 +200,11 @@ public partial class App : Application
 
             if (!locator.IsLocated)
             {
-                MessageBoxWindow.ShowAsync(
-                    mainWindow,
+                Popups.ShowMessageAsync(
                     "Engine Not Found",
                     "The Toybox Engine source folder could not be located automatically. "
-                    + "Open Settings (⚙) and point the Engine path at your engine checkout.").FireAndForget();
+                    + "Open Settings (⚙) and point the Engine path at your engine checkout.",
+                    mainWindow).FireAndForget();
             }
         }
         catch (Exception exception)
@@ -237,12 +259,13 @@ public partial class App : Application
         services.AddSingleton<Session>();
         services.AddSingleton<EngineWatcher>();
         services.AddSingleton<InstanceDetector>();
-        services.AddSingleton<World>();
+        services.AddSingleton<WorldManager>();
         services.AddSingleton<AssetCatalog>();
         services.AddSingleton<Locator>();
         services.AddSingleton<ThemeCreator>();
         services.AddSingleton<StatusViewModel>();
         services.AddSingleton<GameToolbarViewModel>();
+        services.AddSingleton<InspectorRefreshCoordinator>();
 
         // Auto-registers every [Dockable] View's view-model (World, Viewport, Console, Settings, …) and the
         // catalog itself, so panels are declared only on their Views — no per-panel registration here.

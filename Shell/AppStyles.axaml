@@ -16,8 +16,20 @@
          overwrites these from the active Theme.json — including replacing the flat brand/neutral brushes with
          LinearGradientBrushes where the theme defines gradients. -->
     <Styles.Resources>
+        <!-- Seed COLOURS that the derived neutral brushes below key off. ThemeApplier overwrites these live
+             from the active Theme.json — the text / on-colour / muted ones are its WCAG auto-contrast results,
+             the rest are representative palette colours. The brushes that derive from them follow
+             automatically via DynamicResource, so the derivation reads in one declarative place. -->
+        <Color x:Key="ThemeTextColor">#4A4036</Color>
+        <Color x:Key="ThemeOnColorColor">#FFFFFF</Color>
+        <Color x:Key="ThemeMutedColor">#8A8073</Color>
+        <Color x:Key="ThemeBackgroundColor">#EFE6D4</Color>
+        <Color x:Key="ThemeSurfaceColor">#F7F0E2</Color>
+        <Color x:Key="ThemePrimaryColor">#9888EB</Color>
+
+        <!-- Brand / neutral FILLS — ThemeApplier replaces these with LinearGradientBrushes where the theme
+             defines gradients; these are the flat first-frame fallbacks. -->
         <SolidColorBrush x:Key="ThemePrimaryBrush" Color="#A99BF0"/>
-        <SolidColorBrush x:Key="ThemeAccentSolidBrush" Color="#9888EB"/>
         <SolidColorBrush x:Key="ThemeSecondaryBrush" Color="#C7B8A6"/>
         <SolidColorBrush x:Key="ThemeTertiaryBrush" Color="#A9E5C5"/>
         <SolidColorBrush x:Key="ThemeErrorBrush" Color="#E08379"/>
@@ -26,23 +38,31 @@
         <SolidColorBrush x:Key="ThemeSuccessBrush" Color="#8FD9AE"/>
         <SolidColorBrush x:Key="ThemeBackgroundBrush" Color="#EFE6D4"/>
         <SolidColorBrush x:Key="ThemeSurfaceBrush" Color="#F7F0E2"/>
-        <SolidColorBrush x:Key="ThemeTextBrush" Color="#4A4036"/>
-        <SolidColorBrush x:Key="ThemeBorderBrush" Color="#2E4A4036"/>
-        <SolidColorBrush x:Key="ThemeHeaderBrush" Color="#184A4036"/>
-        <SolidColorBrush x:Key="ThemeBandBrush" Color="#104A4036"/>
-        <SolidColorBrush x:Key="ThemeWellBrush" Color="#0A4A4036"/>
-        <SolidColorBrush x:Key="ThemeMutedTextBrush" Color="#8A8073"/>
-        <SolidColorBrush x:Key="ThemeScrimBrush" Color="#B0EFE6D4"/>
-        <!-- Clay depth tokens (ThemeManager overwrites these live; these are first-frame/design fallbacks).
+
+        <!-- Neutral INKS + TINTS derived from the seed colours above. ThemeApplier no longer writes these —
+             it publishes the colours and these brushes track them live via DynamicResource. Opacity is the
+             former 8-bit alpha as a fraction (e.g. 0x2E/0xFF ≈ 0.18, 0x59/0xFF ≈ 0.349). -->
+        <SolidColorBrush x:Key="ThemeTextBrush" Color="{DynamicResource ThemeTextColor}"/>
+        <SolidColorBrush x:Key="ThemeOnColorTextBrush" Color="{DynamicResource ThemeOnColorColor}"/>
+        <SolidColorBrush x:Key="ThemeMutedTextBrush" Color="{DynamicResource ThemeMutedColor}"/>
+        <SolidColorBrush x:Key="ThemeDisabledTextBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.349"/>
+        <SolidColorBrush x:Key="ThemeAccentSolidBrush" Color="{DynamicResource ThemePrimaryColor}"/>
+        <SolidColorBrush x:Key="ThemeBorderBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.18"/>
+        <SolidColorBrush x:Key="ThemeHeaderBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.094"/>
+        <SolidColorBrush x:Key="ThemeBandBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.063"/>
+        <SolidColorBrush x:Key="ThemeWellBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.039"/>
+        <SolidColorBrush x:Key="ThemeGrooveBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.078"/>
+        <SolidColorBrush x:Key="ThemeHeaderRaisedBrush" Color="{DynamicResource ThemeTextColor}" Opacity="0.071"/>
+        <SolidColorBrush x:Key="ThemeScrimBrush" Color="{DynamicResource ThemeBackgroundColor}" Opacity="0.69"/>
+        <SolidColorBrush x:Key="ThemeMenuHighlightBrush" Color="{DynamicResource ThemePrimaryColor}" Opacity="0.227"/>
+        <SolidColorBrush x:Key="ThemeSurfaceFlatBrush" Color="{DynamicResource ThemeSurfaceColor}"/>
+
+        <!-- C#-owned fills kept here only as first-frame fallbacks (ThemeApplier overwrites them live).
              ThemeWellInsetShadow / ThemeCardShadow are BoxShadows built in code, so they have no XAML
-             fallback — until ThemeManager runs an input simply shows no inset, which is harmless. -->
+             fallback — until ThemeApplier runs an input simply shows no inset, which is harmless. -->
         <SolidColorBrush x:Key="ThemeWellFillBrush" Color="#F0E2CB"/>
-        <SolidColorBrush x:Key="ThemeGrooveBrush" Color="#1433291B"/>
         <SolidColorBrush x:Key="ThemeRowBrush" Color="#FBF6EC"/>
-        <SolidColorBrush x:Key="ThemeHeaderRaisedBrush" Color="#1233291B"/>
-        <SolidColorBrush x:Key="ThemeSurfaceFlatBrush" Color="#F8EFE0"/>
         <SolidColorBrush x:Key="ThemeAccentBrightBrush" Color="#C9BCF5"/>
-        <SolidColorBrush x:Key="ThemeMenuHighlightBrush" Color="#3A9580E0"/>
         <!-- Kill Fluent's selected-tab underline pipe at the source: the template paints it with this brush,
              so a transparent fill removes the underline even when Fluent re-shows the pipe via its :selected
              trigger (which can outrank a plain IsVisible override). The filled accent pill marks selection. -->

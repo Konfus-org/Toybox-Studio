@@ -111,24 +111,12 @@ public sealed class IconView : PackIconLucide
 
         // A palette colour picks the same darker/lighter contrast adjustment text does, against the theme's
         // surface — so a brand-coloured icon stays legible on any theme rather than vanishing into the panel.
-        var surface = SurfaceColor();
+        // ThemeBackgroundColor is the exact colour the theme engine contrasts text against (published by
+        // ThemeApplier); resolving it directly keeps the icon and text in lock-step. It only resolves once
+        // we're in the tree, so an icon attached before then keeps its raw palette colour until OnAttached.
         Foreground = new SolidColorBrush(
-            surface is { } background ? Contrast.Ensure(color, background, IconContrastRatio) : color);
-    }
-
-    // The representative colour of the panel surface the icon sits on, or null before the icon is in the tree
-    // (no resources to resolve yet). Matches the brush the theme engine contrasts text against.
-    private Color? SurfaceColor()
-    {
-        if (!this.TryFindResource("ThemeBackgroundBrush", out var resource))
-            return null;
-
-        return resource switch
-        {
-            ISolidColorBrush solid => solid.Color,
-            IGradientBrush { GradientStops.Count: > 0 } gradient =>
-                gradient.GradientStops[gradient.GradientStops.Count / 2].Color,
-            _ => null,
-        };
+            this.TryFindResource("ThemeBackgroundColor", out var resource) && resource is Color background
+                ? Contrast.Ensure(color, background, IconContrastRatio)
+                : color);
     }
 }

@@ -28,6 +28,7 @@
     <StyleInclude Source="/Shell/Styles/ShellStyle.axaml"/>
     <StyleInclude Source="/Shell/Styles/ButtonStyle.axaml"/>
     <StyleInclude Source="/Shell/Styles/InputStyle.axaml"/>
+    <StyleInclude Source="/Shell/Styles/SliderStyle.axaml"/>
     <StyleInclude Source="/Shell/Styles/MenuStyle.axaml"/>
     <StyleInclude Source="/Shell/Styles/DockStyle.axaml"/>
     <StyleInclude Source="/Shell/Styles/TabStyle.axaml"/>

@@ -28,18 +28,23 @@ public sealed partial class MaterialSlotViewModel : ObservableObject
     // Raises the owning component's whole-overrides commit (reflect.set on "overrides").
     private readonly Action? _commit;
 
+    // The grid nesting level this slot's editor renders at, so it indents under its material/category parent.
+    private readonly int _depth;
+
     // The value wrapper the current editor is bound to: the live override token when overridden, else a
     // detached clone of the base value (adopted into the array on first edit). Kept so the promote step can
     // splice the in-progress edit into the array instead of the base value.
     private JToken _wrapper = JValue.CreateNull();
 
-    public MaterialSlotViewModel(string name, JObject baseElement, JArray overrides, string valueKey, Action? commit)
+    public MaterialSlotViewModel(
+        string name, JObject baseElement, JArray overrides, string valueKey, Action? commit, int depth)
     {
         _name = name;
         _baseElement = baseElement;
         _overrides = overrides;
         _valueKey = valueKey;
         _commit = commit;
+        _depth = depth;
         RebuildEditor();
     }
 
@@ -65,7 +70,7 @@ public sealed partial class MaterialSlotViewModel : ObservableObject
         _wrapper = existing?[_valueKey] ?? _baseElement[_valueKey]!.DeepClone();
 
         var node = JsonParser.ParseValueNode(_name, _wrapper);
-        var editor = PropertyViewModelFactory.Create(node, OnEdited);
+        var editor = PropertyViewModelFactory.Create(node, OnEdited, _depth);
         editor.ResetToDefault = OnReset;
         editor.IsModified = existing is not null;
         Editor = editor;

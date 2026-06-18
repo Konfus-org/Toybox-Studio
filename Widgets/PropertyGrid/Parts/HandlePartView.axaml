@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.HandlePartView"
+             x:DataType="local:HandlePart">
+    <!-- Drag grip: ListReorder arms on press of this control and moves the element within its list on release.
+         The behavior reads the owning list + element from this HandlePart (the control's DataContext). -->
+    <Border Background="Transparent" Padding="2,0" Cursor="SizeNorthSouth" VerticalAlignment="Stretch"
+            local:ListReorder.Enabled="True" ToolTip.Tip="Drag to reorder">
+        <local:IconView Width="12" Height="12" IconName="GripVertical" Opacity="0.5"
+                        VerticalAlignment="Center" Foreground="{DynamicResource ThemeTextBrush}"/>
+    </Border>
+</UserControl>

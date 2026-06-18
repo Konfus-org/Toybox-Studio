@@ -78,10 +78,8 @@ public sealed class MaterialInstancePropertyViewModel : PropertyViewModel
         Action? commitOverrides,
         int depth)
     {
-        var overrides = new MaterialOverridesViewModel(overridesNode, readMaterialId(), engine, commitOverrides)
-        {
-            Depth = depth,
-        };
+        var overrides =
+            new MaterialOverridesViewModel(overridesNode, readMaterialId(), engine, commitOverrides, depth);
 
         var material = PropertyViewModelFactory.Create(
             materialNode,

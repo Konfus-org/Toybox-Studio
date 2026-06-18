@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.ActionsPartView"
+             x:DataType="local:ActionsPart">
+    <!-- Add (+) for a resizable list's own row; remove (x) for an element row. Each shows only when its
+         command is present, so the same part serves both. -->
+    <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+        <Button Classes="fieldButton" Command="{Binding AddCommand}" IsVisible="{Binding CanAdd}"
+                ToolTip.Tip="Add entry">
+            <local:IconView Width="13" Height="13" IconName="Plus"
+                            Foreground="{DynamicResource ThemeSuccessBrush}"/>
+        </Button>
+        <Button Classes="fieldButton" Command="{Binding RemoveCommand}" IsVisible="{Binding CanRemove}"
+                ToolTip.Tip="Delete entry">
+            <local:IconView Width="12" Height="12" IconName="X"
+                            Foreground="{DynamicResource ThemeErrorBrush}"/>
+        </Button>
+    </StackPanel>
+</UserControl>

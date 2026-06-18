@@ -21,11 +21,14 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
     private readonly EngineRpc _engine;
     private readonly Action? _commit;
 
-    public MaterialOverridesViewModel(PropertyNode node, long materialId, EngineRpc engine, Action? commit)
+    public MaterialOverridesViewModel(
+        PropertyNode node, long materialId, EngineRpc engine, Action? commit, int depth)
         : base(node)
     {
         _engine = engine;
         _commit = commit;
+        // The category bands render at this depth; their slot rows sit one level deeper (see AddSlots).
+        Depth = depth;
 
         // The overrides body is { textures: { …, value: [ … ] }, parameters: { …, value: [ … ] } }; the live
         // arrays are where per-slot overrides are written.
@@ -91,7 +94,7 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
 
         foreach (var element in elements.OfType<JObject>())
             if (ReadName(element) is { Length: > 0 } name)
-                into.Add(new MaterialSlotViewModel(name, element, overrides, valueKey, _commit));
+                into.Add(new MaterialSlotViewModel(name, element, overrides, valueKey, _commit, Depth + 1));
     }
 
     private void NotifyCounts()

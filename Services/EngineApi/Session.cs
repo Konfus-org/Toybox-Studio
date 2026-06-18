@@ -703,6 +703,20 @@ public sealed class Session : IAsyncDisposable
     }
 
     /// <summary>
+    /// Stops and relaunches the current project's engine, recompiling as part of launch (a compiler change
+    /// clean-reconfigures inside <see cref="CompileProjectAsync(CancellationToken)"/>). Used when an editor
+    /// setting that changes the native build — the C++ compiler or the engine source path — was edited and
+    /// confirmed. No-op when nothing is running; the change applies on the next launch.
+    /// </summary>
+    public async Task RebuildAndRelaunchAsync()
+    {
+        if (State == ConnectionState.Disconnected)
+            return;
+
+        await RestartForProjectAsync().ContinueOnAnyContext();
+    }
+
+    /// <summary>
     /// Atomically reserves the Disconnected→Launching transition so a launch and an auto-attach (raised
     /// on the detector's background thread) can't both enter a session. Returns false if a session is
     /// already starting or live; the caller should bail.

@@ -13,10 +13,13 @@
                     <local:IconView Width="14" Height="14" IconName="Search"
                                     Foreground="{DynamicResource ThemeTextBrush}"/>
                 </Button>
-                <!-- The referenced entity's name (or "(none)"). -->
-                <TextBlock Text="{Binding DisplayName}" FontSize="12" Margin="7,0,0,0"
-                           VerticalAlignment="Center" Opacity="0.85"
-                           Foreground="{DynamicResource ThemeTextBrush}"/>
+                <!-- The referenced entity's name (or "None"); clicking it opens the entity chooser. -->
+                <Button Classes="fieldButton" Command="{Binding PickCommand}" Cursor="Hand"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Left" Margin="3,0,0,0"
+                        VerticalAlignment="Center" ToolTip.Tip="Pick an entity">
+                    <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                               Foreground="{DynamicResource ThemeTextBrush}"/>
+                </Button>
             </DockPanel>
         </Border>
     </local:PropertyRow>

@@ -30,6 +30,12 @@ public sealed partial class ComponentViewModel : ObservableObject
     private readonly Dictionary<string, PropertyViewModel> _resettable = [];
 
     private const string MaterialInstanceName = "material_instance";
+    private const string EnabledProperty = "is_enabled";
+
+    // The live bool value token inside Raw for the base-component is_enabled flag. The flag is [[hidden]] so
+    // it never becomes a grid row; the inspector exposes it as the toggle in the component header instead.
+    // Null only for the (legacy) case of a component whose payload carries no is_enabled field.
+    private readonly JValue? _enabled;
 
     public ComponentViewModel(
         ulong entityId,
@@ -49,23 +55,35 @@ public sealed partial class ComponentViewModel : ObservableObject
         IconColor = component.IconColor;
         Properties = [];
 
+        _enabled = ReadEnabledToken(_raw);
+        _isEnabled = _enabled?.Value<bool>() ?? true;
+
         // A material instance is not a generic property bag: its "overrides" are edited against the base
         // material's slots (fetched live), so it gets a dedicated, base-aware editor instead of the grid.
         if (component.Name == MaterialInstanceName && TryBuildMaterialInstance(component))
             return;
 
-        // A component whose entire payload is a single struct/array repeats itself: the component header and
-        // that lone child's header say the same thing (script_container -> Scripts, transform -> Transform).
-        // Flatten it — promote the child's members to the top level so the header alone names the group.
-        // Every edit still routes through the one top-level property the engine round-trips, so the value
-        // path is unchanged; the promoted members are nested fields and so (like any nested field) carry no
-        // individual reset — reflect.reset is whole-property granular.
+        // A component whose entire payload is a single STRUCT repeats itself: the component header and that lone
+        // child's header say the same thing (script_container -> Scripts, transform -> Transform). Flatten it —
+        // promote the child's members to the top level so the header alone names the group. Every edit still
+        // routes through the one top-level property the engine round-trips, so the value path is unchanged; the
+        // promoted members are nested fields and so (like any nested field) carry no individual reset —
+        // reflect.reset is whole-property granular. A single ARRAY is NOT flattened: it must keep its own list
+        // row so it stays addable/removable (promoting its elements to the root would lose the "+" affordance).
         var single = component.Properties.Count == 1 ? component.Properties[0] : null;
-        if (single is { HasChildren: true })
+        if (single is { HasChildren: true, Type: not "array" })
         {
             var commit = single.ReadOnly ? (Action?)null : () => OnPropertyEdited(single.Name);
             foreach (var child in single.Children)
-                Properties.Add(PropertyViewModelFactory.Create(child, commit));
+            {
+                var viewModel = PropertyViewModelFactory.Create(child, commit);
+                // The promoted members all live under the one top-level property; reset is whole-property
+                // granular, so each member's indicator resets that property (i.e. the whole flattened struct).
+                if (!single.ReadOnly)
+                    viewModel.ResetToDefault = () => OnPropertyReset(single.Name);
+                Properties.Add(viewModel);
+            }
+
             return;
         }
 
@@ -131,6 +149,43 @@ public sealed partial class ComponentViewModel : ObservableObject
     public ObservableCollection<PropertyViewModel> Properties { get; }
 
     /// <summary>
+    /// True when this component carries the base <c>is_enabled</c> flag, so the header shows its enable
+    /// toggle. Every engine component derives from <c>Component</c> and so has it; false only guards the
+    /// degenerate case of a payload without the field.
+    /// </summary>
+    public bool HasEnableToggle => _enabled is not null;
+
+    private bool _isEnabled = true;
+
+    /// <summary>
+    /// Whether this component is active, mirrored from the base <c>is_enabled</c> field. Toggling mutates the
+    /// backing JSON in place and pushes the change through the same per-property round-trip an ordinary edit
+    /// uses — the flag is hidden from the grid, so the header toggle is its only editor.
+    /// </summary>
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set
+        {
+            if (!SetProperty(ref _isEnabled, value) || _enabled is null)
+                return;
+
+            _enabled.Value = value;
+            OnPropertyEdited(EnabledProperty);
+        }
+    }
+
+    // Pulls the live bool value token for is_enabled out of a component's raw JSON. The field arrives as a
+    // typed/attributed wrapper ({ ..., "value": true }); a bare value is tolerated for resilience.
+    private static JValue? ReadEnabledToken(JObject raw)
+    {
+        var token = raw[EnabledProperty];
+        if (token is JObject wrapper && wrapper["value"] is JValue wrapped)
+            return wrapped;
+        return token as JValue;
+    }
+
+    /// <summary>
     /// Pushes a fresh snapshot of the same component into the existing property rows in place, without
     /// rebuilding them — so tracking a running game's live values keeps the grid's controls (and any
     /// in-progress edit) rather than tearing them down every tick. Returns false when the component's shape
@@ -139,6 +194,9 @@ public sealed partial class ComponentViewModel : ObservableObject
     /// </summary>
     public bool SyncFrom(Component component)
     {
+        // Track the live enable flag too (it's not a grid row, so it isn't covered by the row zip below).
+        SyncEnabled(component);
+
         var nodes = EffectiveNodes(component);
         if (nodes.Count != Properties.Count)
             return false;
@@ -152,6 +210,16 @@ public sealed partial class ComponentViewModel : ObservableObject
         }
 
         return synced;
+    }
+
+    // Mirrors the latest is_enabled value into both the canonical backing token (kept in Raw) and the bound
+    // property, without re-committing — the value already came from the engine. Used by the live-value sync.
+    private void SyncEnabled(Component component)
+    {
+        var incoming = ReadEnabledToken(component.Raw)?.Value<bool>() ?? true;
+        if (_enabled is not null)
+            _enabled.Value = incoming;
+        SetProperty(ref _isEnabled, incoming, nameof(IsEnabled));
     }
 
     // The top-level property nodes the grid actually shows: a single-struct component is flattened to its

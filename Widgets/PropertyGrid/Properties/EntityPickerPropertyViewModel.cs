@@ -51,7 +51,7 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
     {
         var id = CurrentId;
         if (id == 0)
-            return "(none)";
+            return "None";
 
         return FindName((ulong)id) ?? $"#{id}";
     }

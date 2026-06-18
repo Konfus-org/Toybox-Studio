@@ -16,6 +16,12 @@
             <DockPanel DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel">
                 <TextBlock DockPanel.Dock="Right" Text="{Binding Subtitle}" Opacity="0.55"
                            VerticalAlignment="Center" HorizontalAlignment="Right" Margin="8,0,0,0"/>
+                <!-- Wholesale enable toggle: a disabled entity is skipped by every runtime system but stays
+                     selected and editable here. Same toy switch as the component/script headers. -->
+                <ToggleSwitch DockPanel.Dock="Left" Margin="0,0,8,0" VerticalAlignment="Center"
+                              IsChecked="{Binding IsEnabled}"
+                              OnContent="" OffContent="" MinHeight="0" Padding="0"
+                              ToolTip.Tip="Enable this entity"/>
                 <TextBlock Text="{Binding Name, FallbackValue=''}" FontWeight="Medium"
                            VerticalAlignment="Center"/>
             </DockPanel>
@@ -54,6 +60,15 @@
                                                       VerticalAlignment="Center"
                                                       Fill="{DynamicResource ThemeAccentSolidBrush}"
                                                       Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                                <!-- Enable toggle (before the chevron): a toy switch like every
+                                                     other bool. As an interactive child it swallows its own
+                                                     click, so flipping it never collapses the section. -->
+                                                <ToggleSwitch DockPanel.Dock="Right" Margin="6,0,4,0"
+                                                              VerticalAlignment="Center"
+                                                              IsChecked="{Binding IsEnabled}"
+                                                              IsVisible="{Binding HasEnableToggle}"
+                                                              OnContent="" OffContent="" MinHeight="0" Padding="0"
+                                                              ToolTip.Tip="Enable this component"/>
                                                 <pg:IconView DockPanel.Dock="Left" Width="15" Height="15"
                                                              Margin="2,0,6,0" VerticalAlignment="Center"
                                                              IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
@@ -102,7 +117,7 @@
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
                                     HorizontalAlignment="Right" Margin="0,8,0,0">
-                            <Button Content="Apply" Classes="accent" Command="{Binding ApplyJsonCommand}"/>
+                            <Button Content="Apply" Classes="action" Command="{Binding ApplyJsonCommand}"/>
                         </StackPanel>
                     </Grid>
                 </TabItem>

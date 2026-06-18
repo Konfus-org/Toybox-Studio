@@ -110,6 +110,8 @@ public sealed class JsonParser
             Order = Unwrap(entity["order"]).Value.Value<int>(),
             // is_global is a plain describe-only flag at the envelope root (not a typed {type,value} field).
             IsGlobal = entity.Value<bool?>("is_global") ?? false,
+            // is_enabled is a typed {type,value} envelope scalar like name/order; absent/null ⇒ enabled.
+            IsEnabled = Unwrap(entity["is_enabled"]).Value.Value<bool?>() ?? true,
             Components = ParseComponents(
                 entity["components"] as JObject, componentTypes, entity["component_order"] as JArray),
         };

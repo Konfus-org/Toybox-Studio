@@ -50,9 +50,22 @@ public sealed partial class HandlePickerPropertyViewModel : PropertyViewModel
     {
         var id = CurrentId;
         if (id == 0)
-            return "(none)";
+            return "None";
 
         return _catalog?.ResolveName(id) ?? $"#{id}";
+    }
+
+    /// <summary>
+    /// Clicking the reference label: a set reference reveals itself in the catalog; a "None" reference opens
+    /// the asset chooser so the user can pick a real asset.
+    /// </summary>
+    [RelayCommand]
+    private async Task ActivateAsync()
+    {
+        if (HasReference)
+            Open();
+        else
+            await PickAsync().ContinueOnSameContext();
     }
 
     /// <summary>Reveals the referenced asset in the catalog (the hyperlink action).</summary>

@@ -20,6 +20,10 @@ public sealed class Entity
     /// appears in the world view's Globals section rather than the scene tree.</summary>
     public bool IsGlobal { get; init; }
 
+    /// <summary>Whether the entity is enabled. A disabled entity is turned off wholesale (skipped by every
+    /// runtime system) but still appears in the editor so it can be re-enabled. Defaults true.</summary>
+    public bool IsEnabled { get; init; } = true;
+
     public required IReadOnlyList<Component> Components { get; init; }
 
     public List<Entity> Children { get; } = [];

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -14,7 +15,7 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// controls. Every structural edit mutates the live backing <see cref="JArray"/> in place and re-commits the
 /// owning component property — the same round-trip a leaf edit uses, so nested lists work too.
 /// </summary>
-public sealed class ArrayPropertyViewModel : PropertyViewModel
+public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
 {
     private readonly JArray? _array;
     private readonly JToken? _elementTemplate;
@@ -32,10 +33,40 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel
         AddCommand = new RelayCommand(Add, () => IsResizable);
         RemoveCommand = new RelayCommand<PropertyViewModel>(Remove);
 
+        Dropdown = new DropdownPart(this);
+        // The list's own row carries the append (+) affordance when it's resizable.
+        if (IsResizable)
+            Actions = new ActionsPart(add: AddCommand);
+
         Rebuild();
     }
 
     public override bool IsComposite => true;
+
+    // A list is "set" when any element is (value-wise); recompute when an element's modified flag moves.
+    private void OnElementChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(IsModified) or nameof(State))
+            RecomputeModified();
+    }
+
+    private void RecomputeModified() => IsModified = Items.Any(item => item.IsModified);
+
+    /// <summary>The backing array token, so the whole list can be compared/reset as a unit.</summary>
+    public override JToken? CurrentValue => _array;
+
+    /// <summary>Restores the list to a default array (count + element values) — the settings reset path.</summary>
+    public override void ApplyValue(JToken token)
+    {
+        if (_array is null || token is not JArray defaults)
+            return;
+
+        _array.Clear();
+        foreach (var element in defaults)
+            _array.Add(element.DeepClone());
+        Rebuild();
+        RaiseCommit();
+    }
 
     public override bool HasChildren => true;
 
@@ -126,10 +157,23 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel
         if (_array is not null)
         {
             foreach (var child in JsonParser.ParseArrayElements(_array))
-                Items.Add(PropertyViewModelFactory.Create(Headered(child), _commit, _depth + 1));
+            {
+                var element = PropertyViewModelFactory.Create(Headered(child), _commit, _depth + 1);
+                element.PropertyChanged += OnElementChanged;
+                // A resizable list's elements carry their own reorder grip + delete affordance, rendered in
+                // the element row's Handle / Actions slots.
+                if (IsResizable)
+                {
+                    element.Handle = new HandlePart(this, element);
+                    element.Actions = new ActionsPart(remove: new RelayCommand(() => Remove(element)));
+                }
+
+                Items.Add(element);
+            }
         }
 
         Summary = $"{Items.Count} item{(Items.Count == 1 ? "" : "s")}";
+        RecomputeModified();
     }
 
     // A struct/object element shows a meaningful header instead of its "[i]" index when it carries an obvious

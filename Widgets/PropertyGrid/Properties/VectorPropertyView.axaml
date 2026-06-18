@@ -13,15 +13,17 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="local:VectorComponentViewModel">
-                    <!-- Drag the field to scrub, or click to type. Even gaps keep the row uncramped. -->
-                    <DockPanel Margin="0,0,10,0">
+                    <!-- Drag the field to scrub, or click to type. MinWidth=0 lets the equal-width columns
+                         shrink the fields cleanly when the value column is narrow (instead of the fixed-width
+                         fields overflowing and overlapping their axis labels); tight gaps keep more room. -->
+                    <DockPanel Margin="0,0,4,0">
                         <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" FontSize="11"
                                    FontWeight="SemiBold" Width="11" TextAlignment="Center"
-                                   Margin="0,0,6,0" VerticalAlignment="Center"
+                                   Margin="0,0,3,0" VerticalAlignment="Center"
                                    Foreground="{Binding Label,
                                        Converter={x:Static local:AxisLabelToBrushConverter.Instance}}"/>
                         <NumericUpDown Classes="field" ShowButtonSpinner="False" FormatString="0.######"
-                                       local:NumericScrub.Enabled="True" Value="{Binding Value}"/>
+                                       MinWidth="0" local:NumericScrub.Enabled="True" Value="{Binding Value}"/>
                     </DockPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

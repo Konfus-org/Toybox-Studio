@@ -224,6 +224,11 @@ public sealed class EngineRpc : IAsyncDisposable
     public Task<Result> SetEntityGlobalAsync(ulong entityId, bool global, CancellationToken ct) =>
         InvokeAsync("entity.setGlobal", new { EntityId = entityId, Global = global }, ct);
 
+    /// <summary>Toggles an entity's wholesale enable flag; disabled entities are skipped by every runtime
+    /// system (rendering, physics, scripting) but stay listed in the editor.</summary>
+    public Task<Result> SetEntityEnabledAsync(ulong entityId, bool enabled, CancellationToken ct) =>
+        InvokeAsync("entity.setEnabled", new { EntityId = entityId, Enabled = enabled }, ct);
+
     /// <summary>
     /// Moves an entity to <paramref name="parent"/> (zero = root) and to position <paramref name="index"/>
     /// among that parent's children — one call covers both reorder and reparent.

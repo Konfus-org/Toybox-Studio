@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors">
 
     <!-- INPUTS — text boxes, combo boxes, numeric fields and toggles, all rendered as PRESSED toy wells: a
          recessed fill (routed onto the FluentTheme surface keys in ThemeApplier) plus an inset BoxShadow on
@@ -66,8 +67,19 @@
         <Setter Property="CornerRadius" Value="{DynamicResource ThemeRightCornerRadius}"/>
     </Style>
 
-    <!-- Bool toggles render as a toy switch (see BoolPropertyView); give the track a touch more roundness. -->
+    <!-- Bool toggles render as a toy switch (see BoolPropertyView); give the track a touch more roundness. They
+         sit FLAT at rest and TIP toward the new state like a physical rocker when flipped, then spring back to
+         flat — a one-shot lean driven by the ToggleTip behavior, scaled by the animation-intensity setting
+         (nothing at 0). -->
     <Style Selector="ToggleSwitch">
         <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="behaviors:ToggleTip.Enabled" Value="True"/>
+    </Style>
+
+    <!-- Typing juice: every text box wiggles its visible field on each keystroke (TextWiggle) and, on Enter,
+         nods to confirm + drops focus (EnterNod). Subtle at the default intensity, off at 0. -->
+    <Style Selector="TextBox">
+        <Setter Property="behaviors:TextWiggle.Enabled" Value="True"/>
+        <Setter Property="behaviors:EnterNod.Enabled" Value="True"/>
     </Style>
 </Styles>

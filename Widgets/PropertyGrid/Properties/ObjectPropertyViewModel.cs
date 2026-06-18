@@ -1,24 +1,51 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>
-/// Nested struct/object property — a recursive sub-grid of child properties.
+/// Nested struct/object property — a recursive sub-grid of child properties. Shows a state indicator like any
+/// row: a struct reads as default exactly when all its children are (its <see cref="PropertyViewModel.IsModified"/>
+/// is the reactive aggregate of its children).
 /// </summary>
-public sealed class ObjectPropertyViewModel : PropertyViewModel
+public sealed class ObjectPropertyViewModel : PropertyViewModel, IExpandable
 {
+    private readonly JToken? _object;
+
     public ObjectPropertyViewModel(PropertyNode node, Action? commit, int depth = 0) : base(node)
     {
+        _object = node.Value;
+
         // Leaf children float above nested struct/array sections (same rule as the grid's top level).
         // OrderChildren keeps a stable partition by node, so the VM order here and SyncCore's per-index zip
         // below both reorder the source nodes identically.
         Children = [];
         foreach (var child in OrderChildren(node.Children))
-            Children.Add(PropertyViewModelFactory.Create(child, commit, depth + 1));
+        {
+            var childViewModel = PropertyViewModelFactory.Create(child, commit, depth + 1);
+            childViewModel.PropertyChanged += OnChildChanged;
+            Children.Add(childViewModel);
+        }
+
+        Dropdown = new DropdownPart(this);
+        RecomputeModified();
     }
 
     public override bool IsComposite => true;
+
+    // A struct is "set" exactly when one of its members is — recompute when any child's modified flag moves.
+    private void OnChildChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(IsModified) or nameof(State))
+            RecomputeModified();
+    }
+
+    private void RecomputeModified() => IsModified = Children.Any(child => child.IsModified);
+
+    /// <summary>The backing struct token, so the whole subtree can be compared/reset as a unit.</summary>
+    public override JToken? CurrentValue => _object;
 
     public override bool HasChildren => true;
 

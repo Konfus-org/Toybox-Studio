@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.SliderPropertyView"
+             x:DataType="local:SliderPropertyViewModel">
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Width="34" Margin="8,0,0,0" VerticalAlignment="Center"
+                       FontSize="12" Foreground="{DynamicResource ThemeMutedTextBrush}"
+                       Text="{Binding Value, StringFormat='{}{0:0.00}'}"/>
+            <Slider Minimum="0" Maximum="1" Value="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"
+                    VerticalAlignment="Center"/>
+        </DockPanel>
+    </local:PropertyRow>
+</UserControl>

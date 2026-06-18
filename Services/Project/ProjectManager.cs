@@ -39,7 +39,12 @@ public sealed class ProjectManager
             TryOpen(lastOpened, out _);
     }
 
+    /// <summary>Raised when a different project (or world) is opened — listeners may relaunch the engine.</summary>
     public event Action<ProjectInfo?>? ProjectChanged;
+
+    /// <summary>Raised when only the open project's display name changed (e.g. its AppSettings "name" was
+    /// edited). Distinct from <see cref="ProjectChanged"/>: this never relaunches the engine.</summary>
+    public event Action<ProjectInfo?>? ProjectRenamed;
 
     public ProjectInfo? CurrentProject { get; private set; }
 
@@ -138,13 +143,22 @@ public sealed class ProjectManager
     }
 
     /// <summary>
-    /// Re-opens the current project from disk to refresh its display name and notify listeners (used
-    /// after its app settings are edited through the settings view).
+    /// Re-reads the current project's display name from its AppSettings (it can change via the "name" field)
+    /// and updates it in place, raising <see cref="ProjectRenamed"/>. Unlike <see cref="TryOpen"/> / a reopen
+    /// this does NOT raise <see cref="ProjectChanged"/>, so it never relaunches the engine — used after the
+    /// project's settings are saved (the running engine hot-reloads them itself).
     /// </summary>
-    public void Reopen()
+    public void RefreshDisplayName()
     {
-        if (CurrentProject is not null)
-            TryOpen(CurrentProject.RootDirectory, out _);
+        if (CurrentProject is not { } project)
+            return;
+
+        var name = ReadProjectName(project.AppSettingsPath) ?? project.ModuleName;
+        if (string.Equals(name, project.Name, StringComparison.Ordinal))
+            return;
+
+        CurrentProject = project with { Name = name };
+        ProjectRenamed?.Invoke(CurrentProject);
     }
 
     private static string? ReadProjectName(string appSettingsPath)

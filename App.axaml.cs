@@ -20,6 +20,7 @@ using Toybox.Studio.Shell.Workspace;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Services.Motion;
 using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.Theming;
 using Toybox.Studio.Models;
@@ -102,6 +103,11 @@ public partial class App : Application
             foreach (var warning in themeManager.LoadWarnings)
                 log.Warning(warning);
 
+            // Publish the motion tokens from the saved Animation-intensity setting so the juicy transitions are
+            // live from the first frame (independent of the theme).
+            MotionTokens.Publish(
+                _host.Services.GetRequiredService<EditorSettings>().Accessibility.AnimationIntensity);
+
             // Give the property grid's custom widgets (asset pickers, script links) the services they
             // need before any inspector or settings grid is built.
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
@@ -109,6 +115,11 @@ public partial class App : Application
                 catalog,
                 _host.Services.GetRequiredService<WorldManager>(),
                 _host.Services.GetRequiredService<EngineRpc>());
+
+            // The Accessibility ▸ Animation intensity setting renders as a clay slider rather than a numeric
+            // field (tagged [View("intensitySlider")] by the settings grid; see SettingsViewModel.TagView).
+            PropertyViewRegistry.Register(
+                "intensitySlider", (node, commit) => new SliderPropertyViewModel(node, commit));
 
             // Activating an asset link (e.g. a handle hyperlink) reveals the file in the OS explorer.
             catalog.AssetActivated += id =>

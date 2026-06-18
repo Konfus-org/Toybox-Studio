@@ -54,6 +54,43 @@ public sealed partial class EntityViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsGlobal { get; private set; }
 
+    // Guards the enable toggle while UpdateFrom seeds it from a snapshot, so reconciling to engine truth
+    // doesn't echo back a redundant entity.setEnabled.
+    private bool _suppressEnabledCommit;
+
+    private bool _isEnabled = true;
+
+    /// <summary>
+    /// Whether the entity is enabled. Flipping it turns the entity off wholesale in the engine — every
+    /// runtime system skips a disabled entity — via <c>entity.setEnabled</c>; it stays in the world tree so
+    /// it can be turned back on. Seeded from each snapshot without re-committing.
+    /// </summary>
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set
+        {
+            if (!SetProperty(ref _isEnabled, value) || _suppressEnabledCommit)
+                return;
+
+            CommitEnabledAsync(value).FireAndForget();
+        }
+    }
+
+    private async Task CommitEnabledAsync(bool enabled)
+    {
+        var result = await _engine.SetEntityEnabledAsync(Id, enabled, CancellationToken.None)
+            .ContinueOnSameContext();
+        if (result.Success)
+        {
+            _onEdited();
+            return;
+        }
+
+        await Popups.ShowErrorAsync("Couldn't change entity state", result.Error!).ContinueOnSameContext();
+        await _resync().ContinueOnSameContext();
+    }
+
     /// <summary>True while the entity's name is being edited inline in the world list.</summary>
     [ObservableProperty]
     public partial bool IsRenaming { get; set; }
@@ -142,6 +179,10 @@ public sealed partial class EntityViewModel : ObservableObject
         Name = data.Name;
         Tag = data.Tag;
         IsGlobal = data.IsGlobal;
+        // Seed the enable flag from engine truth without echoing a setEnabled back.
+        _suppressEnabledCommit = true;
+        IsEnabled = data.IsEnabled;
+        _suppressEnabledCommit = false;
         // Tag is intentionally left out of the header for now; just the id, shown right-aligned.
         Subtitle = $"#{data.Id}";
 

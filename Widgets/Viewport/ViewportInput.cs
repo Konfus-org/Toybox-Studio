@@ -47,8 +47,7 @@ public sealed class ViewportInput
         private bool _hasPointer;
         private int _buttons;
         private int _moveKeys;
-        // True for the single PointerMoved our own re-centre warp triggers, so it isn't read as a delta.
-        private bool _suppressNextMove;
+        private bool _suppressNextMove; // True for the single PointerMoved our own re-centre warp triggers, so it isn't read as a delta.
 
         public Handler(Control control)
         {

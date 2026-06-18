@@ -8,8 +8,11 @@
     <Style Selector="TabControl">
         <Setter Property="Padding" Value="0"/>
     </Style>
+    <!-- The tab content is transparent so the dock-panel surface shows through — the same background the
+         inspector (Components) panel reads on — keeping every folder-tab panel (Settings, Inspector) on one
+         consistent panel surface rather than a separate flat sheet. -->
     <Style Selector="TabControl /template/ ContentPresenter#PART_SelectedContentHost">
-        <Setter Property="Background" Value="{DynamicResource ThemeSurfaceFlatBrush}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="CornerRadius" Value="{DynamicResource ThemePanelCornerRadius}"/>
         <Setter Property="ClipToBounds" Value="True"/>
     </Style>

@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using CommunityToolkit.Mvvm.Input;
@@ -17,6 +18,15 @@ namespace Toybox.Studio.Widgets.Console;
 /// </summary>
 public class ConsoleListBox : ListBox
 {
+    // How close (in px) to the bottom still counts as "parked at the tail".
+    private const double BottomThreshold = 2.0;
+
+    private ScrollViewer? _scrollViewer;
+
+    // While true, new output scrolls into view; the user scrolling up clears it, scrolling
+    // back to the bottom restores it. Starts true so the console tails by default.
+    private bool _stickToBottom = true;
+
     public ConsoleListBox()
     {
         CopySelectionCommand = new RelayCommand(CopySelection);
@@ -46,6 +56,34 @@ public class ConsoleListBox : ListBox
         }
     }
 
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+
+        if (_scrollViewer is { })
+            _scrollViewer.ScrollChanged -= OnScrollChanged;
+
+        _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
+
+        if (_scrollViewer is { })
+            _scrollViewer.ScrollChanged += OnScrollChanged;
+    }
+
+    private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (_scrollViewer is not { } scrollViewer)
+            return;
+
+        // Only react to the user moving the view. New output grows the extent (and our own
+        // tailing scroll rides along with it); those come through as an extent change, which we
+        // ignore so a growing log isn't mistaken for the user scrolling away from the bottom.
+        if (e.ExtentDelta.Y != 0 || e.OffsetDelta.Y == 0)
+            return;
+
+        _stickToBottom =
+            scrollViewer.Offset.Y >= scrollViewer.Extent.Height - scrollViewer.Viewport.Height - BottomThreshold;
+    }
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
         if (e.Key == Key.C && e.KeyModifiers.HasFlag(KeyModifiers.Control))
@@ -59,8 +97,16 @@ public class ConsoleListBox : ListBox
 
     private void OnLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // Follow the tail on new output, but don't yank the view while the user is selecting lines.
-        if (e.Action == NotifyCollectionChangedAction.Add && SelectedItems is { Count: 0 })
+        // Clearing the log (e.g. the Clear command) resets us to tailing.
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            _stickToBottom = true;
+            return;
+        }
+
+        // Follow the tail on new output, but only while the user is parked at the bottom and isn't
+        // selecting lines — otherwise leave the view where they put it so they can read in peace.
+        if (e.Action == NotifyCollectionChangedAction.Add && _stickToBottom && SelectedItems is { Count: 0 })
             ScrollIntoView(ItemCount - 1);
     }
 

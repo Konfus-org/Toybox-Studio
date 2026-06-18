@@ -38,6 +38,38 @@
         <Setter Property="Background" Value="{DynamicResource ThemeRefreshButtonHoverBrush}"/>
     </Style>
 
+    <!-- POPOUT comes from the top→bottom gradient fill (lighter top, darker bottom), NOT a drop shadow: a
+         BoxShadow on the Fluent button's ContentPresenter renders as a square that ignores the corner radius
+         (unlike the inputs/cards, whose shadow sits on a real rounded Border), so it's left off here. -->
+
+    <!-- JUICY: every button presses in and lifts on interaction. The transform magnitude comes from the
+         intensity-scaled tokens (MotionTokens), so it tracks the Accessibility ▸ Animation intensity setting
+         and collapses to identity (no motion) at 0. The presenter additionally fades its fill between states,
+         so a hover/press colour change eases in rather than snapping. -->
+    <Style Selector="Button, ToggleButton">
+        <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+        <Setter Property="RenderTransform" Value="{DynamicResource ThemeControlRestTransform}"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Button:pointerover, ToggleButton:pointerover">
+        <Setter Property="RenderTransform" Value="{DynamicResource ThemeButtonHoverTransform}"/>
+    </Style>
+    <Style Selector="Button:pressed, ToggleButton:pressed">
+        <Setter Property="RenderTransform" Value="{DynamicResource ThemeButtonPressTransform}"/>
+    </Style>
+    <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.12"/>
+            </Transitions>
+        </Setter>
+    </Style>
+
     <!-- Toy "popout" buttons (the console's Clear, the Game transport): the SAME soft surface gradient,
          hairline border and rounding as the search pills — so a button reads as a raised toy surface — and
          they DIM on hover/press (like the chrome-less buttons) instead of brightening or flipping their icon

@@ -62,8 +62,18 @@ public static class ListReorder
             return;
 
         var items = handle.FindAncestorOfType<ItemsControl>();
-        if (items?.DataContext is not ArrayPropertyViewModel list
-            || handle.DataContext is not PropertyViewModel element)
+        if (items is null)
+            return;
+
+        // The grip lives in its own row slot (DataContext = HandlePart) carrying its list + element; the older
+        // inline grip had the element view-model as its DataContext and read the list off the ItemsControl.
+        var (list, element) = handle.DataContext switch
+        {
+            HandlePart part => (part.List, (PropertyViewModel?)part.Element),
+            PropertyViewModel pvm => (items.DataContext as ArrayPropertyViewModel, pvm),
+            _ => (null, null),
+        };
+        if (list is null || element is null)
             return;
 
         var from = list.Items.IndexOf(element);

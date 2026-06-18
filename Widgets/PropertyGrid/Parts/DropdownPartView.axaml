@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.DropdownPartView"
+             x:DataType="local:DropdownPart">
+    <!-- The disclosure chevron: a chromeless button that toggles the composite, rotating when expanded
+         (the shared pgChevron style). The whole row may also toggle (ToggleOnTap), but the chevron is itself
+         a click target so it works on its own. -->
+    <Button Classes="Basic" Command="{Binding ToggleCommand}" Padding="2,0" VerticalAlignment="Center"
+            ToolTip.Tip="Expand / collapse">
+        <Path Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
+              Width="8" Height="8" Stretch="Uniform" VerticalAlignment="Center"
+              Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+    </Button>
+</UserControl>

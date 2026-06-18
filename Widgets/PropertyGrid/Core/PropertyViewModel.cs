@@ -28,8 +28,27 @@ public abstract class PropertyViewModel : ObservableObject
         Icon = node.Icon;
         IconColor = node.IconColor;
         _value = node.Value;
+        // Seed the indicator from the engine's describe flag (accurate for leaves AND composites — a struct/
+        // list reports is_default for its whole subtree). Untyped data (settings) has no flag, so this starts
+        // false and the host's default-wiring corrects leaves; composites then aggregate from their children.
+        _isModified = !node.IsDefault;
         ResetCommand = new RelayCommand(() => ResetToDefault?.Invoke());
+        StateIndicator = new StateIndicatorPart(this);
     }
+
+    /// <summary>
+    /// The composable pieces the shared <see cref="PropertyRow"/> lays out in its slots. Every row has a
+    /// <see cref="StateIndicator"/>; the rest are present only where they apply — <see cref="Dropdown"/> on a
+    /// composite, <see cref="Actions"/> on a list (add) or list element (remove), <see cref="Handle"/> on a
+    /// reorderable list element (a list attaches these to its element rows).
+    /// </summary>
+    public StateIndicatorPart StateIndicator { get; }
+
+    public DropdownPart? Dropdown { get; internal set; }
+
+    public ActionsPart? Actions { get; internal set; }
+
+    public HandlePart? Handle { get; internal set; }
 
     public string Name { get; }
 
@@ -128,14 +147,13 @@ public abstract class PropertyViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The row's right-hand indicator state. Composite header rows show nothing; read-only rows a lock;
-    /// otherwise a filled circle when the value differs from its default, a hollow circle when at default
-    /// (or when the default is unknown — nested/settings rows — which read as default rather than "set").
-    /// Rendered by <see cref="PropertyStateToIndicatorConverter"/>.
+    /// The row's right-hand indicator state, shown for every row (composites included — a struct/list reads as
+    /// default when all its children/elements are). Read-only rows show a lock; otherwise a filled circle when
+    /// the value differs from its default, a hollow circle when at default (or when the default is unknown).
+    /// Rendered by <see cref="PropertyStateToIndicatorConverter"/> via the <see cref="StateIndicator"/> part.
     /// </summary>
     public PropertyState State =>
-        IsComposite ? PropertyState.None
-        : IsReadOnly ? PropertyState.ReadOnly
+        IsReadOnly ? PropertyState.ReadOnly
         : IsModified ? PropertyState.NonDefault
         : PropertyState.Default;
 

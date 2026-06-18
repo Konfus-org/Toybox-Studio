@@ -98,10 +98,19 @@ public sealed class ThemeApplier
             "AccentFillColorSecondaryBrush",
             "AccentFillColorTertiaryBrush",
             "AccentButtonBackground",
-            "AccentButtonBackgroundPointerOver",
-            "AccentButtonBackgroundPressed",
         })
             resources[key] = primaryBrush;
+
+        // The accent button (Fluent's Classes="accent") must REACT like our other buttons: hover brightens,
+        // press recesses — otherwise it sits inert (the "primary button doesn't fade on hover" bug). Build the
+        // hover/press fills from the primary stops, same lighten/darken split as SetColorButton. (Our own
+        // primary buttons use Classes="action"; this keeps any stray accent button consistent too.)
+        resources["AccentButtonBackgroundPointerOver"] = ColorGradient.BuildBrush(
+            ColorMath.Blend(colors.Primary.Start, Colors.White, 0.15f),
+            ColorMath.Blend(colors.Primary.End, Colors.White, 0.15f), 90);
+        resources["AccentButtonBackgroundPressed"] = ColorGradient.BuildBrush(
+            ColorMath.Blend(colors.Primary.Start, Colors.Black, 0.10f),
+            ColorMath.Blend(colors.Primary.End, Colors.Black, 0.14f), 90);
 
         // Dock.Avalonia ships its own #007ACC accent + system-derived chrome; point its overridable brush
         // keys at the active theme so docking (selected tabs, the drop-position highlight, the drag overlay
@@ -185,15 +194,16 @@ public sealed class ThemeApplier
 
         // FLAT control surfaces: text inputs are near-white pills (with the inset well shadow they read as the
         // clean white fields in the reference). These are FluentTheme keys, so they stay in code.
-        var flatBorder = new SolidColorBrush(ColorMath.WithAlpha(text, 0x22));
         var transparent = new SolidColorBrush(Colors.Transparent);
         var inputFill = new SolidColorBrush(colors.Surface.Start);
         var inputHover = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.White, 0.4f));
         foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundFocused" })
             resources[key] = inputFill;
         resources["TextControlBackgroundPointerOver"] = inputHover;
-        resources["TextControlBorderBrush"] = flatBorder;
-        resources["TextControlBorderBrushPointerOver"] = flatBorder;
+        // No hard outline: the inset well shadow alone defines the recess (clay "pressed-in" field). The border
+        // only appears, softly, on focus as the accent affordance (and fades in via the focus brush transition).
+        resources["TextControlBorderBrush"] = transparent;
+        resources["TextControlBorderBrushPointerOver"] = transparent;
         resources["TextControlBorderBrushFocused"] = new SolidColorBrush(accent);
 
         // Buttons: a soft top→bottom clay gradient (lighter top, slightly darker bottom) so each reads as a
@@ -224,11 +234,43 @@ public sealed class ThemeApplier
         SetColorButton(resources, "ThemeStopButton", colors.Stop.Start, colors.Stop.End);
         SetColorButton(resources, "ThemeRefreshButton", colors.Refresh.Start, colors.Refresh.End);
 
-        // Combo boxes: flat near-white pills like the text inputs (no gradient).
+        // Combo boxes: flat near-white pills like the text inputs (no gradient), and — like the text inputs —
+        // no hard outline (the inset well shadow carries the recess); only the focus border shows as accent.
         resources["ComboBoxBackground"] = inputFill;
         resources["ComboBoxBackgroundPointerOver"] = inputHover;
         resources["ComboBoxBackgroundPressed"] = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.Black, 0.06f));
         resources["ComboBoxBackgroundFocused"] = inputFill;
+        resources["ComboBoxBorderBrush"] = transparent;
+        resources["ComboBoxBorderBrushPointerOver"] = transparent;
+        resources["ComboBoxBorderBrushPressed"] = transparent;
+        resources["ComboBoxBorderBrushFocused"] = new SolidColorBrush(accent);
+
+        // Menu / flyout dropdown panels: the popup surfaces (top-level menu dropdowns, submenus, context
+        // menus, flyouts) default to a Fluent neutral that ignores the theme. Point them at the theme surface
+        // (a flat fill the translucent item highlight tints over) with a subtle border. FluentTheme keys, so
+        // they stay in code for Application.Resources precedence.
+        var menuSurface = new SolidColorBrush(colors.Surface.Representative);
+        var menuBorder = new SolidColorBrush(ColorMath.WithAlpha(text, 0x2E));
+        foreach (var key in new[] { "MenuFlyoutPresenterBackground", "FlyoutPresenterBackground" })
+            resources[key] = menuSurface;
+        foreach (var key in new[] { "MenuFlyoutPresenterBorderBrush", "FlyoutBorderThemeBrush" })
+            resources[key] = menuBorder;
+
+        // Sliders (e.g. the Accessibility animation-intensity dial, the theme editor's angle sliders): a clay
+        // groove with an accent-gradient value fill and a raised surface thumb. These recolour FluentTheme's
+        // slider keys (the inset groove / thumb shadow are added in SliderStyle); they stay here for the same
+        // Application.Resources-precedence reason as the other Fluent overrides.
+        var grooveBrush = new SolidColorBrush(ColorMath.WithAlpha(text, 0x22));
+        var thumbBrush = new SolidColorBrush(colors.Surface.Start);
+        resources["SliderTrackFill"] = grooveBrush;
+        resources["SliderTrackFillPointerOver"] = grooveBrush;
+        resources["SliderTrackFillPressed"] = grooveBrush;
+        resources["SliderTrackValueFill"] = primaryBrush;
+        resources["SliderTrackValueFillPointerOver"] = primaryBrush;
+        resources["SliderTrackValueFillPressed"] = primaryBrush;
+        resources["SliderThumbBackground"] = thumbBrush;
+        resources["SliderThumbBackgroundPointerOver"] = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.White, 0.3f));
+        resources["SliderThumbBackgroundPressed"] = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.White, 0.3f));
 
         var radius = new CornerRadius(theme.CornerRadius);
         resources["ControlCornerRadius"] = radius;

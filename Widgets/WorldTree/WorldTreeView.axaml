@@ -84,6 +84,12 @@
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
+
+        <!-- A disabled entity (turned off wholesale) reads dimmed in the tree, so its state is visible
+             without selecting it. Toggled live from the inspector via the shared EntityViewModel. -->
+        <Style Selector="TextBlock.entityDisabled">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
     </UserControl.Styles>
 
     <!-- Shared row content: a centred drag handle, the entity name (double-tap to rename in place), a centred
@@ -123,6 +129,7 @@
                        util:ExpandOnTap.Enabled="True">
                     <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                IsVisible="{Binding !IsRenaming}"
+                               Classes.entityDisabled="{Binding !IsEnabled}"
                                util:DoubleTapCommand.Command="{Binding BeginRenameCommand}"/>
                     <TextBox Classes="renameBox" Text="{Binding RenameDraft, Mode=TwoWay}"
                              IsVisible="{Binding IsRenaming}"

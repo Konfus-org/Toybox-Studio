@@ -29,6 +29,8 @@ public sealed class EditorSettings
 
     public ThemeEditorSettings Theme { get; set; } = new();
 
+    public AccessibilityEditorSettings Accessibility { get; set; } = new();
+
     /// <summary>
     /// Loads the settings from EditorSettings.json, falling back to defaults when the file is missing
     /// or unreadable (the unreadable file is preserved alongside as a *.corrupt breadcrumb).
@@ -119,6 +121,20 @@ public sealed class ProjectEditorSettings
     public string LastOpened { get; set; } = "";
 
     public List<string> Recent { get; set; } = [];
+}
+
+/// <summary>
+/// Accessibility / comfort preferences. Currently the global animation-intensity dial that scales the
+/// editor's micro-animations (button press, toggle tilt, typing wiggle) — see
+/// <c>Toybox.Studio.Services.Motion.MotionTokens</c>. 0 turns motion off entirely; 1 is the most pronounced.
+/// </summary>
+public sealed class AccessibilityEditorSettings
+{
+    /// <summary>
+    /// How energetic the editor's micro-animations are, 0 (no motion) to 1 (full). Defaults to a subtle 0.35.
+    /// Rendered as a clay slider in Settings via [View("intensitySlider")].
+    /// </summary>
+    public double AnimationIntensity { get; set; } = 0.35;
 }
 
 public sealed class ThemeEditorSettings

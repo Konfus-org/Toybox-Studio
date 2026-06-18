@@ -1,0 +1,14 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- SLIDERS — clay look: the rail reads as a pressed-in groove (inset well shadow on its rounded track),
+         while the value fill + thumb are recoloured to the accent/surface via FluentTheme's slider keys in
+         ThemeApplier. The groove BoxShadow rides FluentTheme's real track-background border so it follows the
+         rail's rounding; if a future Fluent revision renames the part the selector simply no-ops (the recolour
+         still carries the look). Used by the Accessibility animation-intensity dial and the theme editor's
+         angle sliders. -->
+    <Style Selector="Slider /template/ Border#TrackBackground">
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetSoftShadow}"/>
+    </Style>
+</Styles>

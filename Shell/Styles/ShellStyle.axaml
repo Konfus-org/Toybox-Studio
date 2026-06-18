@@ -21,11 +21,12 @@
         <Setter Property="CornerRadius" Value="0,0,12,12"/>
         <Setter Property="BoxShadow" Value="0 3 12 0 #26000000"/>
     </Style>
-    <!-- Top-level menu items read as soft toy pills, rounded to the theme radius. -->
+    <!-- Top-level menu items read as soft toy pills, rounded to the theme radius. Kept tight so the menu bar
+         reads as a compact row rather than a sparse one. -->
     <Style Selector="Border.Toolbar Menu > MenuItem">
         <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
-        <Setter Property="Padding" Value="12,5"/>
-        <Setter Property="Margin" Value="2,0"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="Margin" Value="0"/>
     </Style>
 
     <!-- A pressed vertical divider for the toolbar: a thin rounded groove (dark hairline + light
@@ -43,8 +44,8 @@
          a MenuItem) are NOT matched by the direct-child selector, so they keep their normal horizontal rule. -->
     <Style Selector="Border.Toolbar Menu > Separator">
         <Setter Property="Width" Value="1"/>
-        <Setter Property="MinHeight" Value="18"/>
-        <Setter Property="Margin" Value="4,4"/>
+        <Setter Property="MinHeight" Value="16"/>
+        <Setter Property="Margin" Value="2,4"/>
         <Setter Property="Background" Value="#26000000"/>
         <Setter Property="BorderBrush" Value="#40FFFFFF"/>
         <Setter Property="BorderThickness" Value="0,0,1,0"/>

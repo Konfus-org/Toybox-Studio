@@ -8,6 +8,7 @@ using Toybox.Studio.Widgets.PropertyGrid;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Services.Motion;
 using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.Theming;
 using Toybox.Studio.Widgets.Theming;
@@ -29,6 +30,8 @@ public sealed partial class SettingsViewModel : DataPanel
     private readonly EditorSettings _editor;
     private readonly ThemeManager _theme;
     private readonly ProjectManager _projects;
+    private readonly Session _session;
+    private readonly Locator _locator;
     private readonly Logger _log;
     private readonly JsonParser _parser;
     private readonly EngineRpc _engine;
@@ -41,6 +44,7 @@ public sealed partial class SettingsViewModel : DataPanel
         FilePicker filePicker,
         ProjectManager projects,
         Session session,
+        Locator locator,
         EngineRpc engine,
         Logger log,
         JsonParser parser)
@@ -48,6 +52,8 @@ public sealed partial class SettingsViewModel : DataPanel
         _editor = editor;
         _theme = theme;
         _projects = projects;
+        _session = session;
+        _locator = locator;
         _log = log;
         _parser = parser;
         _engine = engine;
@@ -103,20 +109,8 @@ public sealed partial class SettingsViewModel : DataPanel
     [ObservableProperty]
     public partial string Search { get; set; } = "";
 
-    // Set while we persist project settings: our own save calls _projects.Reopen() to refresh the title and
-    // notify listeners, which posts a ProjectChanged-driven RefreshProjectSettings back to us. Rebuilding the
-    // grid we are editing would tear down the live rows and collapse any expanded list/struct (and drop edit
-    // focus), so we swallow exactly that one self-induced refresh. The grid already shows the edited values.
-    private bool _suppressProjectRefresh;
-
     private void RefreshProjectSettings()
     {
-        if (_suppressProjectRefresh)
-        {
-            _suppressProjectRefresh = false;
-            return;
-        }
-
         var project = _projects.CurrentProject;
         HasProject = project is not null;
         _appJson = ReadAppJson(project);
@@ -235,10 +229,11 @@ public sealed partial class SettingsViewModel : DataPanel
         }
 
         _appJson = toWrite;
-        // Reopen refreshes the display name + notifies listeners; suppress the resulting refresh of THIS
-        // grid (posted via ProjectChanged) so editing a list/struct doesn't rebuild and collapse it.
-        _suppressProjectRefresh = true;
-        _projects.Reopen();
+        // Deliberately NOT _projects.Reopen() here: that fired ProjectChanged → Session.RestartForProjectAsync,
+        // relaunching/recompiling the engine on every settings save. The running engine hot-reloads AppSettings
+        // on its own (it watches the file), and our _appJson is already current — so just refresh the project
+        // display name (which can change via the "name" field) without notifying Session.
+        _projects.RefreshDisplayName();
     }
 
     private static JObject? ReadAppJson(ProjectInfo? project)
@@ -271,6 +266,8 @@ public sealed partial class SettingsViewModel : DataPanel
         // The reflected POCO loses the fact that the compiler is a fixed choice, so tag it as an enum
         // (with its options) here; the grid then renders it as a dropdown instead of a free-text box.
         TagEnum(_editorSettingsJson, "Build", "Compiler", [.. CMakeCompiler.CompilerChoices]);
+        // Likewise, render the animation-intensity dial as a clay slider rather than a numeric field.
+        TagView(_editorSettingsJson, "Accessibility", "AnimationIntensity", "intensitySlider");
         foreach (var node in _parser.ParseProperties(_editorSettingsJson))
             EditorSettingsProperties.Add(PropertyViewModelFactory.Create(node, OnEdited));
 
@@ -300,9 +297,20 @@ public sealed partial class SettingsViewModel : DataPanel
         foreach (var viewModel in items)
         {
             var fallback = defaults[viewModel.RawName];
-            if (viewModel is ObjectPropertyViewModel composite && fallback is JObject childDefaults)
+            if (viewModel is ObjectPropertyViewModel structRow && fallback is JObject childDefaults)
             {
-                WireDefaults(composite.Children, childDefaults);
+                // Wire the leaves first, then make the struct itself resettable — resetting it just resets all
+                // its children. Its modified state is the children's aggregate (handled by the view-model).
+                WireDefaults(structRow.Children, childDefaults);
+                if (!structRow.IsReadOnly)
+                    structRow.ResetToDefault = () => ResetChildren(structRow.Children);
+            }
+            else if (viewModel is ArrayPropertyViewModel listRow && fallback is JArray arrayDefault
+                     && !listRow.IsReadOnly)
+            {
+                // A list resets to its whole default array (count + element values).
+                var def = (JArray)arrayDefault.DeepClone();
+                listRow.ResetToDefault = () => listRow.ApplyValue(def);
             }
             else if (fallback is JValue value && !viewModel.IsReadOnly)
             {
@@ -316,6 +324,13 @@ public sealed partial class SettingsViewModel : DataPanel
                 };
             }
         }
+    }
+
+    // Resets a composite by reverting each of its children to default (each child was wired above).
+    private static void ResetChildren(IEnumerable<PropertyViewModel> children)
+    {
+        foreach (var child in children)
+            child.ResetToDefault?.Invoke();
     }
 
     private static void UpdateModified(PropertyViewModel viewModel, JToken @default) =>
@@ -334,6 +349,8 @@ public sealed partial class SettingsViewModel : DataPanel
         _editor.Save();
         // Engine + theme-selection changes here should take effect immediately.
         _theme.ApplySavedTheme();
+        // Re-publish the (now persisted) animation intensity so motion matches the saved value authoritatively.
+        MotionTokens.Publish(_editor.Accessibility.AnimationIntensity);
     }
 
     // A leaf committed an edit (the live document was already mutated in place); re-derive the document's
@@ -371,16 +388,102 @@ public sealed partial class SettingsViewModel : DataPanel
     }
 
     /// <summary>Commits both grids (editor POCO via C#, project settings via the engine), commits the pending
-    /// theme, then re-baselines. Invoked by the base <see cref="DataPanel.SaveAsync"/> (the footer's Save).</summary>
+    /// theme, then re-baselines. Build-affecting editor settings (the C++ compiler and the engine source path)
+    /// are the only ones that recompile the engine, and only after a confirmation. Invoked by the base
+    /// <see cref="DataPanel.SaveAsync"/> (the footer's Save).</summary>
     protected override async Task CommitAsync()
     {
+        // Detect build-affecting changes BEFORE committing/re-baselining (the baseline still reflects the
+        // last-saved values). Parallel/Verbose and project (AppSettings) edits never recompile.
+        var compilerChanged = EditorLeafChanged("Build", "Compiler");
+        var enginePathChanged = EditorLeafChanged("Engine", "SourcePath");
+        var reverted = false;
+
+        // Each build-affecting change needs an explicit "this recompiles" confirmation. On decline, revert
+        // just that field so the rest of the save still proceeds.
+        if (compilerChanged && !await ConfirmRecompileAsync("compiler").ContinueOnSameContext())
+        {
+            RevertEditorLeaf("Build", "Compiler");
+            compilerChanged = false;
+            reverted = true;
+        }
+
+        if (enginePathChanged && !await ConfirmRecompileAsync("engine source path").ContinueOnSameContext())
+        {
+            RevertEditorLeaf("Engine", "SourcePath");
+            enginePathChanged = false;
+            reverted = true;
+        }
+
         // Commit the previewed theme into the persisted editor settings before saving the POCO.
         _editor.Theme.Active = _pendingTheme;
         SaveEditorSettings();
         await SaveProjectSettingsAsync(CancellationToken.None).ContinueOnSameContext();
         _savedTheme = _pendingTheme;
+
+        // A changed engine path must reach the Locator (CompileProjectAsync reads _locator.EngineSourcePath,
+        // not the raw setting). If it isn't a valid checkout, surface that and skip the relaunch.
+        if (enginePathChanged)
+        {
+            var newPath = _editor.Engine.SourcePath;
+            if (string.IsNullOrWhiteSpace(newPath) || !_locator.TrySetManually(newPath))
+            {
+                await Popups.ShowErrorAsync(
+                    "Engine path",
+                    $"'{newPath}' is not a valid engine source checkout; the engine was not relaunched.")
+                    .ContinueOnSameContext();
+                enginePathChanged = false;
+            }
+        }
+
+        // A declined field was reverted in the working doc; rebuild the editor grid from the (reverted) POCO
+        // so the row snaps back visually.
+        if (reverted)
+            BuildEditorSettings();
+
         Rebaseline();
         RecomputeDirty();
+
+        // The only remaining settings-save path that recompiles: a confirmed compiler / engine-path change.
+        if (compilerChanged || enginePathChanged)
+            await _session.RebuildAndRelaunchAsync().ContinueOnSameContext();
+    }
+
+    private static Task<bool> ConfirmRecompileAsync(string what) =>
+        Popups.ConfirmAsync(
+            "Recompile engine?",
+            $"Changing the {what} will trigger a full engine recompile. Continue?",
+            confirmText: "Recompile",
+            cancelText: "Cancel");
+
+    // Reads a leaf from an editor-settings doc, unwrapping a typed ({ type, value, … }) wrapper to its inner
+    // value so an enum-tagged field (the compiler) compares like a plain one.
+    private static JToken? ReadEditorLeaf(JObject? doc, string section, string field)
+    {
+        if (doc?[section] is not JObject owner || owner[field] is not { } token)
+            return null;
+        return token is JObject wrapper && wrapper["value"] is { } inner ? inner : token;
+    }
+
+    private bool EditorLeafChanged(string section, string field) =>
+        !JToken.DeepEquals(
+            ReadEditorLeaf(_editorSettingsJson, section, field),
+            ReadEditorLeaf(_editorBaseline, section, field));
+
+    // Restores a single editor-settings field in the working doc to its baseline value (so a declined build
+    // change isn't committed) while leaving every other edit intact. Handles the typed enum wrapper.
+    private void RevertEditorLeaf(string section, string field)
+    {
+        if (_editorSettingsJson?[section] is not JObject working
+            || _editorBaseline?[section] is not JObject baseline
+            || baseline[field] is not { } baselineToken)
+            return;
+
+        if (working[field] is JObject wrapper && wrapper["value"] is not null
+            && baselineToken is JObject baselineWrapper && baselineWrapper["value"] is { } inner)
+            wrapper["value"] = inner.DeepClone();
+        else
+            working[field] = baselineToken.DeepClone();
     }
 
     /// <summary>Discards every unsaved edit: reverts the live theme preview to the saved theme, then rebuilds
@@ -390,6 +493,9 @@ public sealed partial class SettingsViewModel : DataPanel
     {
         if (!string.Equals(_pendingTheme, _savedTheme, StringComparison.Ordinal))
             _theme.PreviewTheme(_savedTheme);
+
+        // The slider previewed motion live; restore the saved intensity now that the edit is discarded.
+        MotionTokens.Publish(_editor.Accessibility.AnimationIntensity);
 
         BuildEditorSettings();
         // The flat-fallback grid edits _appJson in place, so re-read it from disk to undo those edits; the
@@ -413,6 +519,26 @@ public sealed partial class SettingsViewModel : DataPanel
             ["type"] = "enum",
             ["value"] = current,
             ["choices"] = new JArray(choices),
+        };
+    }
+
+    /// <summary>
+    /// Rewrites <paramref name="field"/> inside <paramref name="parent"/> as a typed wrapper carrying a custom
+    /// editor <paramref name="view"/> (<c>{ "type", "value", "view" }</c>), so the grid routes it to the
+    /// registered widget (e.g. the clay slider) instead of the type-driven default. The reflected POCO loses
+    /// the [View] attribute, so the tag is re-applied here. <see cref="FlattenTypedWrappers"/> reverses it
+    /// before the settings POCO is repopulated. <paramref name="type"/> is the value's JSON token (e.g. "double").
+    /// </summary>
+    private static void TagView(JObject root, string parent, string field, string view, string type = "double")
+    {
+        if (root[parent] is not JObject owner || owner[field] is not JValue current)
+            return;
+
+        owner[field] = new JObject
+        {
+            ["type"] = type,
+            ["value"] = current,
+            ["view"] = view,
         };
     }
 

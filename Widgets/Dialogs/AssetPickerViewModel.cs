@@ -22,9 +22,11 @@ public sealed partial class AssetPickerViewModel : ObservableObject
     public AssetPickerViewModel(string title, IReadOnlyList<Asset> options, long currentId)
     {
         Title = title;
-        _options = options;
-        FilteredOptions = options;
-        SelectedAsset = options.FirstOrDefault(o => o.Id == currentId);
+        // "None" is always the first option, so a reference can be cleared from the list itself (id 0). Any
+        // stray id-0 entry in the source is dropped so it isn't duplicated.
+        _options = options.Where(o => o.Id != 0).Prepend(new Asset(0, "None", "", "")).ToList();
+        FilteredOptions = _options;
+        SelectedAsset = _options.FirstOrDefault(o => o.Id == currentId);
         Refilter();
     }
 

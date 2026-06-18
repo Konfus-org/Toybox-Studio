@@ -14,8 +14,9 @@
                     <local:IconView Width="14" Height="14" IconName="Search"
                                     Foreground="{DynamicResource ThemeTextBrush}"/>
                 </Button>
-                <!-- Current reference as a hyperlink; clicking reveals it in the catalog. -->
-                <Button Command="{Binding OpenCommand}" IsEnabled="{Binding HasReference}"
+                <!-- Current reference as a hyperlink: a set reference reveals it in the catalog; "None" opens
+                     the asset chooser to pick one. -->
+                <Button Command="{Binding ActivateCommand}" Cursor="Hand"
                         HorizontalAlignment="Left" HorizontalContentAlignment="Left" Margin="7,0,0,0"
                         Padding="0" Background="Transparent" BorderThickness="0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding DisplayName}" FontSize="12"

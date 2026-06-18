@@ -10,8 +10,9 @@
              toggles). A section appears only when the base material defines slots of that kind. Rows are the
              material's fixed slots; no add/remove (the shape is the material's). -->
         <StackPanel IsVisible="{Binding HasTextures}">
-            <ToggleButton x:Name="TexturesToggle" Classes="sectionHeader" IsChecked="True">
-                <DockPanel>
+            <ToggleButton x:Name="TexturesToggle" Classes="sectionHeader" IsChecked="True"
+                          Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
+                <DockPanel Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
                     <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8"
                           Stretch="Uniform" Margin="8,0,2,0" VerticalAlignment="Center"
                           Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
@@ -23,8 +24,9 @@
         </StackPanel>
 
         <StackPanel IsVisible="{Binding HasParameters}">
-            <ToggleButton x:Name="ParametersToggle" Classes="sectionHeader" IsChecked="True">
-                <DockPanel>
+            <ToggleButton x:Name="ParametersToggle" Classes="sectionHeader" IsChecked="True"
+                          Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
+                <DockPanel Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
                     <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8"
                           Stretch="Uniform" Margin="8,0,2,0" VerticalAlignment="Center"
                           Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>

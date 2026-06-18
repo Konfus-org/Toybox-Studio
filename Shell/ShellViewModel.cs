@@ -52,6 +52,8 @@ public sealed partial class ShellViewModel : ObservableObject
         _world = world;
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshTitle);
+        // A project rename (its AppSettings "name" edited in Settings) updates the title without a relaunch.
+        projects.ProjectRenamed += _ => Dispatch.To(DispatchContext.UI, RefreshTitle);
         RefreshTitle();
     }
 

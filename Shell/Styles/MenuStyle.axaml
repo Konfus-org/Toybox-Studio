@@ -1,5 +1,12 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors">
+
+    <!-- Opening a menu nods its dropdown in (top-level nods down, a sub-option's submenu nods right),
+         scaled by the animation-intensity setting. See MenuOpenNod. -->
+    <Style Selector="MenuItem">
+        <Setter Property="behaviors:MenuOpenNod.Enabled" Value="True"/>
+    </Style>
 
     <!-- DROPDOWNS / MENUS / FLYOUTS — the popup is rounded (OverlayCornerRadius) with a soft drop shadow, and
          each item's highlight (Fluent's square, edge-flush Border#PART_LayoutRoot) is rounded to the theme

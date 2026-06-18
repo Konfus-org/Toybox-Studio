@@ -4,7 +4,7 @@ using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Media.Transformation;
+using Avalonia.Media;
 using Avalonia.Styling;
 
 namespace Toybox.Studio.Widgets.Behaviors;
@@ -23,19 +23,20 @@ public static class ToggleOnTap
     public static readonly AttachedProperty<bool> StateProperty =
         AvaloniaProperty.RegisterAttached<Control, bool>("State", typeof(ToggleOnTap));
 
-    // Shrink to 97% and back, matching the press feedback FluentTheme gives its buttons. Animated through
-    // RenderTransform with TransformOperations ("scale(...)") — the one transform shape Avalonia has a keyframe
-    // animator for — and run on the row itself (a Visual). Animating a detached ScaleTransform instead throws
-    // in Avalonia 12, which casts the animation target to Visual to resolve its clock.
+    // Shrink to 97% and back, matching the press feedback FluentTheme gives its buttons. Animated through the
+    // ScaleTransform.ScaleX/Y SUB-properties (which have a keyframe double animator) run on the row itself (a
+    // Visual) — the animator composes the row's RenderTransform from them. Animating the whole RenderTransform
+    // instead throws "No animator registered for the property RenderTransform"; running on a bare transform
+    // throws because the animation target must be a Visual.
     private static readonly Animation PressPulse = new()
     {
         Duration = TimeSpan.FromMilliseconds(150),
         Easing = new QuadraticEaseInOut(),
         Children =
         {
-            new KeyFrame { Cue = new Cue(0d), Setters = { Scale(1.0) } },
-            new KeyFrame { Cue = new Cue(0.5d), Setters = { Scale(0.97) } },
-            new KeyFrame { Cue = new Cue(1d), Setters = { Scale(1.0) } },
+            Pulse(0d, 1.0),
+            Pulse(0.5d, 0.97),
+            Pulse(1d, 1.0),
         },
     };
 
@@ -69,6 +70,13 @@ public static class ToggleOnTap
         PressPulse.RunAsync(control);
     }
 
-    private static Setter Scale(double factor) =>
-        new(Visual.RenderTransformProperty, TransformOperations.Parse($"scale({factor})"));
+    private static KeyFrame Pulse(double cue, double factor) => new()
+    {
+        Cue = new Cue(cue),
+        Setters =
+        {
+            new Setter(ScaleTransform.ScaleXProperty, factor),
+            new Setter(ScaleTransform.ScaleYProperty, factor),
+        },
+    };
 }

@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.PropertyGridView"
              x:Name="Root">
 
@@ -23,13 +24,24 @@
                         <Grid Background="{TemplateBinding Depth,
                                           Converter={x:Static local:DepthToBrushConverter.Instance}}">
                             <Grid.ColumnDefinitions>
-                                <!-- Auto + the shared size group defaults the label column to the widest
-                                     header (so the longest name reads in full); the splitter then lets it be
-                                     dragged down to a sliver. -->
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="PgLabel" MinWidth="20"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
+                                <!-- The row is assembled from PropertyParts in left-to-right slots; each non-value
+                                     slot binds to its part on the row's view-model and collapses to zero width
+                                     when that part is null (so a plain leaf reads exactly as before). -->
+                                <ColumnDefinition Width="Auto"/>                                          <!-- Handle (reorder grip) -->
+                                <!-- Auto + the shared size group defaults the label column to the widest header
+                                     (so the longest name reads in full); the splitter then lets it be dragged
+                                     down to a sliver. -->
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="PgLabel" MinWidth="20"/>   <!-- Label -->
+                                <ColumnDefinition Width="Auto"/>                                          <!-- resize splitter -->
+                                <ColumnDefinition Width="*"/>                                             <!-- Value editor -->
+                                <ColumnDefinition Width="Auto"/>                                          <!-- Add/Remove -->
+                                <ColumnDefinition Width="Auto"/>                                          <!-- Dropdown -->
+                                <ColumnDefinition Width="Auto"/>                                          <!-- State indicator -->
                             </Grid.ColumnDefinitions>
+
+                            <!-- Handle slot: the drag-to-reorder grip on list elements; empty (zero width) elsewhere. -->
+                            <ContentPresenter Grid.Column="0" Content="{ReflectionBinding Handle}"
+                                              VerticalAlignment="Stretch"/>
 
                             <!-- Label gutter. A DockPanel (not a StackPanel) so the label is the fill child:
                                  that constrains its width to whatever the gutter has left, which is what makes
@@ -37,7 +49,7 @@
                                  spills into the value column when the splitter is dragged narrow. Depth is
                                  conveyed purely by the per-level shading on the inner Grid (no elbow), with a
                                  small indent so nested labels still tuck under their parent. -->
-                            <Border Grid.Column="0" Background="Transparent"
+                            <Border Grid.Column="1" Background="Transparent"
                                     ClipToBounds="True">
                                 <DockPanel LastChildFill="True" VerticalAlignment="Center"
                                            Margin="{TemplateBinding Depth,
@@ -57,37 +69,27 @@
                             <!-- Drag handle: resizes the shared label column for every row at once. A visible
                                  hairline marks the column edge; the wider transparent splitter on top is the
                                  grab area (west-east cursor), and it brightens to the accent on hover/drag. -->
-                            <Border Grid.Column="1" Width="1" HorizontalAlignment="Center"
+                            <Border Grid.Column="2" Width="1" HorizontalAlignment="Center"
                                     Background="{DynamicResource ThemeBorderBrush}" IsHitTestVisible="False"/>
-                            <GridSplitter Grid.Column="1" Width="7" ResizeDirection="Columns"
+                            <GridSplitter Grid.Column="2" Width="7" ResizeDirection="Columns"
                                           Cursor="SizeWestEast" Background="Transparent"/>
 
-                            <!-- Value side: the editor, with a state indicator pinned to the right (no
-                                 separator border, so the slot never reads as a resizable column edge). The
-                                 row's PropertyState picks the control via PropertyStateToIndicatorConverter:
-                                 lock = read-only, filled circle = non-default, hollow circle = at default.
-                                 When the row supports reset (CanReset), the indicator becomes a click target
-                                 that reverts to default; otherwise it's purely informational (hit-test off so
-                                 it keeps full opacity rather than dimming as a disabled button would). -->
-                            <Border Grid.Column="2" Background="Transparent">
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right" Classes="resetIndicator" Width="22"
-                                            Margin="2,0,6,0" Padding="0"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                            Command="{ReflectionBinding ResetCommand}"
-                                            IsHitTestVisible="{ReflectionBinding CanReset}"
-                                            Cursor="Hand"
-                                            ToolTip.Tip="Reset to default"
-                                            Content="{ReflectionBinding State,
-                                                Converter={x:Static local:PropertyStateToIndicatorConverter.Instance}}"/>
-                                    <Border Padding="9,2,4,2">
-                                        <ContentPresenter Content="{TemplateBinding Content}"
-                                                          VerticalAlignment="Center"
-                                                          HorizontalAlignment="Stretch"/>
-                                    </Border>
-                                </DockPanel>
+                            <!-- Value editor: the per-type widget hosted as the row's Content. -->
+                            <Border Grid.Column="3" Padding="9,2,4,2">
+                                <ContentPresenter Content="{TemplateBinding Content}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Stretch"/>
                             </Border>
+
+                            <!-- Trailing part slots: add/remove, the disclosure chevron, and the state/reset
+                                 indicator. Each is its own PropertyPart view-model + view; an empty slot is
+                                 zero width, so a leaf row's indicator still sits immediately right of its value. -->
+                            <ContentPresenter Grid.Column="4" Content="{ReflectionBinding Actions}"
+                                              VerticalAlignment="Center"/>
+                            <ContentPresenter Grid.Column="5" Content="{ReflectionBinding Dropdown}"
+                                              VerticalAlignment="Center"/>
+                            <ContentPresenter Grid.Column="6" Content="{ReflectionBinding StateIndicator}"
+                                              VerticalAlignment="Center"/>
                         </Grid>
                     </Border>
                 </ControlTemplate>
@@ -102,6 +104,11 @@
 
     <!-- Compact, unified value-editor styling so every field reads as the same dark box. -->
     <UserControl.Styles>
+        <!-- Every leaf property row animates in (a soft fade + scale-up pop) as a grid is built — the default
+             entrance for any property view that doesn't supply its own. Intensity-scaled, off at 0. -->
+        <Style Selector="local|PropertyRow">
+            <Setter Property="behaviors:RowEntrance.Enabled" Value="True"/>
+        </Style>
         <Style Selector="NumericUpDown.field">
             <Setter Property="MinWidth" Value="56"/>
             <Setter Property="MinHeight" Value="22"/>
@@ -286,6 +293,23 @@
         </DataTemplate>
         <DataTemplate DataType="local:ThemePickerPropertyViewModel">
             <local:ThemePickerPropertyView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:SliderPropertyViewModel">
+            <local:SliderPropertyView/>
+        </DataTemplate>
+
+        <!-- PropertyParts: the composable pieces a PropertyRow lays out in its slots. -->
+        <DataTemplate DataType="local:StateIndicatorPart">
+            <local:StateIndicatorPartView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:DropdownPart">
+            <local:DropdownPartView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:ActionsPart">
+            <local:ActionsPartView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:HandlePart">
+            <local:HandlePartView/>
         </DataTemplate>
     </UserControl.DataTemplates>
 

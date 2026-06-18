@@ -56,6 +56,17 @@ public sealed class WindowManager : Factory
         // drag-float path falls back to DefaultHostWindowLocator.)
         DefaultHostWindowLocator = () => new HostWindow();
 
+        // Stamp capabilities on every dockable the moment Dock initializes it — at startup (InitLayout) and
+        // at runtime (a float/drag/split has the library create fresh root/tool docks we never build or
+        // AttachContent over). Without this their Fluent chrome binds into a null DockCapabilityPolicy /
+        // DockCapabilityOverrides and floods the log with "Value is null" binding errors. See
+        // EnsureDockCapabilities: the instances are empty (all-null), so capability resolution is unchanged.
+        DockableInit += (_, args) =>
+        {
+            if (args.Dockable is { } dockable)
+                EnsureDockCapabilities(dockable);
+        };
+
         // Closing a spawned tool's window must dispose its view-model so the engine view + frame stream
         // it owns are torn down.
         DockableClosed += (_, args) => DisposeInstance(args.Dockable);

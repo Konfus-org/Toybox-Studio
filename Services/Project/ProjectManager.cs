@@ -1,5 +1,6 @@
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Models;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Services.Project;
 
@@ -139,7 +140,8 @@ public sealed class ProjectManager
         if (projects.Recent.Count > MaxRecentProjects)
             projects.Recent.RemoveRange(MaxRecentProjects, projects.Recent.Count - MaxRecentProjects);
 
-        _settings.Save();
+        // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
+        _settings.SaveAsync().FireAndForget();
     }
 
     /// <summary>

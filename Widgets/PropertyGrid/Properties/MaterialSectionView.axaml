@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.MaterialSectionView"
+             x:DataType="local:MaterialSectionViewModel">
+    <!-- A material override section (Textures / Parameters) rendered like a nested struct: an ordinary
+         property row that toggles on a tap, with the disclosure chevron on the left and the state/reset
+         indicator on the right (from the section's own parts), then its slot rows beneath. -->
+    <StackPanel IsVisible="{Binding Visible}">
+        <local:PropertyRow HeaderText="{Binding Name}" Depth="{Binding Depth}"
+                           IconName="{Binding Icon}" IconColor="{Binding IconColor}"
+                           util:ExpandNod.State="{Binding IsExpanded}"
+                           util:ToggleOnTap.Enabled="True"
+                           util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}"/>
+        <ItemsControl ItemsSource="{Binding Slots}" IsVisible="{Binding IsExpanded}"/>
+    </StackPanel>
+</UserControl>

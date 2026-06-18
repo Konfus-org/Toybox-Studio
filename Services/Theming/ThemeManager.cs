@@ -1,4 +1,5 @@
 using Toybox.Studio.Models;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Services.Theming;
 
@@ -63,7 +64,8 @@ public sealed class ThemeManager
             return;
 
         _settings.Theme.Active = theme.Name;
-        _settings.Save();
+        // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
+        _settings.SaveAsync().FireAndForget();
         _applier.Apply(theme);
     }
 

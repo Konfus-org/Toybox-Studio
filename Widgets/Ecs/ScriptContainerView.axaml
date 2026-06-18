@@ -19,19 +19,20 @@
                         </StackPanel.IsVisible>
 
                         <!-- A script binding is a section just like a component: the shared sectionHeader band
-                             with the chevron pinned right and the whole band collapsing on click. The enable
-                             checkbox sits to the right (before the chevron); as an interactive child it
+                             with the chevron pinned LEFT (before the icon/title) and the whole band collapsing
+                             on click. The enable checkbox sits at the far right; as an interactive child it
                              swallows its own click, so ticking it never collapses the section. -->
                         <ToggleButton x:Name="ScriptToggle" Classes="sectionHeader" IsChecked="True">
                             <DockPanel>
-                                <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8"
-                                      Stretch="Uniform" Margin="8,0,2,0" VerticalAlignment="Center"
-                                      Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                <!-- Disclosure chevron on the LEFT, before the icon/title. -->
+                                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
+                                      Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
+                                      Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
                                 <ToggleSwitch DockPanel.Dock="Right" Margin="6,0,4,0" VerticalAlignment="Center"
                                               IsChecked="{Binding Enabled}"
                                               OnContent="" OffContent="" MinHeight="0" Padding="0"
                                               ToolTip.Tip="Run this script"/>
-                                <pg:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="2,0,6,0"
+                                <pg:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="0,0,6,0"
                                              VerticalAlignment="Center"
                                              IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
                                 <TextBlock Text="{Binding Title}" FontWeight="Medium"

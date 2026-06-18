@@ -55,12 +55,16 @@ public sealed class EditorSettings
     }
 
     /// <summary>
-    /// Writes the current settings back to EditorSettings.json.
+    /// Writes the current settings back to EditorSettings.json without blocking the calling (UI) thread:
+    /// the JSON is serialized synchronously on the caller (a correct, race-free snapshot) and only the disk
+    /// write is awaited. Callers either <c>await</c> this (the Settings panel) or fire-and-forget it (the
+    /// event-driven service writes — theme pick, engine path, recent-project list).
     /// </summary>
-    public void Save()
+    public async Task SaveAsync()
     {
         Directory.CreateDirectory(BaseDirectory);
-        File.WriteAllText(FilePath, JsonConvert.SerializeObject(this, Formatting.Indented));
+        var json = JsonConvert.SerializeObject(this, Formatting.Indented);
+        await File.WriteAllTextAsync(FilePath, json).ConfigureAwait(false);
     }
 
     private static void PreserveCorruptFile()

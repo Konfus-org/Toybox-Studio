@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors">
 
     <!-- SHARED SECTION HEADER ======================================================================
          ONE collapsible section header used everywhere a run of properties is grouped: component sections
@@ -14,10 +15,23 @@
         <Setter Property="BorderBrush" Value="{DynamicResource ThemeGrooveBrush}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
         <Setter Property="CornerRadius" Value="0"/>
-        <Setter Property="Padding" Value="10,8"/>
+        <!-- No right padding: the trailing controls (summary / + / state dot) carry their own small margins,
+             so they line up flush with the leaf rows' right-hand indicators instead of sitting bumped inward. -->
+        <Setter Property="Padding" Value="10,8,0,8"/>
         <Setter Property="MinHeight" Value="0"/>
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <!-- Nod the header in the direction it just moved when it opens/closes: bound to its own checked
+             (expanded) state, so component headers, categories and structs all animate identically. -->
+        <Setter Property="behaviors:ExpandNod.State" Value="{Binding IsChecked, RelativeSource={RelativeSource Self}}"/>
+    </Style>
+    <!-- A header band is full-width and flush against its neighbours, so the generic button hover grow reads
+         as aggressive and spills over them. Override it with a much milder, near-in-bounds nudge (this style
+         sheet is included after ButtonStyle, so it wins the :pointerover RenderTransform). Hover also paints
+         the band's bottom groove in the primary accent — the same moving underline the property rows get. -->
+    <Style Selector="ToggleButton.sectionHeader:pointerover">
+        <Setter Property="RenderTransform" Value="{DynamicResource ThemeHeaderHoverTransform}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
     </Style>
     <!-- Foreground is pinned across every interaction state, because FluentTheme's ToggleButton:checked flips
          the foreground to its on-accent (white) ink — which, when a section is expanded, made the label and

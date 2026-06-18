@@ -53,12 +53,13 @@ public static class Popups
         string message,
         string confirmText = "Yes",
         string cancelText = "No",
-        Window? owner = null)
+        Window? owner = null,
+        CancellationToken dismiss = default)
     {
         owner ??= MainWindow();
         if (owner is null)
             return false;
-        return await ConfirmDialog.ShowAsync(owner, title, message, confirmText, cancelText)
+        return await ConfirmDialog.ShowAsync(owner, title, message, confirmText, cancelText, dismiss)
             .ContinueOnAnyContext();
     }
 

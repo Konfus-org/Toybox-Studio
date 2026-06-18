@@ -13,9 +13,10 @@
                       IsVisible="{Binding !IsNested}"
                       Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
             <DockPanel Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
-                <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
-                      Margin="8,0,2,0" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 0,8 Z"/>
-                <local:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="2,0,6,0"
+                <!-- Disclosure chevron on the LEFT, before the icon/label, like a tree node. -->
+                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
+                      Margin="2,0,8,0" VerticalAlignment="Center" Data="M 0,0 L 8,4 L 0,8 Z"/>
+                <local:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="0,0,6,0"
                                 VerticalAlignment="Center"
                                 IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
                 <TextBlock Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
@@ -27,11 +28,12 @@
                            Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
                            IconName="{Binding Icon}" IconColor="{Binding IconColor}"
                            IsVisible="{Binding IsNested}"
+                           util:ExpandNod.State="{Binding IsExpanded}"
                            util:ToggleOnTap.Enabled="True"
                            util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}">
             <Path Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
                   Width="8" Height="8" Stretch="Uniform" HorizontalAlignment="Right"
-                  Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                  Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
         </local:PropertyRow>
 
         <ItemsControl ItemsSource="{Binding Children}" IsVisible="{Binding IsExpanded}"/>

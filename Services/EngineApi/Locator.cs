@@ -1,5 +1,6 @@
 using Toybox.Studio.Models;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Utils;
 namespace Toybox.Studio.Services.EngineApi;
 
 /// <summary>
@@ -66,7 +67,8 @@ public sealed class Locator
         if (persist && path is not null)
         {
             _settings.Engine.SourcePath = path;
-            _settings.Save();
+            // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
+            _settings.SaveAsync().FireAndForget();
         }
 
         EngineChanged?.Invoke(path);

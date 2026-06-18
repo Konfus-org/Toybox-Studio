@@ -10,6 +10,6 @@
             ToolTip.Tip="Expand / collapse">
         <Path Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
               Width="8" Height="8" Stretch="Uniform" VerticalAlignment="Center"
-              Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+              Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
     </Button>
 </UserControl>

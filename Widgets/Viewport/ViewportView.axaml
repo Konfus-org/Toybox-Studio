@@ -8,9 +8,15 @@
     <!-- ViewportInput captures pointer/keyboard while focused and forwards it to the engine view
          (editor fly camera). Background must be non-null so the Panel receives pointer events. The cursor
          hides while the game requests relative (mouselook) mode; the input behavior re-centres it. -->
-    <Panel Background="Transparent" Focusable="True" local:ViewportInput.Enabled="True"
-           Cursor="{Binding RelativeMouse,
-                    Converter={x:Static local:RelativeMouseCursorConverter.Instance}}">
+    <Panel x:Name="Surface" Background="Transparent" Focusable="True" local:ViewportInput.Enabled="True">
+        <!-- The cursor hides only while the game wants mouselook AND this panel is focused, so Alt+Esc
+             (which drops focus) hands the cursor back even though the game still requests relative mode. -->
+        <Panel.Cursor>
+            <MultiBinding Converter="{x:Static local:RelativeMouseCursorConverter.Instance}">
+                <Binding Path="RelativeMouse"/>
+                <Binding Path="IsFocused" ElementName="Surface"/>
+            </MultiBinding>
+        </Panel.Cursor>
         <!-- Samples the engine view's shared GPU texture directly (zero copy). Reports back to the
              view-model if this compositor can't import it, so the ghost shows instead of black. -->
         <local:CompositionInteropViewport

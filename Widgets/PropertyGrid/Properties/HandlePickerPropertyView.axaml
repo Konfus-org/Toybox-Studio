@@ -11,7 +11,7 @@
                      explicit foreground — an IconView with no colour leaves its glyph unpainted. -->
                 <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding PickCommand}"
                         VerticalAlignment="Stretch" ToolTip.Tip="Pick from asset database">
-                    <local:IconView Width="14" Height="14" IconName="Search"
+                    <local:IconView Width="14" Height="14" IconName="Target"
                                     Foreground="{DynamicResource ThemeTextBrush}"/>
                 </Button>
                 <!-- Current reference as a hyperlink: a set reference reveals it in the catalog; "None" opens

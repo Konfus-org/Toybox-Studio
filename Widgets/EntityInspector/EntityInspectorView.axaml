@@ -55,14 +55,15 @@
                                     <StackPanel IsVisible="{Binding #ComponentGrid.HasVisibleItems}">
                                         <ToggleButton x:Name="CompToggle" Classes="sectionHeader" IsChecked="True">
                                             <DockPanel>
-                                                <Path DockPanel.Dock="Right" Classes="sectionChevron"
-                                                      Width="8" Height="8" Stretch="Uniform" Margin="8,0,2,0"
+                                                <!-- Disclosure chevron on the LEFT, before the icon/label. -->
+                                                <Path DockPanel.Dock="Left" Classes="sectionChevron"
+                                                      Width="8" Height="8" Stretch="Uniform" Margin="2,0,8,0"
                                                       VerticalAlignment="Center"
                                                       Fill="{DynamicResource ThemeAccentSolidBrush}"
-                                                      Data="M 0,0 L 4,4 L 0,8 Z"/>
-                                                <!-- Enable toggle (before the chevron): a toy switch like every
-                                                     other bool. As an interactive child it swallows its own
-                                                     click, so flipping it never collapses the section. -->
+                                                      Data="M 0,0 L 8,4 L 0,8 Z"/>
+                                                <!-- Enable toggle (far right): a toy switch like every other
+                                                     bool. As an interactive child it swallows its own click, so
+                                                     flipping it never collapses the section. -->
                                                 <ToggleSwitch DockPanel.Dock="Right" Margin="6,0,4,0"
                                                               VerticalAlignment="Center"
                                                               IsChecked="{Binding IsEnabled}"
@@ -70,7 +71,7 @@
                                                               OnContent="" OffContent="" MinHeight="0" Padding="0"
                                                               ToolTip.Tip="Enable this component"/>
                                                 <pg:IconView DockPanel.Dock="Left" Width="15" Height="15"
-                                                             Margin="2,0,6,0" VerticalAlignment="Center"
+                                                             Margin="0,0,6,0" VerticalAlignment="Center"
                                                              IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
                                                 <TextBlock Text="{Binding DisplayName}" FontWeight="Medium"
                                                            Foreground="{DynamicResource ThemeAccentSolidBrush}"

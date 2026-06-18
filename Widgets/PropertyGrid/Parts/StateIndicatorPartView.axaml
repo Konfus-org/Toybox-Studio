@@ -3,14 +3,17 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.StateIndicatorPartView"
              x:DataType="local:StateIndicatorPart">
-    <!-- The reset/indicator affordance: a chromeless button whose content is the dot/lock for the row's state
-         (PropertyStateToIndicatorConverter). It's a click target that reverts to default whenever a reset is
-         wired (CanReset), and purely informational otherwise. Styling (resetIndicator / stateFilled /
-         stateHollow) lives in PropertyGridView.axaml and applies since this renders inside the grid subtree. -->
-    <Button Classes="resetIndicator" Width="22" Padding="0" Margin="2,0,6,0"
-            HorizontalAlignment="Center" VerticalAlignment="Center"
-            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-            Command="{Binding ResetCommand}" IsHitTestVisible="{Binding CanReset}"
-            Cursor="Hand" ToolTip.Tip="Reset to default"
-            Content="{Binding State, Converter={x:Static local:PropertyStateToIndicatorConverter.Instance}}"/>
+    <!-- The reset/indicator affordance. An always-hit-testable wrapper carries the tooltip (so a row at its
+         default still says "Default" on hover) while the inner button is a click target ONLY when the row
+         actually differs from its default (IsResettable) — a default indicator is purely informational, not
+         clickable. Styling (resetIndicator / stateFilled / stateHollow) lives in PropertyGridView.axaml. -->
+    <Border Background="Transparent" Margin="2,0,6,0" ToolTip.Tip="{Binding Hint}"
+            HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Button Classes="resetIndicator" Width="22" Padding="0"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                Command="{Binding ResetCommand}" IsHitTestVisible="{Binding IsResettable}"
+                Cursor="Hand"
+                Content="{Binding State, Converter={x:Static local:PropertyStateToIndicatorConverter.Instance}}"/>
+    </Border>
 </UserControl>

@@ -161,6 +161,9 @@ public partial class App : Application
             var session = _host.Services.GetRequiredService<Session>();
             // Resolve the watcher before any launch so it observes the engine from the very first signal.
             _host.Services.GetRequiredService<EngineWatcher>();
+            // Bring the freeze watchdog up too, so an unresponsive engine is caught from the first launch and
+            // the editor can offer to force-restart it instead of hanging on the frozen process.
+            _host.Services.GetRequiredService<EngineWatchdog>();
             // Bring the inspector's live-refresh coordinator to life so it drives the play-mode pull (it holds
             // the shared inspector view-model and the play/selection subscriptions).
             _host.Services.GetRequiredService<InspectorRefreshCoordinator>();
@@ -269,6 +272,7 @@ public partial class App : Application
         services.AddSingleton<WorldSelection>();
         services.AddSingleton<Session>();
         services.AddSingleton<EngineWatcher>();
+        services.AddSingleton<EngineWatchdog>();
         services.AddSingleton<InstanceDetector>();
         services.AddSingleton<WorldManager>();
         services.AddSingleton<AssetCatalog>();

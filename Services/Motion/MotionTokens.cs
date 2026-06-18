@@ -32,6 +32,9 @@ public static class MotionTokens
         resources["ThemeControlRestTransform"] = TransformOperations.Parse("scale(1)");
         resources["ThemeButtonHoverTransform"] = Transform($"scale({1 + 0.04 * i})");
         resources["ThemeButtonPressTransform"] = Transform($"scale({1 - 0.07 * i})");
+        // Section-header bands are full-width and sit flush against their neighbours, so they get a much milder
+        // hover grow than a free-standing button — barely a nudge, kept small enough to stay within the item.
+        resources["ThemeHeaderHoverTransform"] = Transform($"scale({1 + 0.012 * i})");
         // The toggle "tip" is a one-shot reactive animation driven by the ToggleTip behavior (which reads the
         // intensity directly), not a steady-state transform — so no toggle tokens are published here.
     }

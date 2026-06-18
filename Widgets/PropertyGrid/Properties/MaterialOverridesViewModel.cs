@@ -38,6 +38,10 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
 
         Parameters = [];
         Textures = [];
+        // Textures and Parameters present as nested STRUCT rows (collapsible header + state/reset), not accent
+        // category bands — each wraps its slot collection and reacts as the base material resolves.
+        TextureSection = new MaterialSectionViewModel("Textures", Textures, Depth);
+        ParameterSection = new MaterialSectionViewModel("Parameters", Parameters, Depth);
         ReloadBaseAsync(materialId).FireAndForget();
     }
 
@@ -48,6 +52,12 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
     public ObservableCollection<MaterialSlotViewModel> Parameters { get; }
 
     public ObservableCollection<MaterialSlotViewModel> Textures { get; }
+
+    /// <summary>The Textures slots as a struct-style section row (header + reset + slots).</summary>
+    public MaterialSectionViewModel TextureSection { get; }
+
+    /// <summary>The Parameters slots as a struct-style section row (header + reset + slots).</summary>
+    public MaterialSectionViewModel ParameterSection { get; }
 
     public bool HasParameters => Parameters.Count > 0;
 

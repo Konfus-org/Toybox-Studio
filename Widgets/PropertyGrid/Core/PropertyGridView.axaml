@@ -21,6 +21,11 @@
                             BorderBrush="{DynamicResource ThemeGrooveBrush}" BorderThickness="0,0,0,1"
                             BoxShadow="0 1 0 0 #2EFFFFFF"
                             Background="Transparent">
+                        <Border.Transitions>
+                            <Transitions>
+                                <BrushTransition Property="BorderBrush" Duration="0:0:0.12"/>
+                            </Transitions>
+                        </Border.Transitions>
                         <Grid Background="{TemplateBinding Depth,
                                           Converter={x:Static local:DepthToBrushConverter.Instance}}">
                             <Grid.ColumnDefinitions>
@@ -35,12 +40,16 @@
                                 <ColumnDefinition Width="Auto"/>                                          <!-- resize splitter -->
                                 <ColumnDefinition Width="*"/>                                             <!-- Value editor -->
                                 <ColumnDefinition Width="Auto"/>                                          <!-- Add/Remove -->
-                                <ColumnDefinition Width="Auto"/>                                          <!-- Dropdown -->
                                 <ColumnDefinition Width="Auto"/>                                          <!-- State indicator -->
                             </Grid.ColumnDefinitions>
 
-                            <!-- Handle slot: the drag-to-reorder grip on list elements; empty (zero width) elsewhere. -->
-                            <ContentPresenter Grid.Column="0" Content="{ReflectionBinding Handle}"
+                            <!-- Handle slot: the drag-to-reorder grip on list elements; empty (zero width) elsewhere.
+                                 Part bindings anchor to the row's DataContext via the templated parent: a
+                                 ContentPresenter reassigns its OWN DataContext to its resolved Content, so a plain
+                                 {ReflectionBinding Handle} would re-evaluate the path against the part itself and
+                                 fault ("cannot cast StateIndicatorPart to PropertyViewModel"). -->
+                            <ContentPresenter Grid.Column="0"
+                                              Content="{ReflectionBinding DataContext.Handle, RelativeSource={RelativeSource TemplatedParent}}"
                                               VerticalAlignment="Stretch"/>
 
                             <!-- Label gutter. A DockPanel (not a StackPanel) so the label is the fill child:
@@ -54,6 +63,12 @@
                                 <DockPanel LastChildFill="True" VerticalAlignment="Center"
                                            Margin="{TemplateBinding Depth,
                                                 Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                                    <!-- Disclosure chevron for a composite (object/array) row, tucked in just
+                                         left of the header so a nested/list-element row reads like a tree node.
+                                         Empty (zero width) on a leaf row. Lives in the template so its presenter
+                                         has a TemplatedParent and the DropdownPart template resolves. -->
+                                    <ContentPresenter DockPanel.Dock="Left" VerticalAlignment="Center"
+                                                      Content="{ReflectionBinding DataContext.Dropdown, RelativeSource={RelativeSource TemplatedParent}}"/>
                                     <local:IconView DockPanel.Dock="Left" Width="15" Height="15"
                                                     Margin="8,0,6,0" VerticalAlignment="Center"
                                                     IconName="{TemplateBinding IconName}"
@@ -81,14 +96,15 @@
                                                   HorizontalAlignment="Stretch"/>
                             </Border>
 
-                            <!-- Trailing part slots: add/remove, the disclosure chevron, and the state/reset
-                                 indicator. Each is its own PropertyPart view-model + view; an empty slot is
-                                 zero width, so a leaf row's indicator still sits immediately right of its value. -->
-                            <ContentPresenter Grid.Column="4" Content="{ReflectionBinding Actions}"
+                            <!-- Trailing part slots: add/remove and the state/reset indicator. Each is its own
+                                 PropertyPart view-model + view; an empty slot is zero width, so a leaf row's
+                                 indicator still sits immediately right of its value. The disclosure chevron is
+                                 NOT here — a composite row carries it on the LEFT, just before its header. -->
+                            <ContentPresenter Grid.Column="4"
+                                              Content="{ReflectionBinding DataContext.Actions, RelativeSource={RelativeSource TemplatedParent}}"
                                               VerticalAlignment="Center"/>
-                            <ContentPresenter Grid.Column="5" Content="{ReflectionBinding Dropdown}"
-                                              VerticalAlignment="Center"/>
-                            <ContentPresenter Grid.Column="6" Content="{ReflectionBinding StateIndicator}"
+                            <ContentPresenter Grid.Column="5"
+                                              Content="{ReflectionBinding DataContext.StateIndicator, RelativeSource={RelativeSource TemplatedParent}}"
                                               VerticalAlignment="Center"/>
                         </Grid>
                     </Border>
@@ -99,6 +115,11 @@
             <Style Selector="^[IsReadOnly=true] /template/ TextBlock#PART_Label">
                 <Setter Property="Opacity" Value="0.5"/>
             </Style>
+            <!-- Hover paints the row's bottom groove in the primary accent — a moving underline as the pointer
+                 travels the grid (eased by the BrushTransition on PART_RowRoot). -->
+            <Style Selector="^:pointerover /template/ Border#PART_RowRoot">
+                <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+            </Style>
         </ControlTheme>
     </UserControl.Resources>
 
@@ -108,6 +129,9 @@
              entrance for any property view that doesn't supply its own. Intensity-scaled, off at 0. -->
         <Style Selector="local|PropertyRow">
             <Setter Property="behaviors:RowEntrance.Enabled" Value="True"/>
+            <!-- Every row grows a hair on hover, like the buttons (composite rows additionally nod on
+                 expand/collapse — wired per view via ExpandNod.State). -->
+            <Setter Property="behaviors:Pop.Enabled" Value="True"/>
         </Style>
         <Style Selector="NumericUpDown.field">
             <Setter Property="MinWidth" Value="56"/>
@@ -199,11 +223,17 @@
         <Style Selector="Button.resetIndicator:pointerover Border.stateHollow">
             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceFlatBrush}"/>
         </Style>
+        <!-- The at-default dot reads as a hollow RING: a surface-coloured fill carrying the inset crater (clay
+             depth, when shadows are on) plus an explicit muted outline. The outline is the contrast guarantee —
+             ThemeMutedTextBrush is auto-contrasted against the background, so the dot stays clearly visible on
+             flat (shadow-less) themes where the crater alone would vanish into the surface. -->
         <Style Selector="Border.stateHollow">
             <Setter Property="Width" Value="11"/>
             <Setter Property="Height" Value="11"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Background" Value="{DynamicResource ThemeWellFillBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeMutedTextBrush}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
             <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetShadow}"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -273,6 +303,9 @@
         <DataTemplate DataType="local:MaterialOverridesViewModel">
             <local:MaterialOverridesView/>
         </DataTemplate>
+        <DataTemplate DataType="local:MaterialSectionViewModel">
+            <local:MaterialSectionView/>
+        </DataTemplate>
         <DataTemplate DataType="local:MaterialSlotViewModel">
             <local:MaterialSlotView/>
         </DataTemplate>
@@ -329,11 +362,30 @@
                                     <StackPanel IsVisible="{Binding HasHeader}">
                                         <ToggleButton x:Name="CatToggle" Classes="sectionHeader" IsChecked="True">
                                             <DockPanel>
-                                                <Path DockPanel.Dock="Right" Classes="sectionChevron"
-                                                      Width="8" Height="8" Stretch="Uniform" Margin="8,0,2,0"
+                                                <!-- The group's default-state indicator (and reset), like a composite
+                                                     row: set when any child is, and reverting it resets every child.
+                                                     A button so it swallows its own click — resetting never toggles
+                                                     the category band. Pinned to the far-right edge to match the
+                                                     leaf-row / section-header part order. -->
+                                                <Border DockPanel.Dock="Right" Background="Transparent"
+                                                        Margin="2,0,6,0" VerticalAlignment="Center"
+                                                        ToolTip.Tip="{Binding Hint}">
+                                                    <Button Classes="resetIndicator" Width="22"
+                                                            Padding="0" VerticalAlignment="Center"
+                                                            HorizontalContentAlignment="Center"
+                                                            VerticalContentAlignment="Center"
+                                                            Command="{Binding ResetCommand}"
+                                                            IsHitTestVisible="{Binding IsResettable}"
+                                                            Cursor="Hand"
+                                                            Content="{Binding State,
+                                                                Converter={x:Static local:PropertyStateToIndicatorConverter.Instance}}"/>
+                                                </Border>
+                                                <!-- Disclosure chevron on the LEFT, before the label, like a tree node. -->
+                                                <Path DockPanel.Dock="Left" Classes="sectionChevron"
+                                                      Width="8" Height="8" Stretch="Uniform" Margin="2,0,8,0"
                                                       VerticalAlignment="Center"
                                                       Fill="{DynamicResource ThemeAccentSolidBrush}"
-                                                      Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                                      Data="M 0,0 L 8,4 L 0,8 Z"/>
                                                 <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="12"
                                                            Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
                                             </DockPanel>

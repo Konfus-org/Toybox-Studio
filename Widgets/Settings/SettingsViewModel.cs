@@ -219,7 +219,8 @@ public sealed partial class SettingsViewModel : DataPanel
         {
             try
             {
-                File.WriteAllText(project.AppSettingsPath, toWrite.ToString(Formatting.Indented));
+                await File.WriteAllTextAsync(project.AppSettingsPath, toWrite.ToString(Formatting.Indented), ct)
+                    .ContinueOnAnyContext();
             }
             catch (Exception exception)
             {
@@ -336,7 +337,7 @@ public sealed partial class SettingsViewModel : DataPanel
     private static void UpdateModified(PropertyViewModel viewModel, JToken @default) =>
         viewModel.IsModified = viewModel.CurrentValue is { } current && !JToken.DeepEquals(current, @default);
 
-    private void SaveEditorSettings()
+    private async Task SaveEditorSettingsAsync()
     {
         if (_editorSettingsJson is null)
             return;
@@ -346,7 +347,8 @@ public sealed partial class SettingsViewModel : DataPanel
         var plain = (JObject)_editorSettingsJson.DeepClone();
         FlattenTypedWrappers(plain);
         JsonConvert.PopulateObject(plain.ToString(), _editor);
-        _editor.Save();
+        // Flush to disk off the UI thread, then resume on it for the live theme/motion apply below.
+        await _editor.SaveAsync().ContinueOnSameContext();
         // Engine + theme-selection changes here should take effect immediately.
         _theme.ApplySavedTheme();
         // Re-publish the (now persisted) animation intensity so motion matches the saved value authoritatively.
@@ -417,7 +419,7 @@ public sealed partial class SettingsViewModel : DataPanel
 
         // Commit the previewed theme into the persisted editor settings before saving the POCO.
         _editor.Theme.Active = _pendingTheme;
-        SaveEditorSettings();
+        await SaveEditorSettingsAsync().ContinueOnSameContext();
         await SaveProjectSettingsAsync(CancellationToken.None).ContinueOnSameContext();
         _savedTheme = _pendingTheme;
 

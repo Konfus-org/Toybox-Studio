@@ -99,7 +99,7 @@ public sealed class CompositionInteropViewport : Control
         ElementComposition.SetElementChildVisual(this, _visual);
         UpdateVisualLayout();
 
-        _interop = await _compositor.TryGetCompositionGpuInterop();
+        _interop = await _compositor.TryGetCompositionGpuInterop().ContinueOnSameContext();
         if (_interop is null
             || !_interop.SupportedImageHandleTypes.Contains(
                 KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle))
@@ -112,7 +112,8 @@ public sealed class CompositionInteropViewport : Control
         InteropUnavailable = false;
         _initialized = true;
         _update ??= UpdateFrame;
-        await ImportCurrentSurfaceAsync().ContinueOnAnyContext();
+        // Resume on the UI thread: StartLoop and the composition objects it drives are UI-thread-affine.
+        await ImportCurrentSurfaceAsync().ContinueOnSameContext();
         StartLoop();
     }
 
@@ -152,7 +153,9 @@ public sealed class CompositionInteropViewport : Control
             {
                 try
                 {
-                    await _lastPresent.ContinueOnAnyContext();
+                    // Stay on the UI thread across the wait: the import/dispose and the visual touch
+                    // below are UI-thread-affine composition calls.
+                    await _lastPresent.ContinueOnSameContext();
                 }
                 catch
                 {
@@ -160,7 +163,7 @@ public sealed class CompositionInteropViewport : Control
                 }
             }
 
-            await old.DisposeAsync().ConfigureAwait(false);
+            await old.DisposeAsync().ContinueOnSameContext();
         }
 
         var surface = Surface;
@@ -238,7 +241,8 @@ public sealed class CompositionInteropViewport : Control
         {
             try
             {
-                await lastPresent.ContinueOnAnyContext();
+                // Released on the UI thread (TearDown's caller): the imported image is UI-thread-affine.
+                await lastPresent.ContinueOnSameContext();
             }
             catch
             {
@@ -246,6 +250,6 @@ public sealed class CompositionInteropViewport : Control
             }
         }
 
-        await imported.DisposeAsync().ConfigureAwait(false);
+        await imported.DisposeAsync().ContinueOnSameContext();
     }
 }

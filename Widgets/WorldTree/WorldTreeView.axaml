@@ -40,9 +40,10 @@
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
-        <!-- Per-row expand chevron, pinned to the right and matching the property-grid section chevron:
-             points right when collapsed, rotates down when expanded. Bound to the row's TreeViewItem so a
-             click toggles that node. Hidden for leaf rows (no children) via the :empty rule below. -->
+        <!-- Per-row expand chevron, pinned to the LEFT (just before the name) and matching the property-grid
+             section chevron: points right when collapsed, rotates down when expanded. Bound to the row's
+             TreeViewItem so a click toggles that node. A leaf row (no children) keeps the gutter but hides the
+             glyph via the :empty rule below, so names stay aligned. -->
         <Style Selector="ToggleButton.entityExpander">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -66,13 +67,17 @@
                 <RotateTransform Angle="90"/>
             </Setter>
         </Style>
-        <!-- A leaf row (no children) reserves no expander. -->
+        <!-- A leaf row (no children) keeps the chevron's gutter so names stay aligned, but hides the glyph and
+             ignores clicks. -->
         <Style Selector="TreeViewItem:empty ToggleButton.entityExpander">
-            <Setter Property="IsVisible" Value="False"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style Selector="TreeViewItem:empty ToggleButton.entityExpander Path">
+            <Setter Property="Opacity" Value="0"/>
         </Style>
 
-        <!-- The default left expand chevron is removed: rows would otherwise carry a left gutter for it
-             (pushing every row in too far) and the indicator lives on the right now instead. -->
+        <!-- The default Fluent expand chevron is removed: we render our own (entityExpander) in the row, so the
+             built-in left gutter would otherwise double up and push every row in too far. -->
         <Style Selector="TreeView.entities TreeViewItem /template/ Panel#PART_ExpandCollapseChevronContainer">
             <Setter Property="IsVisible" Value="False"/>
             <Setter Property="Width" Value="0"/>
@@ -90,6 +95,21 @@
         <Style Selector="TextBlock.entityDisabled">
             <Setter Property="Opacity" Value="0.4"/>
         </Style>
+
+        <!-- Each row carries a bottom groove that stays invisible at rest and lights up in the primary accent
+             on hover — the same moving underline the property rows use (eased by the BrushTransition). -->
+        <Style Selector="Border.entityRow">
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.entityRow:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
     </UserControl.Styles>
 
     <!-- Shared row content: a centred drag handle, the entity name (double-tap to rename in place), a centred
@@ -101,6 +121,11 @@
         <x:Double x:Key="TreeViewItemIndent">12</x:Double>
 
         <TreeDataTemplate x:Key="EntityRow" ItemsSource="{Binding Children}" x:DataType="ecs:EntityViewModel">
+            <!-- The whole row grows on hover (Pop) and shows the primary-accent underline on hover, like every
+                 property row; a parent row also nods in the direction it opens/closes (ExpandNod, bound to its
+                 tree node — leaf rows never toggle, so they never nod). -->
+            <Border Classes="entityRow" Background="Transparent" util:Pop.Enabled="True"
+                    util:ExpandNod.State="{Binding $parent[TreeViewItem].IsExpanded}">
             <DockPanel>
                 <Border DockPanel.Dock="Left" Cursor="SizeAll" Background="Transparent"
                         Padding="0,0,4,0" VerticalAlignment="Center"
@@ -109,6 +134,14 @@
                     <pg:IconView Width="12" Height="12" IconName="GripVertical" Opacity="0.45"
                                  Foreground="{DynamicResource ThemeTextBrush}"/>
                 </Border>
+                <!-- Disclosure chevron on the LEFT, just before the name (a leaf keeps the gutter so names stay
+                     aligned). Points right when collapsed, rotates down when expanded. -->
+                <ToggleButton DockPanel.Dock="Left" Classes="entityExpander"
+                              IsChecked="{Binding $parent[TreeViewItem].IsExpanded, Mode=TwoWay}"
+                              ToolTip.Tip="Expand / collapse">
+                    <Path Width="8" Height="8" Stretch="Uniform"
+                          Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
+                </ToggleButton>
                 <Button DockPanel.Dock="Right" Classes="rowButton" VerticalAlignment="Center"
                         ToolTip.Tip="Delete entity"
                         Command="{Binding $parent[TreeView].((ecs:WorldViewModel)DataContext).DeleteEntityCommand}"
@@ -116,12 +149,6 @@
                     <pg:IconView Width="12" Height="12" IconName="X"
                                  Foreground="{DynamicResource ThemeErrorBrush}"/>
                 </Button>
-                <ToggleButton DockPanel.Dock="Right" Classes="entityExpander"
-                              IsChecked="{Binding $parent[TreeViewItem].IsExpanded, Mode=TwoWay}"
-                              ToolTip.Tip="Expand / collapse">
-                    <Path Width="8" Height="8" Stretch="Uniform"
-                          Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
-                </ToggleButton>
                 <!-- The row body: a single tap anywhere on it opens/closes the node (selection still fires on
                      press). Renaming is started ONLY by double-tapping the name text itself, not the empty
                      body. Transparent background so the whole body is hit-testable for the open gesture. -->
@@ -138,6 +165,7 @@
                              util:RenameBox.CancelCommand="{Binding CancelRenameCommand}"/>
                 </Panel>
             </DockPanel>
+            </Border>
         </TreeDataTemplate>
     </UserControl.Resources>
 
@@ -169,9 +197,9 @@
                             <ToggleButton x:Name="GlobalsToggle" Classes="sectionHeader" IsChecked="False"
                                           ToolTip.Tip="Full-lifetime entities, outside the scene stream">
                                 <DockPanel>
-                                    <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8"
-                                          Stretch="Uniform" Margin="8,0,2,0" VerticalAlignment="Center"
-                                          Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                    <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
+                                          Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
+                                          Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
                                     <Button DockPanel.Dock="Right" Classes="rowButton" VerticalAlignment="Center"
                                             ToolTip.Tip="Add global entity" Command="{Binding AddGlobalEntityCommand}">
                                         <pg:IconView Width="13" Height="13" IconName="Plus"
@@ -206,9 +234,9 @@
                         <ToggleButton x:Name="StreamedToggle" Classes="sectionHeader" IsChecked="True"
                                       ToolTip.Tip="Entities streamed in with the scene">
                             <DockPanel>
-                                <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8"
-                                      Stretch="Uniform" Margin="8,0,2,0" VerticalAlignment="Center"
-                                      Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 4,4 L 0,8 Z"/>
+                                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
+                                      Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
+                                      Fill="{DynamicResource ThemeAccentSolidBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
                                 <Button DockPanel.Dock="Right" Classes="rowButton" VerticalAlignment="Center"
                                         ToolTip.Tip="Add entity" Command="{Binding AddStreamedEntityCommand}">
                                     <pg:IconView Width="13" Height="13" IconName="Plus"

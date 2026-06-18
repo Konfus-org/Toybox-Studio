@@ -29,6 +29,13 @@ public sealed class Session : IAsyncDisposable
     private static readonly TimeSpan MinimumUptimeForRestart = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan AttachConnectTimeout = TimeSpan.FromSeconds(5);
 
+    // Each watchdog ping is bounded so a frozen engine can't park the probe forever; if no ping
+    // succeeds within this window the engine is treated as unresponsive (so the editor can offer to
+    // force-restart it). A short retry pause keeps a failing probe from spinning.
+    private static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PingRetryDelay = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan UnresponsiveThreshold = TimeSpan.FromSeconds(5);
+
     // The engine is built in-tree with the project, so this also selects the engine binary: a Debug
     // Studio drives a Debug engine; a Release Studio drives a Release engine.
     private const string BuildConfiguration =
@@ -48,10 +55,15 @@ public sealed class Session : IAsyncDisposable
     private int _isCompiling;
 
     private Engine? _process;
-    private CancellationTokenSource? _pingLoopCts;
+    private CancellationTokenSource? _watchdogCts;
     private bool _isStopping;
     private int _connectionLossHandled;
     private DateTime _lastLaunchTimeUtc = DateTime.MinValue;
+
+    // Watchdog state, shared between the watchdog loop and the UI (Snooze): the tick of the last
+    // successful ping, and whether the engine is currently flagged unresponsive (0/1 for Interlocked).
+    private long _lastPingOkTicks;
+    private int _isUnresponsive;
 
     public Session(
         EditorSettings settings,
@@ -79,6 +91,19 @@ public sealed class Session : IAsyncDisposable
     public event Action<ConnectionState>? StateChanged;
 
     public event Action<TimeSpan>? PingMeasured;
+
+    /// <summary>
+    /// Raised (off the UI thread) when the engine has not answered a ping for longer than the
+    /// unresponsive threshold while still connected — i.e. it appears frozen. Subscribers should
+    /// marshal to the UI themselves. The editor uses this to offer a force-restart.
+    /// </summary>
+    public event Action? Unresponsive;
+
+    /// <summary>
+    /// Raised (off the UI thread) when a previously unresponsive engine answers again, or the session
+    /// is torn down — a signal to dismiss any "not responding" prompt.
+    /// </summary>
+    public event Action? Responsive;
 
     /// <summary>
     /// Raised when launch/compile work starts or finishes (drives loading UI).
@@ -490,26 +515,98 @@ public sealed class Session : IAsyncDisposable
         _log.Info(
             $"Connected to {hello.Engine} (app '{hello.App}', protocol v{hello.ProtocolVersion}).");
 
-        _pingLoopCts = new CancellationTokenSource();
-        RunPingLoopAsync(_pingLoopCts.Token).FireAndForget();
+        Interlocked.Exchange(ref _isUnresponsive, 0);
+        Interlocked.Exchange(ref _lastPingOkTicks, DateTime.UtcNow.Ticks);
+        _watchdogCts = new CancellationTokenSource();
+        RunWatchdogAsync(_watchdogCts.Token).FireAndForget();
     }
 
-    private async Task RunPingLoopAsync(CancellationToken ct)
+    /// <summary>
+    /// Keeps the connection honest: probes the engine with a bounded ping on a cadence, reports the
+    /// round-trip for the status bar, and — crucially — notices when a still-connected engine stops
+    /// answering. A frozen engine keeps its socket open, so neither a process exit nor an RPC disconnect
+    /// fires; this loop is the only thing that catches that case and raises <see cref="Unresponsive"/>.
+    /// </summary>
+    private async Task RunWatchdogAsync(CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(PingInterval);
         try
         {
-            while (await timer.WaitForNextTickAsync(ct).ContinueOnAnyContext())
+            while (!ct.IsCancellationRequested)
             {
-                var ping = await _engine.PingAsync(ct).ContinueOnAnyContext();
+                // Bound each probe so a frozen engine parks this attempt, not the whole loop.
+                using var attempt = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                attempt.CancelAfter(PingTimeout);
+
+                var ping = await _engine.PingAsync(attempt.Token).ContinueOnAnyContext();
+                if (ct.IsCancellationRequested)
+                    break;
+
                 if (ping.Success)
+                {
+                    Interlocked.Exchange(ref _lastPingOkTicks, DateTime.UtcNow.Ticks);
                     PingMeasured?.Invoke(ping.Value);
+                    MarkResponsive();
+                    // Healthy: idle for the normal interval before the next probe.
+                    await Task.Delay(PingInterval, ct).ContinueOnAnyContext();
+                }
+                else
+                {
+                    // No reply (timed out or errored) while still connected: the engine may be frozen.
+                    // Keep probing without the idle interval so we cross the threshold promptly.
+                    EvaluateResponsiveness();
+                    await Task.Delay(PingRetryDelay, ct).ContinueOnAnyContext();
+                }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelled on teardown.
         }
         catch (Exception)
         {
-            // Cancelled on teardown, or the connection died; the Disconnected handler owns cleanup.
+            // The connection died; the Disconnected handler owns cleanup.
         }
+    }
+
+    /// <summary>
+    /// Flags the engine unresponsive (once) when it has gone past the threshold without a good ping,
+    /// raising <see cref="Unresponsive"/>. Only meaningful while we still believe we're connected.
+    /// </summary>
+    private void EvaluateResponsiveness()
+    {
+        if (State != ConnectionState.Connected)
+            return;
+
+        var sinceLastOk = DateTime.UtcNow - new DateTime(Interlocked.Read(ref _lastPingOkTicks));
+        if (sinceLastOk < UnresponsiveThreshold)
+            return;
+
+        if (Interlocked.Exchange(ref _isUnresponsive, 1) == 1)
+            return;
+
+        _log.Warning(
+            $"Engine has not responded for {sinceLastOk.TotalSeconds:F0}s; it may be frozen.");
+        Unresponsive?.Invoke();
+    }
+
+    /// <summary>Clears the unresponsive flag and announces recovery, if it was set.</summary>
+    private void MarkResponsive()
+    {
+        if (Interlocked.Exchange(ref _isUnresponsive, 0) == 0)
+            return;
+
+        _log.Info("Engine resumed responding.");
+        Responsive?.Invoke();
+    }
+
+    /// <summary>
+    /// The user chose to keep waiting on a frozen engine: treat now as the last good moment so the
+    /// watchdog re-arms and prompts again only if the engine stays frozen for another full threshold.
+    /// </summary>
+    public void SnoozeWatchdog()
+    {
+        Interlocked.Exchange(ref _lastPingOkTicks, DateTime.UtcNow.Ticks);
+        Interlocked.Exchange(ref _isUnresponsive, 0);
     }
 
     private void OnProcessExited(int exitCode)
@@ -570,23 +667,28 @@ public sealed class Session : IAsyncDisposable
     private async Task TearDownAsync(bool killProcess)
     {
         Engine? process;
-        CancellationTokenSource? pingLoopCts;
+        CancellationTokenSource? watchdogCts;
         lock (_sync)
         {
             if (State == ConnectionState.Disconnected && _process is null && !_engine.IsConnected)
                 return;
 
             process = _process;
-            pingLoopCts = _pingLoopCts;
+            watchdogCts = _watchdogCts;
             _process = null;
-            _pingLoopCts = null;
+            _watchdogCts = null;
         }
 
         // We own this disconnect, so flag the loss as handled before tearing the connection down: the
         // engine's Disconnected event (fired by Disconnect below) must not be mistaken for a crash.
         Interlocked.Exchange(ref _connectionLossHandled, 1);
-        pingLoopCts?.Cancel();
-        pingLoopCts?.Dispose();
+        // The engine is going away, so any "not responding" prompt should be dismissed (teardown owns the
+        // messaging from here). Raise Responsive directly rather than via MarkResponsive to avoid the
+        // misleading "resumed responding" log line during a kill.
+        if (Interlocked.Exchange(ref _isUnresponsive, 0) == 1)
+            Responsive?.Invoke();
+        watchdogCts?.Cancel();
+        watchdogCts?.Dispose();
         _engine.Disconnect();
 
         if (process is not null)
@@ -714,6 +816,41 @@ public sealed class Session : IAsyncDisposable
             return;
 
         await RestartForProjectAsync().ContinueOnAnyContext();
+    }
+
+    /// <summary>
+    /// Force-restarts a frozen engine: hard-kills the process (skipping the graceful <c>engine.shutdown</c>
+    /// handshake a frozen engine would never answer) and relaunches it. Unlike crash auto-restart, this is
+    /// an explicit user action, so it ignores the <c>RestartOnCrash</c> setting and the minimum-uptime guard.
+    /// An attached engine isn't owned, so it can only be detached from, not killed or relaunched.
+    /// </summary>
+    public async Task ForceRestartAsync()
+    {
+        lock (_sync)
+        {
+            if (State == ConnectionState.Disconnected || _isStopping)
+                return;
+
+            _isStopping = true;
+        }
+
+        var wasOwned = Kind == SessionKind.Owned;
+        try
+        {
+            await TearDownAsync(killProcess: wasOwned).ContinueOnAnyContext();
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                _isStopping = false;
+            }
+        }
+
+        if (wasOwned)
+            await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
+        else
+            _log.Info("Detached from the unresponsive engine; it was not owned, so it keeps running.");
     }
 
     /// <summary>

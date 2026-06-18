@@ -54,7 +54,7 @@ public static class ToggleTip
             return;
 
         // Tip toward the new state: clockwise (right edge dips) when turning on, the other way when off.
-        var peak = 7 * intensity * (toggle.IsChecked == true ? 1 : -1);
+        var peak = 17 * intensity * (toggle.IsChecked == true ? 1 : -1);
         var animation = new Animation
         {
             Duration = TimeSpan.FromMilliseconds(180),

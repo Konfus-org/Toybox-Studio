@@ -25,6 +25,21 @@ public sealed class StateIndicatorPart : PropertyPart
 
     public bool CanReset => _owner.CanReset;
 
+    /// <summary>
+    /// True only when the indicator is a live revert affordance: the row supports a reset AND it currently
+    /// differs from its default. A row already at its default exposes nothing to reset, so its (hollow)
+    /// indicator is purely informational and not clickable.
+    /// </summary>
+    public bool IsResettable => _owner.CanReset && _owner.State == PropertyState.NonDefault;
+
+    /// <summary>Tooltip: a revert hint when resettable, "Read-only" for locked rows, else just "Default".</summary>
+    public string Hint => _owner.State switch
+    {
+        PropertyState.NonDefault when _owner.CanReset => "Reset to default",
+        PropertyState.ReadOnly => "Read-only",
+        _ => "Default",
+    };
+
     public ICommand ResetCommand => _owner.ResetCommand;
 
     private void OnOwnerChanged(object? sender, PropertyChangedEventArgs args)
@@ -33,6 +48,8 @@ public sealed class StateIndicatorPart : PropertyPart
         {
             OnPropertyChanged(nameof(State));
             OnPropertyChanged(nameof(CanReset));
+            OnPropertyChanged(nameof(IsResettable));
+            OnPropertyChanged(nameof(Hint));
         }
     }
 }

@@ -13,13 +13,17 @@
                       IsVisible="{Binding !IsNested}"
                       Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
             <DockPanel Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
-                <Path DockPanel.Dock="Right" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
-                      Margin="8,0,2,0" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 0,8 Z"/>
                 <!-- A root struct shows its default-state indicator (and reset) just like a row; the button
-                     swallows its own click so resetting never toggles the band. -->
-                <ContentPresenter DockPanel.Dock="Right" Content="{Binding StateIndicator}"
-                                  VerticalAlignment="Center"/>
-                <local:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="2,0,6,0"
+                     swallows its own click so resetting never toggles the band. It's pinned to the far-right
+                     edge (after the chevron) to match the leaf-row and list-header part order. A ContentControl
+                     (not a bare ContentPresenter) so the StateIndicatorPart's implicit DataTemplate resolves:
+                     a bare presenter outside a control template has no TemplatedParent and renders nothing. -->
+                <ContentControl DockPanel.Dock="Right" Content="{Binding StateIndicator}"
+                                VerticalAlignment="Center"/>
+                <!-- Disclosure chevron on the LEFT, before the icon/label, like a tree node. -->
+                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
+                      Margin="2,0,8,0" VerticalAlignment="Center" Data="M 0,0 L 8,4 L 0,8 Z"/>
+                <local:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="0,0,6,0"
                                 VerticalAlignment="Center"
                                 IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
                 <TextBlock Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
@@ -33,6 +37,7 @@
                            Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
                            IconName="{Binding Icon}" IconColor="{Binding IconColor}"
                            IsVisible="{Binding IsNested}"
+                           util:ExpandNod.State="{Binding IsExpanded}"
                            util:ToggleOnTap.Enabled="True"
                            util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}"/>
 

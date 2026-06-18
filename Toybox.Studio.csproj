@@ -40,6 +40,8 @@
     <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="12.0.0.2" />
     <PackageReference Include="Dock.Serializer.Newtonsoft" Version="12.0.0.2" />
     <PackageReference Include="IconPacks.Avalonia" Version="2.0.0" />
+    <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="12.0.4" PrivateAssets="All" Publish="True" />
+    <PackageReference Include="HotAvalonia" Version="3.*" PrivateAssets="All" Publish="True" />
   </ItemGroup>
 
   <ItemGroup>

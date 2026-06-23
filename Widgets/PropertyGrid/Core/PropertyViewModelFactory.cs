@@ -1,3 +1,5 @@
+using Toybox.Studio.Services.EngineApi;
+
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>
@@ -19,9 +21,9 @@ public static class PropertyViewModelFactory
         // element), provided the engine RPC is wired in to fetch those slots. The top-level material_instance
         // component takes the same path through ComponentViewModel before the grid is ever built.
         if (node.Type == MaterialInstancePropertyViewModel.TypeToken
-            && PropertyViewRegistry.Engine is { } engine
+            && PropertyViewRegistry.Assets is { } assets
             && MaterialInstancePropertyViewModel.CanBuild(node))
-            return Tag(new MaterialInstancePropertyViewModel(node, engine, effectiveCommit, depth), depth);
+            return Tag(new MaterialInstancePropertyViewModel(node, assets, effectiveCommit, depth), depth);
 
         // Nested structs render as a recursive sub-grid regardless of their concrete type token.
         if (node.HasChildren && node.Type != "array")

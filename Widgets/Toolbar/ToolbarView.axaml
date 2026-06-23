@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.Toolbar"
+             xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.Toolbar.ToolbarView"
+             x:DataType="local:ToolbarViewModel">
+
+    <UserControl.Styles>
+        <!-- The floating tools read as clickable (hand cursor, app-wide) and grow noticeably on hover so the
+             one under the pointer pops out of the dim row — a stronger zoom than the standard button nudge,
+             since the glyphs are small. Eased by the RenderTransform transition the base button style adds. -->
+        <Style Selector="Button.Basic:pointerover, ToggleButton.Basic:pointerover">
+            <Setter Property="RenderTransform" Value="scale(1.2)"/>
+        </Style>
+        <Style Selector="Button.Basic:pressed, ToggleButton.Basic:pressed">
+            <Setter Property="RenderTransform" Value="scale(1.08)"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- A movable, data-driven toolbar overlay. The grip drags it to a viewport edge (orientation flips
+         to match); each tool runs its multi-part RPC command and a grouped tool shows its checked state.
+         A small themed pill (scrim fill + hairline border + the theme's control rounding) floats it over the
+         viewport; the fill also keeps the region hit-testable so the grip/reorder gestures own the pointer
+         (not a box-select). -->
+    <Border Background="{DynamicResource ThemeScrimBrush}"
+            BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"
+            CornerRadius="{DynamicResource ControlCornerRadius}" Padding="3" Margin="8"
+            HorizontalAlignment="{Binding HorizontalAlignment}"
+            VerticalAlignment="{Binding VerticalAlignment}">
+        <StackPanel Orientation="{Binding Orientation}" Spacing="3">
+            <!-- Drag handle: reposition/dock the whole toolbar (distinct from per-tool reorder). -->
+            <Border local:ToolbarDockDrag.Enabled="True" Background="Transparent"
+                    Cursor="SizeAll" ToolTip.Tip="Drag to dock"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <pg:IconView IconName="GripVertical" Width="14" Height="14"/>
+            </Border>
+
+            <ItemsControl ItemsSource="{Binding Tools}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="2"
+                                    Orientation="{Binding ((local:ToolbarViewModel)DataContext).Orientation, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="local:ToolbarItemViewModel">
+                        <!-- A plain action tool is a Button; a grouped (radio) tool is a ToggleButton whose
+                             checked state mirrors the active group member. Drag a tool to re-order it. The whole
+                             item hides when its game-mode condition isn't met (e.g. Play while stopped). -->
+                        <Panel IsVisible="{Binding IsVisible}">
+                            <Button Classes="Basic" Padding="6,4"
+                                    local:ToolbarReorder.Enabled="True"
+                                    IsVisible="{Binding !IsToggle}"
+                                    ToolTip.Tip="{Binding Tooltip}"
+                                    Command="{Binding RunCommand}">
+                                <pg:IconView Width="15" Height="15"
+                                             IconName="{Binding IconName}" IconColor="{Binding IconColor}"/>
+                            </Button>
+                            <ToggleButton Classes="Basic" Padding="6,4"
+                                          local:ToolbarReorder.Enabled="True"
+                                          IsVisible="{Binding IsToggle}"
+                                          IsChecked="{Binding IsActive, Mode=OneWay}"
+                                          ToolTip.Tip="{Binding Tooltip}"
+                                          Command="{Binding RunCommand}">
+                                <pg:IconView Width="15" Height="15"
+                                             IconName="{Binding IconName}" IconColor="{Binding IconColor}"/>
+                            </ToggleButton>
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,8 +1,12 @@
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -16,6 +20,14 @@ public abstract class PropertyViewModel : ObservableObject
     // The live backing token, kept only so a search can match against the value text. Composite rows
     // (object/array) have no scalar value here — they match through their children instead.
     private readonly JToken? _value;
+
+    // Set while a fresh snapshot is being pushed in via <see cref="Sync"/>: tracking engine truth must move
+    // the displayed value WITHOUT persisting it straight back as if the user had just typed it.
+    private bool _suppressCommit;
+
+    private bool _isModified;
+
+    private bool _visible = true;
 
     protected PropertyViewModel(PropertyNode node)
     {
@@ -33,22 +45,45 @@ public abstract class PropertyViewModel : ObservableObject
         // false and the host's default-wiring corrects leaves; composites then aggregate from their children.
         _isModified = !node.IsDefault;
         ResetCommand = new RelayCommand(() => ResetToDefault?.Invoke());
+        Parts.CollectionChanged += OnPartsChanged;
+        // Every row carries a state/reset indicator; composites and list elements append their own parts
+        // (the disclosure chevron, the reorder handle, the add/remove affordances) to this same list.
         StateIndicator = new StateIndicatorPart(this);
+        Parts.Add(StateIndicator);
     }
 
     /// <summary>
-    /// The composable pieces the shared <see cref="PropertyRow"/> lays out in its slots. Every row has a
-    /// <see cref="StateIndicator"/>; the rest are present only where they apply — <see cref="Dropdown"/> on a
-    /// composite, <see cref="Actions"/> on a list (add) or list element (remove), <see cref="Handle"/> on a
-    /// reorderable list element (a list attaches these to its element rows).
+    /// The always-present state/reset indicator part. Every row gets one in its <see cref="TrailingParts"/>;
+    /// this typed handle is for the root composite section headers, which render as an accent band outside the
+    /// shared <see cref="PropertyRow"/> chrome and so show the indicator directly rather than via the slot.
     /// </summary>
     public StateIndicatorPart StateIndicator { get; }
 
-    public DropdownPart? Dropdown { get; internal set; }
+    /// <summary>
+    /// The composable pieces that make up this row, in declaration order. The shared <see cref="PropertyRow"/>
+    /// chrome lays each one out in the slot it declares (<see cref="PropertyPart.Slot"/>), so a row's affordances
+    /// are fully dynamic: anything can <c>Parts.Add(...)</c> a new part (a chevron, a handle, add/remove, a
+    /// future context menu) without touching this class or the row template. Every row starts with a
+    /// <see cref="StateIndicatorPart"/>; a resizable list adds a <see cref="HandlePart"/> +
+    /// <see cref="ActionsPart"/> to each element row. The disclosure chevron is the exception — it lives in
+    /// <see cref="Disclosure"/> (a reserved gutter), not here, so it never shifts the label.
+    /// </summary>
+    public ObservableCollection<PropertyPart> Parts { get; } = [];
 
-    public ActionsPart? Actions { get; internal set; }
+    /// <summary>
+    /// The disclosure (expand/collapse) chevron for a composite row, or null for a leaf. Rendered by the
+    /// shared <see cref="PropertyRow"/> chrome in a dedicated fixed-width gutter that is reserved on every
+    /// row — present but glyph-less on leaves — so a row's icon and label always start at the same x whether
+    /// or not it has children. Composites set this instead of adding the chevron to <see cref="Parts"/>, which
+    /// would otherwise shift the label out of alignment with sibling leaf rows.
+    /// </summary>
+    public DropdownPart? Disclosure { get; protected set; }
 
-    public HandlePart? Handle { get; internal set; }
+    /// <summary>Parts rendered in the indented label gutter, before the icon (the drag-to-reorder handle).</summary>
+    public ObservableCollection<PropertyPart> LeadingParts { get; } = [];
+
+    /// <summary>Parts rendered after the value editor, on the right edge (add/remove, state indicator).</summary>
+    public ObservableCollection<PropertyPart> TrailingParts { get; } = [];
 
     public string Name { get; }
 
@@ -115,10 +150,6 @@ public abstract class PropertyViewModel : ObservableObject
     /// </summary>
     public Action? CommitChanges { get; set; }
 
-    // Set while a fresh snapshot is being pushed in via <see cref="Sync"/>: tracking engine truth must move
-    // the displayed value WITHOUT persisting it straight back as if the user had just typed it.
-    private bool _suppressCommit;
-
     /// <summary>
     /// Resets this property to its engine default. Set by the host (inspector) only on rows that support
     /// it — top-level, non-read-only component properties; null everywhere else (settings, nested rows).
@@ -127,8 +158,6 @@ public abstract class PropertyViewModel : ObservableObject
 
     /// <summary>True when a reset affordance should be offered for this row.</summary>
     public bool CanReset => ResetToDefault is not null;
-
-    private bool _isModified;
 
     /// <summary>
     /// True when this property's current value differs from its engine default — i.e. it has actually been
@@ -160,8 +189,6 @@ public abstract class PropertyViewModel : ObservableObject
     /// <summary>Invokes <see cref="ResetToDefault"/>; available for a reset affordance (e.g. context menu).</summary>
     public ICommand ResetCommand { get; }
 
-    private bool _visible = true;
-
     /// <summary>
     /// Whether this row is shown under the active grid filter. The row's view binds its visibility here, so
     /// a non-matching row collapses out without rebuilding the tree. Driven by <see cref="ApplyFilter"/>.
@@ -174,6 +201,21 @@ public abstract class PropertyViewModel : ObservableObject
 
     /// <summary>The child rows to recurse into when filtering; empty for leaf rows, overridden by composites.</summary>
     protected virtual IEnumerable<PropertyViewModel> FilterChildren => [];
+
+    // The bare value as text for value-search. A typed wrapper ({ type, value }) contributes only its value,
+    // never the type token, so searching "int" doesn't match every integer.
+    private string ValueText => _value switch
+    {
+        null => "",
+        JObject obj when obj["value"] is { } inner => inner.ToString(Formatting.None),
+        _ => _value.ToString(Formatting.None),
+    };
+
+    /// <summary>
+    /// This leaf's current value as a bare JSON token, or null for composites/widgets that don't expose a
+    /// single scalar. Used to compare against a known default (the settings grid) without a per-type cast.
+    /// </summary>
+    public virtual JToken? CurrentValue => null;
 
     /// <summary>
     /// Applies a header/value search across this row and its subtree, setting <see cref="Visible"/>
@@ -204,38 +246,6 @@ public abstract class PropertyViewModel : ObservableObject
         return anyChildVisible;
     }
 
-    private void ShowAll()
-    {
-        Visible = true;
-        foreach (var child in FilterChildren)
-            child.ShowAll();
-    }
-
-    private bool Matches(string query) =>
-        Name.Contains(query, StringComparison.OrdinalIgnoreCase)
-        || ValueText.Contains(query, StringComparison.OrdinalIgnoreCase);
-
-    // The bare value as text for value-search. A typed wrapper ({ type, value }) contributes only its value,
-    // never the type token, so searching "int" doesn't match every integer.
-    private string ValueText => _value switch
-    {
-        null => "",
-        JObject obj when obj["value"] is { } inner => inner.ToString(Formatting.None),
-        _ => _value.ToString(Formatting.None),
-    };
-
-    protected void RaiseCommit()
-    {
-        if (!_suppressCommit)
-            CommitChanges?.Invoke();
-    }
-
-    /// <summary>
-    /// This leaf's current value as a bare JSON token, or null for composites/widgets that don't expose a
-    /// single scalar. Used to compare against a known default (the settings grid) without a per-type cast.
-    /// </summary>
-    public virtual JToken? CurrentValue => null;
-
     /// <summary>
     /// Sets this leaf's value from a bare JSON token, going through the same path as a user edit (so it
     /// persists and the bound control refreshes). No-op for composites/widgets without a scalar value.
@@ -263,6 +273,12 @@ public abstract class PropertyViewModel : ObservableObject
         }
     }
 
+    protected void RaiseCommit()
+    {
+        if (!_suppressCommit)
+            CommitChanges?.Invoke();
+    }
+
     /// <summary>
     /// Type-specific in-place value refresh for <see cref="Sync"/>. The default handles every row that does
     /// not override it conservatively: it reports success only when the value is unchanged from what this row
@@ -270,4 +286,51 @@ public abstract class PropertyViewModel : ObservableObject
     /// stale value. Leaf/composite rows whose value can move at runtime override this to update in place.
     /// </summary>
     protected virtual bool SyncCore(PropertyNode node) => JToken.DeepEquals(node.Value, _value);
+
+    // Buckets Parts into the two slot collections the row template binds, keeping Parts the single source of
+    // truth. Within a bucket parts are ordered by PropertyPart.Order (not insertion order), so the visual
+    // layout is stable however the parts happened to be added. Handles plain Add/Remove/Reset.
+    private void OnPartsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        switch (e.Action)
+        {
+            case NotifyCollectionChangedAction.Add when e.NewItems is not null:
+                foreach (PropertyPart part in e.NewItems)
+                    InsertByOrder(Bucket(part), part);
+                break;
+            case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
+                foreach (PropertyPart part in e.OldItems)
+                    Bucket(part).Remove(part);
+                break;
+            default:
+                LeadingParts.Clear();
+                TrailingParts.Clear();
+                foreach (var part in Parts)
+                    InsertByOrder(Bucket(part), part);
+                break;
+        }
+    }
+
+    private ObservableCollection<PropertyPart> Bucket(PropertyPart part) =>
+        part.Slot == PartSlot.Leading ? LeadingParts : TrailingParts;
+
+    // Stable sorted insert: place the part after every existing one with an equal-or-lower Order.
+    private static void InsertByOrder(ObservableCollection<PropertyPart> bucket, PropertyPart part)
+    {
+        var index = 0;
+        while (index < bucket.Count && bucket[index].Order <= part.Order)
+            index++;
+        bucket.Insert(index, part);
+    }
+
+    private void ShowAll()
+    {
+        Visible = true;
+        foreach (var child in FilterChildren)
+            child.ShowAll();
+    }
+
+    private bool Matches(string query) =>
+        Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+        || ValueText.Contains(query, StringComparison.OrdinalIgnoreCase);
 }

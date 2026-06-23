@@ -7,8 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Models.Ecs;
-using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.World;
 using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Ecs;
@@ -24,25 +23,23 @@ public sealed class ScriptContainerViewModel : ObservableObject
 {
     private const string ScriptsProperty = "scripts";
 
-    private readonly ulong _entityId;
-    private readonly string _componentName;
+    private readonly Component _component;
     private readonly JObject _raw;
-    private readonly EngineRpc _engine;
     private readonly Func<Task> _resync;
     private readonly Action _onEdited;
 
+    private string? _filter;
+
     public ScriptContainerViewModel(
-        ulong entityId, Component component, EngineRpc engine, Func<Task> resync, Action onEdited)
+        Component component, ComponentDescription snapshot, Func<Task> resync, Action onEdited)
     {
-        _entityId = entityId;
-        _componentName = component.Name;
-        _raw = component.Raw;
-        _engine = engine;
+        _component = component;
+        _raw = snapshot.Raw;
         _resync = resync;
         _onEdited = onEdited;
 
         Bindings = [];
-        var scripts = component.Properties.FirstOrDefault(property => property.Name == ScriptsProperty);
+        var scripts = snapshot.Properties.FirstOrDefault(property => property.Name == ScriptsProperty);
         if (scripts is not null)
         {
             foreach (var binding in scripts.Children)
@@ -53,8 +50,6 @@ public sealed class ScriptContainerViewModel : ObservableObject
     public ObservableCollection<ScriptBindingViewModel> Bindings { get; }
 
     public bool HasBindings => Bindings.Count > 0;
-
-    private string? _filter;
 
     /// <summary>The inspector search, fanned out to each binding card.</summary>
     public string? Filter
@@ -81,8 +76,8 @@ public sealed class ScriptContainerViewModel : ObservableObject
         if (bare is null)
             return;
 
-        var result = await _engine
-            .SetPropertyAsync(_entityId, _componentName, ScriptsProperty, bare, CancellationToken.None)
+        var result = await _component
+            .SetPropertyAsync(ScriptsProperty, bare, CancellationToken.None)
             .ContinueOnSameContext();
         if (result.Success)
         {

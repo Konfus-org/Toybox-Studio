@@ -2,8 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Toybox.Studio.Models;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Extensions;
 
 namespace Toybox.Studio.Services.Theming;
 
@@ -21,11 +21,11 @@ namespace Toybox.Studio.Services.Theming;
 /// </summary>
 public sealed class ThemeApplier
 {
-    /// <summary>The theme last applied to the live resources.</summary>
-    public Theme Active { get; private set; } = Theme.DefaultClay();
-
     /// <summary>Raised after a theme is applied so dependents (e.g. the engine log colors) can re-sync.</summary>
     public event Action? ThemeChanged;
+
+    /// <summary>The theme last applied to the live resources.</summary>
+    public Theme Active { get; private set; } = Theme.DefaultClay();
 
     /// <summary>
     /// Writes every theme token onto the live Avalonia resource dictionary. When <paramref name="notify"/>
@@ -50,7 +50,7 @@ public sealed class ThemeApplier
         var background = colors.Background.Representative;
         var text = Contrast.Ensure(colors.Text.Start, background, 8.5);
         var onPrimary = Contrast.Ensure(colors.Primary.Representative, colors.Primary.Representative, 8.5);
-        var muted = Contrast.Ensure(ColorMath.Blend(text, background, 0.40f), background, 4.5);
+        var muted = Contrast.Ensure(text.Blend(background, 0.40f), background, 4.5);
 
         // The compact set of COLOURS that AppStyles derives its translucent neutral brushes from (border,
         // header, band, well, scrim, groove, muted/on-colour text, …). Publishing the colours — not the
@@ -76,12 +76,12 @@ public sealed class ThemeApplier
         // its dominant colour, so it stands in as the accent.
         var accent = colors.Primary.Start;
         resources["SystemAccentColor"] = accent;
-        resources["SystemAccentColorLight1"] = ColorMath.Blend(accent, Colors.White, 0.3f);
-        resources["SystemAccentColorLight2"] = ColorMath.Blend(accent, Colors.White, 0.5f);
-        resources["SystemAccentColorLight3"] = ColorMath.Blend(accent, Colors.White, 0.7f);
-        resources["SystemAccentColorDark1"] = ColorMath.Blend(accent, Colors.Black, 0.2f);
-        resources["SystemAccentColorDark2"] = ColorMath.Blend(accent, Colors.Black, 0.4f);
-        resources["SystemAccentColorDark3"] = ColorMath.Blend(accent, Colors.Black, 0.6f);
+        resources["SystemAccentColorLight1"] = accent.Blend(Colors.White, 0.3f);
+        resources["SystemAccentColorLight2"] = accent.Blend(Colors.White, 0.5f);
+        resources["SystemAccentColorLight3"] = accent.Blend(Colors.White, 0.7f);
+        resources["SystemAccentColorDark1"] = accent.Blend(Colors.Black, 0.2f);
+        resources["SystemAccentColorDark2"] = accent.Blend(Colors.Black, 0.4f);
+        resources["SystemAccentColorDark3"] = accent.Blend(Colors.Black, 0.6f);
 
         // Where FluentTheme fills an accent SURFACE (selected list/tree/tab items, accent buttons, the
         // toggle-switch's "on" track), point its accent-fill brushes at the primary GRADIENT so a selected
@@ -106,11 +106,11 @@ public sealed class ThemeApplier
         // hover/press fills from the primary stops, same lighten/darken split as SetColorButton. (Our own
         // primary buttons use Classes="action"; this keeps any stray accent button consistent too.)
         resources["AccentButtonBackgroundPointerOver"] = ColorGradient.BuildBrush(
-            ColorMath.Blend(colors.Primary.Start, Colors.White, 0.15f),
-            ColorMath.Blend(colors.Primary.End, Colors.White, 0.15f), 90);
+            colors.Primary.Start.Blend(Colors.White, 0.15f),
+            colors.Primary.End.Blend(Colors.White, 0.15f), 90);
         resources["AccentButtonBackgroundPressed"] = ColorGradient.BuildBrush(
-            ColorMath.Blend(colors.Primary.Start, Colors.Black, 0.10f),
-            ColorMath.Blend(colors.Primary.End, Colors.Black, 0.14f), 90);
+            colors.Primary.Start.Blend(Colors.Black, 0.10f),
+            colors.Primary.End.Blend(Colors.Black, 0.14f), 90);
 
         // Dock.Avalonia ships its own #007ACC accent + system-derived chrome; point its overridable brush
         // keys at the active theme so docking (selected tabs, the drop-position highlight, the drag overlay
@@ -130,7 +130,7 @@ public sealed class ThemeApplier
         // Panel surface — a gentle warm vertical ramp. The top stop is warmed (NOT the near-white surface
         // start) so the panel's top edge doesn't read as a bright white border against the window.
         var dockSurface = ColorGradient.BuildBrush(
-            ColorMath.Blend(colors.Surface.Start, colors.Surface.End, 0.5f), colors.Surface.End, 90);
+            colors.Surface.Start.Blend(colors.Surface.End, 0.5f), colors.Surface.End, 90);
 
         // Active title header = the SAME primary gradient as the action buttons; inactive header = surface.
         resources["DockSurfaceHeaderActiveBrush"] = primaryBrushForDock;
@@ -142,7 +142,7 @@ public sealed class ThemeApplier
         resources["DockApplicationAccentBrushMed"] = TitleGradient(primaryStart, primaryEnd, 0.15f);
         resources["DockApplicationAccentBrushHigh"] = TitleGradient(primaryStart, primaryEnd, 0.30f);
         resources["DockApplicationAccentBrushIndicator"] = primaryBrushForDock;
-        resources["DockTargetIndicatorBrush"] = new SolidColorBrush(ColorMath.WithAlpha(accent, 0x80));
+        resources["DockTargetIndicatorBrush"] = new SolidColorBrush(accent.WithAlpha(0x80));
 
         // Each docking panel surface (a gentle vertical ramp; RelativeUnit re-maps per panel).
         resources["DockThemeBackgroundBrush"] = dockSurface;
@@ -160,28 +160,28 @@ public sealed class ThemeApplier
         })
             resources[key] = new SolidColorBrush(Colors.Transparent);
 
-        resources["DockSelectorOverlayBackdropBrush"] = new SolidColorBrush(ColorMath.WithAlpha(dockBg, 0xC0));
+        resources["DockSelectorOverlayBackdropBrush"] = new SolidColorBrush(dockBg.WithAlpha(0xC0));
 
         // Chrome buttons (pin / menu / close): themed icon + a faint hover band, no fill of their own.
         resources["DockToolChromeIconBrush"] = new SolidColorBrush(text);
         resources["DockChromeButtonForegroundBrush"] = new SolidColorBrush(text);
         // No drag-grip bar in the title bars — the whole header is draggable anyway.
         resources["DockChromeGripBrush"] = new SolidColorBrush(Colors.Transparent);
-        resources["DockChromeButtonHoverBackgroundBrush"] = new SolidColorBrush(ColorMath.WithAlpha(text, 0x18));
-        resources["DockChromeButtonPressedBackgroundBrush"] = new SolidColorBrush(ColorMath.WithAlpha(text, 0x28));
+        resources["DockChromeButtonHoverBackgroundBrush"] = new SolidColorBrush(text.WithAlpha(0x18));
+        resources["DockChromeButtonPressedBackgroundBrush"] = new SolidColorBrush(text.WithAlpha(0x28));
 
         // Tabs (tool + document): clay feel — transparent idle, faint hover, the surface gradient behind the
         // ACTIVE tab with an accent indicator + accent text.
         resources["DockTabBackgroundBrush"] = new SolidColorBrush(Colors.Transparent);
         resources["DockDocumentTabStripBackgroundBrush"] = new SolidColorBrush(Colors.Transparent);
-        resources["DockTabHoverBackgroundBrush"] = new SolidColorBrush(ColorMath.WithAlpha(text, 0x14));
+        resources["DockTabHoverBackgroundBrush"] = new SolidColorBrush(text.WithAlpha(0x14));
         // Active tab has a PURPLE (primary) background, so its text/indicator use the on-primary ink. Inactive
         // tab text is the auto-contrast muted ink (on the cream strip).
         resources["DockTabActiveBackgroundBrush"] = primaryBrushForDock;
         resources["DockTabActiveIndicatorBrush"] = primaryBrushForDock;
         var onPrimaryBrush = new SolidColorBrush(onPrimary);
         var darkInk = new SolidColorBrush(text);
-        resources["DockTabForegroundBrush"] = new SolidColorBrush(Contrast.Ensure(ColorMath.Blend(text, background, 0.35f), background, 4.5));
+        resources["DockTabForegroundBrush"] = new SolidColorBrush(Contrast.Ensure(text.Blend(background, 0.35f), background, 4.5));
         resources["DockTabSelectedForegroundBrush"] = onPrimaryBrush;
         resources["DockTabActiveForegroundBrush"] = onPrimaryBrush;
         resources["DockDocumentTabSelectedForegroundBrush"] = onPrimaryBrush;
@@ -196,7 +196,7 @@ public sealed class ThemeApplier
         // clean white fields in the reference). These are FluentTheme keys, so they stay in code.
         var transparent = new SolidColorBrush(Colors.Transparent);
         var inputFill = new SolidColorBrush(colors.Surface.Start);
-        var inputHover = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.White, 0.4f));
+        var inputHover = new SolidColorBrush(colors.Surface.Start.Blend(Colors.White, 0.4f));
         foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundFocused" })
             resources[key] = inputFill;
         resources["TextControlBackgroundPointerOver"] = inputHover;
@@ -218,8 +218,8 @@ public sealed class ThemeApplier
 
         // Consistent disabled chrome across ALL buttons — a muted surface fill + muted ink derived from the
         // theme. The fill is our own key (a blend, kept here); the *ForegroundDisabled keys are FluentTheme's.
-        var disabledFill = new SolidColorBrush(ColorMath.Blend(colors.Surface.Representative, background, 0.5f));
-        var disabledInk = new SolidColorBrush(ColorMath.WithAlpha(text, 0x59));
+        var disabledFill = new SolidColorBrush(colors.Surface.Representative.Blend(background, 0.5f));
+        var disabledInk = new SolidColorBrush(text.WithAlpha(0x59));
         foreach (var key in new[] { "ButtonBackgroundDisabled", "ComboBoxBackgroundDisabled", "TextControlBackgroundDisabled" })
             resources[key] = disabledFill;
         foreach (var key in new[] { "ButtonForegroundDisabled", "ComboBoxForegroundDisabled", "TextControlForegroundDisabled" })
@@ -238,7 +238,7 @@ public sealed class ThemeApplier
         // no hard outline (the inset well shadow carries the recess); only the focus border shows as accent.
         resources["ComboBoxBackground"] = inputFill;
         resources["ComboBoxBackgroundPointerOver"] = inputHover;
-        resources["ComboBoxBackgroundPressed"] = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.Black, 0.06f));
+        resources["ComboBoxBackgroundPressed"] = new SolidColorBrush(colors.Surface.Start.Blend(Colors.Black, 0.06f));
         resources["ComboBoxBackgroundFocused"] = inputFill;
         resources["ComboBoxBorderBrush"] = transparent;
         resources["ComboBoxBorderBrushPointerOver"] = transparent;
@@ -250,7 +250,7 @@ public sealed class ThemeApplier
         // (a flat fill the translucent item highlight tints over) with a subtle border. FluentTheme keys, so
         // they stay in code for Application.Resources precedence.
         var menuSurface = new SolidColorBrush(colors.Surface.Representative);
-        var menuBorder = new SolidColorBrush(ColorMath.WithAlpha(text, 0x2E));
+        var menuBorder = new SolidColorBrush(text.WithAlpha(0x2E));
         foreach (var key in new[] { "MenuFlyoutPresenterBackground", "FlyoutPresenterBackground" })
             resources[key] = menuSurface;
         foreach (var key in new[] { "MenuFlyoutPresenterBorderBrush", "FlyoutBorderThemeBrush" })
@@ -260,7 +260,7 @@ public sealed class ThemeApplier
         // groove with an accent-gradient value fill and a raised surface thumb. These recolour FluentTheme's
         // slider keys (the inset groove / thumb shadow are added in SliderStyle); they stay here for the same
         // Application.Resources-precedence reason as the other Fluent overrides.
-        var grooveBrush = new SolidColorBrush(ColorMath.WithAlpha(text, 0x22));
+        var grooveBrush = new SolidColorBrush(text.WithAlpha(0x22));
         var thumbBrush = new SolidColorBrush(colors.Surface.Start);
         resources["SliderTrackFill"] = grooveBrush;
         resources["SliderTrackFillPointerOver"] = grooveBrush;
@@ -269,8 +269,8 @@ public sealed class ThemeApplier
         resources["SliderTrackValueFillPointerOver"] = primaryBrush;
         resources["SliderTrackValueFillPressed"] = primaryBrush;
         resources["SliderThumbBackground"] = thumbBrush;
-        resources["SliderThumbBackgroundPointerOver"] = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.White, 0.3f));
-        resources["SliderThumbBackgroundPressed"] = new SolidColorBrush(ColorMath.Blend(colors.Surface.Start, Colors.White, 0.3f));
+        resources["SliderThumbBackgroundPointerOver"] = new SolidColorBrush(colors.Surface.Start.Blend(Colors.White, 0.3f));
+        resources["SliderThumbBackgroundPressed"] = new SolidColorBrush(colors.Surface.Start.Blend(Colors.White, 0.3f));
 
         var radius = new CornerRadius(theme.CornerRadius);
         resources["ControlCornerRadius"] = radius;
@@ -339,7 +339,7 @@ public sealed class ThemeApplier
 
         // A brightened flat accent for hover affordances (e.g. the reset indicator brightening on hover) —
         // a blend toward white, so it stays in code rather than moving to an opacity-only XAML derivation.
-        resources["ThemeAccentBrightBrush"] = new SolidColorBrush(ColorMath.Blend(colors.Primary.Representative, Colors.White, 0.28f));
+        resources["ThemeAccentBrightBrush"] = new SolidColorBrush(colors.Primary.Representative.Blend(Colors.White, 0.28f));
 
         // Tab + panel rounding derived from the theme's CornerRadius: a tab rounds only its TOP corners while
         // the panel rounds only its BOTTOM corners, so the selected tab reads as part of the panel it owns.
@@ -356,8 +356,8 @@ public sealed class ThemeApplier
     /// bottom relative to the surface stops, so the button reads as a raised, moulded pill.</summary>
     private static IBrush ButtonGradient(ColorGradient surface, float lightenTop, float darkenBottom) =>
         ColorGradient.BuildBrush(
-            ColorMath.Blend(surface.Start, Colors.White, lightenTop),
-            ColorMath.Blend(surface.End, Colors.Black, darkenBottom),
+            surface.Start.Blend(Colors.White, lightenTop),
+            surface.End.Blend(Colors.Black, darkenBottom),
             90);
 
     /// <summary>
@@ -367,11 +367,11 @@ public sealed class ThemeApplier
     /// </summary>
     private static void SetColorButton(IResourceDictionary resources, string key, Color top, Color bottom)
     {
-        var topStop = ColorMath.Blend(top, Colors.White, 0.16f);
-        var bottomStop = ColorMath.Blend(bottom, Colors.Black, 0.14f);
+        var topStop = top.Blend(Colors.White, 0.16f);
+        var bottomStop = bottom.Blend(Colors.Black, 0.14f);
         resources[key + "Brush"] = ColorGradient.BuildBrush(topStop, bottomStop, 90);
         resources[key + "HoverBrush"] = ColorGradient.BuildBrush(
-            ColorMath.Blend(topStop, Colors.White, 0.15f), ColorMath.Blend(bottomStop, Colors.White, 0.15f), 90);
+            topStop.Blend(Colors.White, 0.15f), bottomStop.Blend(Colors.White, 0.15f), 90);
     }
 
     /// <summary>
@@ -380,8 +380,8 @@ public sealed class ThemeApplier
     /// </summary>
     private static IBrush TitleGradient(Color start, Color end, float lighten) =>
         ColorGradient.BuildBrush(
-            ColorMath.Blend(start, Colors.White, lighten),
-            ColorMath.Blend(end, Colors.White, lighten),
+            start.Blend(Colors.White, lighten),
+            end.Blend(Colors.White, lighten),
             0);
 
     private static void SetBrush(IResourceDictionary resources, string key, ColorGradient gradient) =>

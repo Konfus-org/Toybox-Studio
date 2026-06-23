@@ -1,6 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors">
+        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors.Animations">
 
     <!-- Opening a menu nods its dropdown in (top-level nods down, a sub-option's submenu nods right),
          scaled by the animation-intensity setting. See MenuOpenNod. -->

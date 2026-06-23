@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
-             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors" xmlns:anim="using:Toybox.Studio.Widgets.Behaviors.Animations"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.MaterialInstancePropertyView"
              x:DataType="local:MaterialInstancePropertyViewModel">
     <!-- A material instance shown wherever it nests (a field or a list element): an expandable header row,
@@ -24,17 +24,15 @@
             </DockPanel>
         </ToggleButton>
 
+        <!-- Nested instance: an ordinary property row that toggles on tap; the disclosure chevron renders in
+             the row's own leading slot (from the composite's DropdownPart), on the left like a tree node. -->
         <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
                            Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
                            IconName="{Binding Icon}" IconColor="{Binding IconColor}"
                            IsVisible="{Binding IsNested}"
-                           util:ExpandNod.State="{Binding IsExpanded}"
+                           anim:ExpandNod.State="{Binding IsExpanded}"
                            util:ToggleOnTap.Enabled="True"
-                           util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}">
-            <Path Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
-                  Width="8" Height="8" Stretch="Uniform" HorizontalAlignment="Right"
-                  Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
-        </local:PropertyRow>
+                           util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}"/>
 
         <ItemsControl ItemsSource="{Binding Children}" IsVisible="{Binding IsExpanded}"/>
     </StackPanel>

@@ -18,15 +18,15 @@ public sealed partial class SaveChangesDialogViewModel : ObservableObject
         Message = message;
     }
 
+    /// <summary>Raised when the dialog should close.</summary>
+    public event Action? CloseRequested;
+
     public string Title { get; }
 
     public string Message { get; }
 
     /// <summary>The user's choice; <see cref="SaveChoice.Cancel"/> until they pick Save or Don't Save.</summary>
     public SaveChoice Choice { get; private set; } = SaveChoice.Cancel;
-
-    /// <summary>Raised when the dialog should close.</summary>
-    public event Action? CloseRequested;
 
     [RelayCommand]
     private void Save()

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -10,19 +11,13 @@ public sealed partial class BoolPropertyViewModel : PropertyViewModel
 {
     private readonly JsonValueSlot _slot;
 
+    [ObservableProperty]
+    private bool _value;
+
     public BoolPropertyViewModel(PropertyNode node) : base(node)
     {
         _slot = new JsonValueSlot(node.Value);
         _value = node.Value?.Type == JTokenType.Boolean && node.Value.Value<bool>();
-    }
-
-    [ObservableProperty]
-    private bool _value;
-
-    partial void OnValueChanged(bool value)
-    {
-        if (_slot.Set(new JValue(value)))
-            RaiseCommit();
     }
 
     public override JToken? CurrentValue => new JValue(Value);
@@ -33,5 +28,11 @@ public sealed partial class BoolPropertyViewModel : PropertyViewModel
     {
         Value = node.Value?.Type == JTokenType.Boolean && node.Value.Value<bool>();
         return true;
+    }
+
+    partial void OnValueChanged(bool value)
+    {
+        if (_slot.Set(new JValue(value)))
+            RaiseCommit();
     }
 }

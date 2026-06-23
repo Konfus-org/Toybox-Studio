@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
-             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors" xmlns:anim="using:Toybox.Studio.Widgets.Behaviors.Animations"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.MaterialSectionView"
              x:DataType="local:MaterialSectionViewModel">
     <!-- A material override section (Textures / Parameters) rendered like a nested struct: an ordinary
@@ -10,7 +10,7 @@
     <StackPanel IsVisible="{Binding Visible}">
         <local:PropertyRow HeaderText="{Binding Name}" Depth="{Binding Depth}"
                            IconName="{Binding Icon}" IconColor="{Binding IconColor}"
-                           util:ExpandNod.State="{Binding IsExpanded}"
+                           anim:ExpandNod.State="{Binding IsExpanded}"
                            util:ToggleOnTap.Enabled="True"
                            util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}"/>
         <ItemsControl ItemsSource="{Binding Slots}" IsVisible="{Binding IsExpanded}"/>

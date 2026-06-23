@@ -13,6 +13,9 @@ public sealed partial class RotationComponentViewModel : ObservableObject
     private readonly int _index;
     private readonly Action _apply;
 
+    [ObservableProperty]
+    private decimal? _value;
+
     public RotationComponentViewModel(string label, int index, double[] euler, Action apply)
     {
         Label = label;
@@ -23,9 +26,6 @@ public sealed partial class RotationComponentViewModel : ObservableObject
     }
 
     public string Label { get; }
-
-    [ObservableProperty]
-    private decimal? _value;
 
     partial void OnValueChanged(decimal? value)
     {

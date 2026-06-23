@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:Avalonia.Data.Converters"
              xmlns:controls="using:Toybox.Studio.Widgets.Searching"
-             xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors"
+             xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors.Animations"
              x:Class="Toybox.Studio.Widgets.Searching.SearchBox">
 
     <UserControl.Styles>

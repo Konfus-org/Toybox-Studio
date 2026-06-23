@@ -1,4 +1,3 @@
-using Toybox.Studio.Models;
 using Toybox.Studio.Utils;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;

@@ -34,6 +34,27 @@ public sealed class CMakeCompiler
     private readonly CommandRunner _runner;
     private readonly Logger _log;
 
+    // The CommandRunner categorizes each logged build line by the first named group that matches. Build
+    // tools write most failures to stdout, so the line text — not its stream — is the severity signal:
+    // the "error" group catches clang/gcc/cmake "error:", a Ninja "FAILED:" step, MSVC compiler
+    // ("error C2065") and linker ("LNK2019"/"LNK1120") codes, and "fatal error"; everything else with a
+    // "warning" is a warning, and the rest is info.
+    private static readonly Regex BuildLogPattern = new(
+        @"(?<error>error:|fatal error|FAILED:|CMake Error|error C[0-9]+|LNK[0-9]+)|(?<warning>warning)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// The selectable compiler options, in display order — the labels the settings dropdown offers and
+    /// that <see cref="ParseCompiler"/> understands. Kept here so the two can't drift apart.
+    /// </summary>
+    public static readonly IReadOnlyList<string> CompilerChoices = ["Auto", "MSVC", "Clang"];
+
+    /// <summary>The configure-preset names defined in every Toybox project's <c>CMakePresets.json</c>.</summary>
+    public const string MsvcPreset = "msvc";
+    public const string ClangPreset = "clang";
+
+    private static readonly TimeSpan ToolDetectionTimeout = TimeSpan.FromSeconds(5);
+
     public CMakeCompiler(CommandRunner runner, Logger log)
     {
         _runner = runner;
@@ -140,57 +161,10 @@ public sealed class CMakeCompiler
         }
     }
 
-    private static bool LooksLikeFileLock(string message) =>
-        message.Contains("permission denied", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("unable to remove file", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("Access is denied", StringComparison.OrdinalIgnoreCase);
-
-    // Ninja prints this while loading a .ninja_deps/.ninja_log that ends mid-record — the signature of a
-    // build process that was killed mid-write (a cancelled launch, a force-stopped engine, a timeout).
-    private static bool LooksLikeDepsCorruption(string message) =>
-        message.Contains("premature end of file", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Rewrites Ninja's build/dependency logs from the records it currently holds, clearing damage left by
-    /// a build whose process tree was killed mid-write. Without this a single interrupted build poisons the
-    /// tree indefinitely: Ninja recovers the truncated log in memory on every load but never rewrites it,
-    /// so each subsequent build re-reads the stale prefix and recompiles everything. A no-op for non-Ninja
-    /// generators (the MSVC preset's Visual Studio generator has no <c>build.ninja</c>) or if ninja isn't
-    /// on PATH.
-    /// </summary>
-    private async Task RepairNinjaDepsAsync(string buildDirectory, CancellationToken ct)
-    {
-        if (!File.Exists(Path.Combine(buildDirectory, "build.ninja")))
-            return;
-
-        _log.Info("Repairing the incremental build database left inconsistent by an interrupted build...");
-        await _runner.RunAsync(
-            "ninja",
-            ["-t", "recompact"],
-            workingDirectory: buildDirectory,
-            ct: ct).ContinueOnAnyContext();
-    }
-
-    // The CommandRunner categorizes each logged build line by the first named group that matches. Build
-    // tools write most failures to stdout, so the line text — not its stream — is the severity signal:
-    // the "error" group catches clang/gcc/cmake "error:", a Ninja "FAILED:" step, MSVC compiler
-    // ("error C2065") and linker ("LNK2019"/"LNK1120") codes, and "fatal error"; everything else with a
-    // "warning" is a warning, and the rest is info.
-    private static readonly Regex BuildLogPattern = new(
-        @"(?<error>error:|fatal error|FAILED:|CMake Error|error C[0-9]+|LNK[0-9]+)|(?<warning>warning)",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
     public static bool IsConfigured(string buildDirectory)
     {
         return File.Exists(Path.Combine(buildDirectory, "CMakeCache.txt"));
     }
-
-    /// <summary>
-    /// The selectable compiler options, in display order — the labels the settings dropdown offers and
-    /// that <see cref="ParseCompiler"/> understands. Kept here so the two can't drift apart.
-    /// </summary>
-    public static readonly IReadOnlyList<string> CompilerChoices = ["Auto", "MSVC", "Clang"];
 
     /// <summary>
     /// Maps a stored compiler setting ("Auto"/"MSVC"/"Clang", case-insensitive) to a preference,
@@ -202,10 +176,6 @@ public sealed class CMakeCompiler
         "clang" => CompilerPreference.Clang,
         _ => CompilerPreference.Auto,
     };
-
-    /// <summary>The configure-preset names defined in every Toybox project's <c>CMakePresets.json</c>.</summary>
-    public const string MsvcPreset = "msvc";
-    public const string ClangPreset = "clang";
 
     /// <summary>
     /// The build preset for a configure preset and configuration, by the
@@ -263,12 +233,6 @@ public sealed class CMakeCompiler
         return compiler == CompilerPreference.Msvc ? preset == MsvcPreset : preset == ClangPreset;
     }
 
-    private static string ValueAfterEquals(string line)
-    {
-        var index = line.IndexOf('=');
-        return index < 0 ? "" : line[(index + 1)..].Trim();
-    }
-
     /// <summary>
     /// Picks the configure preset for a fresh build tree. MSVC's preset uses CMake's default Visual Studio
     /// generator, which locates the toolchain itself (no developer command prompt required); Clang's uses
@@ -295,6 +259,44 @@ public sealed class CMakeCompiler
                     return ClangPreset;
                 return MsvcPreset;
         }
+    }
+
+    private static bool LooksLikeFileLock(string message) =>
+        message.Contains("permission denied", StringComparison.OrdinalIgnoreCase)
+        || message.Contains("unable to remove file", StringComparison.OrdinalIgnoreCase)
+        || message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase)
+        || message.Contains("Access is denied", StringComparison.OrdinalIgnoreCase);
+
+    // Ninja prints this while loading a .ninja_deps/.ninja_log that ends mid-record — the signature of a
+    // build process that was killed mid-write (a cancelled launch, a force-stopped engine, a timeout).
+    private static bool LooksLikeDepsCorruption(string message) =>
+        message.Contains("premature end of file", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Rewrites Ninja's build/dependency logs from the records it currently holds, clearing damage left by
+    /// a build whose process tree was killed mid-write. Without this a single interrupted build poisons the
+    /// tree indefinitely: Ninja recovers the truncated log in memory on every load but never rewrites it,
+    /// so each subsequent build re-reads the stale prefix and recompiles everything. A no-op for non-Ninja
+    /// generators (the MSVC preset's Visual Studio generator has no <c>build.ninja</c>) or if ninja isn't
+    /// on PATH.
+    /// </summary>
+    private async Task RepairNinjaDepsAsync(string buildDirectory, CancellationToken ct)
+    {
+        if (!File.Exists(Path.Combine(buildDirectory, "build.ninja")))
+            return;
+
+        _log.Info("Repairing the incremental build database left inconsistent by an interrupted build...");
+        await _runner.RunAsync(
+            "ninja",
+            ["-t", "recompact"],
+            workingDirectory: buildDirectory,
+            ct: ct).ContinueOnAnyContext();
+    }
+
+    private static string ValueAfterEquals(string line)
+    {
+        var index = line.IndexOf('=');
+        return index < 0 ? "" : line[(index + 1)..].Trim();
     }
 
     /// <summary>
@@ -365,8 +367,6 @@ public sealed class CMakeCompiler
 
         return result;
     }
-
-    private static readonly TimeSpan ToolDetectionTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>True when <paramref name="tool"/> runs (<c>--version</c> exits 0), i.e. it is on PATH.</summary>
     private async Task<bool> IsToolAvailableAsync(string tool, CancellationToken ct) =>

@@ -15,7 +15,8 @@ public sealed class StateIndicatorPart : PropertyPart
 {
     private readonly PropertyViewModel _owner;
 
-    public StateIndicatorPart(PropertyViewModel owner)
+    // Order 100: the state/reset indicator is pinned to the far right of every row, after any add/remove.
+    public StateIndicatorPart(PropertyViewModel owner) : base(PartSlot.Trailing, order: 100)
     {
         _owner = owner;
         _owner.PropertyChanged += OnOwnerChanged;

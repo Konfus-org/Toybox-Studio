@@ -26,6 +26,9 @@ public sealed partial class MessageDialogViewModel : ObservableObject
         OkText = okText;
     }
 
+    /// <summary>Raised when the dialog should close.</summary>
+    public event Action? CloseRequested;
+
     public string Title { get; }
 
     public string Message { get; }
@@ -37,9 +40,6 @@ public sealed partial class MessageDialogViewModel : ObservableObject
     public string? IconColor { get; }
 
     public string OkText { get; }
-
-    /// <summary>Raised when the dialog should close.</summary>
-    public event Action? CloseRequested;
 
     [RelayCommand]
     private void Ok() => CloseRequested?.Invoke();

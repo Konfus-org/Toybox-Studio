@@ -3,31 +3,41 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.World;
-using Toybox.Studio.Widgets.GameToolbar;
+using Toybox.Studio.Widgets.Toolbar;
 using Toybox.Studio.Widgets.Viewport;
 
 namespace Toybox.Studio.Widgets.GameView;
 
 /// <summary>
 /// The Game view: shows exactly what the game camera sees (a frame <see cref="Surface"/> streaming the
-/// engine's mirrored game camera) and hosts the Play/Stop/Pause <see cref="Transport"/> that used to
-/// live in the shell title bar. Single-instance, so its surface streams for the app's lifetime.
+/// engine's mirrored game camera) and hosts the Play/Stop/Pause <see cref="Transport"/> — the same
+/// data-driven toolbar the viewport uses, seeded with the transport tools (whose game-mode conditions show
+/// Play while stopped and Stop/Pause while playing). Single-instance, so its surface streams for the app's
+/// lifetime.
 /// </summary>
 public sealed class GameViewViewModel : ObservableObject, IDisposable
 {
     public GameViewViewModel(
-        Session session, EngineRpc engine, Logger logger, EngineWatcher watcher, WorldManager world,
-        GameToolbarViewModel transport)
+        Session session, Func<ViewKind, ViewportStream> streamFactory, Logger logger, EngineWatcher watcher,
+        WorldManager world, WorldSelection selection, GizmoTool gizmoTool, ToolCommandRunner toolCommandRunner,
+        ToolbarState toolbarState)
     {
-        Transport = transport;
-        Surface = new ViewportViewModel(session, engine, logger, watcher, world, ViewKind.Game);
+        Transport = new ToolbarViewModel(
+            ToolbarLayout.GameTransport(), toolCommandRunner, toolbarState, watcher);
+        Surface = new ViewportViewModel(
+            session, streamFactory, logger, watcher, world, selection, gizmoTool, toolCommandRunner,
+            toolbarState, ViewKind.Game);
     }
 
     /// <summary>The frame surface bound to the engine's game-camera mirror.</summary>
     public ViewportViewModel Surface { get; }
 
-    /// <summary>The Play/Stop/Pause transport.</summary>
-    public GameToolbarViewModel Transport { get; }
+    /// <summary>The Play/Stop/Pause transport toolbar.</summary>
+    public ToolbarViewModel Transport { get; }
 
-    public void Dispose() => Surface.Dispose();
+    public void Dispose()
+    {
+        Transport.Dispose();
+        Surface.Dispose();
+    }
 }

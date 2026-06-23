@@ -18,16 +18,16 @@ public sealed class CommandRunner
 {
     private readonly Logger _log;
 
-    public CommandRunner(Logger log)
-    {
-        _log = log;
-    }
-
     // Categorizes a logged output line by the first named group that matches. A caller supplies its own
     // pattern (e.g. the cmake build's error/warning shapes); the default just looks for the level words.
     private static readonly Regex DefaultLogCategoryRegex = new(
         @"(?<critical>critical|fatal)|(?<error>error)|(?<warning>warning|warn)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    public CommandRunner(Logger log)
+    {
+        _log = log;
+    }
 
     /// <summary>
     /// Runs <paramref name="command"/> with <paramref name="arguments"/> to completion. The result's value
@@ -129,7 +129,7 @@ public sealed class CommandRunner
             void Forward(string? line)
             {
                 if (!string.IsNullOrWhiteSpace(line))
-                    _log.External(Classify(pattern, line), category, line);
+                    _log.Log(Classify(pattern, line), category, line);
             }
 
             process.OutputDataReceived += (_, e) => Forward(e.Data);

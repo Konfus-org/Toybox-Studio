@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Extensions;
 
 namespace Toybox.Studio.Services.Theming;
 
@@ -75,7 +76,7 @@ public static class DockSelectorTinter
                 var hsl = Color.FromRgb(buffer[i + 2], buffer[i + 1], buffer[i]).ToHsl();
                 var outc = hsl is { S: > 0.20, H: >= 20 and <= 70 }
                     ? new HslColor(1.0, accentHsl.H, accentHsl.S, hsl.L).ToRgb() // warm dock-edge highlight → accent
-                    : ColorMath.Blend(ink, paper, (float)hsl.L);                // neutral glyph → Text↔Surface
+                    : ink.Blend(paper, (float)hsl.L);                // neutral glyph → Text↔Surface
                 buffer[i] = outc.B;
                 buffer[i + 1] = outc.G;
                 buffer[i + 2] = outc.R;

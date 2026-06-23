@@ -2,6 +2,7 @@ using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
@@ -16,6 +17,9 @@ public sealed partial class ScriptLinkPropertyViewModel : PropertyViewModel
     private readonly AssetCatalog? _catalog;
     private readonly long _id;
 
+    [ObservableProperty]
+    private string _displayName;
+
     public ScriptLinkPropertyViewModel(PropertyNode node, AssetCatalog? catalog) : base(node)
     {
         _catalog = catalog;
@@ -23,11 +27,8 @@ public sealed partial class ScriptLinkPropertyViewModel : PropertyViewModel
         _displayName = ResolveDisplayName();
 
         if (catalog is not null)
-            catalog.CatalogUpdated += OnCatalogUpdated;
+            catalog.Changed += OnCatalogUpdated;
     }
-
-    [ObservableProperty]
-    private string _displayName;
 
     public bool HasReference => _id != 0;
 

@@ -1,6 +1,5 @@
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Models.Ecs;
-using Toybox.Studio.Widgets.PropertyGrid;
+using Toybox.Studio.Services.World;
 
 namespace Toybox.Studio.Services.EngineApi;
 
@@ -48,18 +47,25 @@ public sealed class JsonParser
     private const string ObjectToken = "object";
     private const string UnknownToken = "unknown";
 
+    // Aggregate leaf types whose value is a JSON object (e.g. a colour's { r, g, b, a }) rather than an
+    // array. These are always edited by a single leaf widget (a colour picker), never a sub-grid — even when
+    // the describe path expands their channels into typed { type, value } wrappers — so they're excluded from
+    // the "members are typed ⇒ composite" rule below. (vecN/quat are array-valued and route through
+    // IsCompositeArray, so they need no entry here.)
+    private static readonly HashSet<string> ObjectLeafAggregates = new(StringComparer.Ordinal) { "color" };
+
     /// <summary>
     /// Flattens a raw world.describe reply into a sorted entity hierarchy, parsing each entity's components
     /// into their property trees along the way. Pure and CPU-bound — callers run it off the UI thread. Type
     /// disambiguation (e.g. routing a rotation quaternion to the Euler editor) comes from each property's
     /// inline attribute metadata, which world.describe already carries — no separate reflection lookup.
     /// </summary>
-    public IReadOnlyList<Entity> ParseWorld(JObject reply)
+    public IReadOnlyList<EntityDescription> ParseWorld(JObject reply)
     {
         var componentTypes = reply["component_types"] as JObject;
         var entities = reply["entities"] as JArray ?? [];
 
-        var nodes = new Dictionary<ulong, (Entity Node, ulong Parent)>();
+        var nodes = new Dictionary<ulong, (EntityDescription Node, ulong Parent)>();
         foreach (var token in entities)
         {
             if (token is not JObject entity)
@@ -69,7 +75,7 @@ public sealed class JsonParser
             nodes[node.Id] = (node, Unwrap(entity["parent"]).Value.Value<ulong>());
         }
 
-        var roots = new List<Entity>();
+        var roots = new List<EntityDescription>();
         foreach (var (node, parent) in nodes.Values)
         {
             if (parent != 0 && nodes.TryGetValue(parent, out var owner))
@@ -88,80 +94,12 @@ public sealed class JsonParser
     /// selected entity's live component values without re-describing the whole world. Returns null if the
     /// reply has no entity.
     /// </summary>
-    public Entity? ParseEntity(JObject reply)
+    public EntityDescription? ParseEntity(JObject reply)
     {
         if (reply["entity"] is not JObject entity)
             return null;
 
         return BuildEntity(entity, reply["component_types"] as JObject);
-    }
-
-    // Builds the UI snapshot for a single serialized entity (id/name/tag/order + parsed components). Shared
-    // by the whole-world parse and the single-entity refresh.
-    private Entity BuildEntity(JObject entity, JObject? componentTypes)
-    {
-        var id = Unwrap(entity["id"]).Value.Value<ulong>();
-        var name = Unwrap(entity["name"]).Value.Value<string>();
-        return new Entity
-        {
-            Id = id,
-            Name = string.IsNullOrEmpty(name) ? $"Entity {id}" : name,
-            Tag = Unwrap(entity["tag"]).Value.Value<string>() ?? "",
-            Order = Unwrap(entity["order"]).Value.Value<int>(),
-            // is_global is a plain describe-only flag at the envelope root (not a typed {type,value} field).
-            IsGlobal = entity.Value<bool?>("is_global") ?? false,
-            // is_enabled is a typed {type,value} envelope scalar like name/order; absent/null ⇒ enabled.
-            IsEnabled = Unwrap(entity["is_enabled"]).Value.Value<bool?>() ?? true,
-            Components = ParseComponents(
-                entity["components"] as JObject, componentTypes, entity["component_order"] as JArray),
-        };
-    }
-
-    private List<Component> ParseComponents(JObject? components, JObject? componentTypes, JArray? order)
-    {
-        var result = new List<Component>();
-        if (components is null)
-            return result;
-
-        foreach (var property in components.Properties())
-        {
-            if (property.Value is not JObject raw)
-                continue;
-
-            string? icon = null, iconColor = null;
-            if (componentTypes?[property.Name] is JObject info)
-                (icon, iconColor) = (info.Value<string>(IconKey), info.Value<string>(IconColorKey));
-
-            result.Add(new Component(property.Name, raw, ParseProperties(raw), icon, iconColor));
-        }
-
-        // Present components in the engine's registration order (component_order), not the alphabetical key
-        // order the JSON map imposes. Any component missing from the list (or no list at all, e.g. settings)
-        // sorts after, keeping a stable result.
-        if (order is { Count: > 0 })
-        {
-            var rank = order
-                .Select((token, index) => (Name: token.Value<string>() ?? "", Index: index))
-                .ToDictionary(entry => entry.Name, entry => entry.Index);
-            result = result
-                .OrderBy(component => rank.TryGetValue(component.Name, out var index) ? index : int.MaxValue)
-                .ToList();
-        }
-
-        return result;
-    }
-
-    // Entities sort by their explicit engine order (the user's arrangement), falling back to name as a
-    // stable tie-break — so a freshly created or legacy entity with order 0 still lands sensibly.
-    private static void SortRecursively(List<Entity> nodes)
-    {
-        nodes.Sort((a, b) =>
-        {
-            var byOrder = a.Order.CompareTo(b.Order);
-            return byOrder != 0 ? byOrder : string.CompareOrdinal(a.Name, b.Name);
-        });
-        foreach (var node in nodes)
-            SortRecursively(node.Children);
     }
 
     /// <summary>
@@ -171,23 +109,6 @@ public sealed class JsonParser
     /// sub-grids either way.
     /// </summary>
     public IReadOnlyList<PropertyNode> ParseProperties(JObject json) => ParsePropertiesCore(json);
-
-    private static IReadOnlyList<PropertyNode> ParsePropertiesCore(JObject json)
-    {
-        var nodes = new List<PropertyNode>(json.Count);
-        foreach (var property in json.Properties())
-        {
-            // [[editor::hidden]] fields are dropped here, the single choke point feeding every grid
-            // (inspector, app settings, editor settings), so they never become widgets.
-            var node = Build(property.Name, Unwrap(property.Value));
-            if (!node.Hidden)
-                nodes.Add(node);
-        }
-
-        // Present fields in declaration (source) order, which the alphabetical JSON keys otherwise lose.
-        // OrderBy is stable, so untyped data (no order attribute → all 0) keeps its original JSON order.
-        return nodes.OrderBy(node => node.Order).ToList();
-    }
 
     /// <summary>
     /// Parses a JSON array's elements into property nodes, labelled <c>[0]</c>, <c>[1]</c>, … This is the
@@ -215,6 +136,99 @@ public sealed class JsonParser
         }
 
         return children;
+    }
+
+    // Builds the UI snapshot for a single serialized entity (id/name/tag/order + parsed components). Shared
+    // by the whole-world parse and the single-entity refresh.
+    private EntityDescription BuildEntity(JObject entity, JObject? componentTypes)
+    {
+        var id = Unwrap(entity["id"]).Value.Value<ulong>();
+        var name = Unwrap(entity["name"]).Value.Value<string>();
+        return new EntityDescription
+        {
+            Id = id,
+            Name = string.IsNullOrEmpty(name) ? $"Entity {id}" : name,
+            // "tags" is a typed array of strings (the entity's serialized gameplay tags).
+            Tags = (Unwrap(entity["tags"]).Value as JArray)?
+                .Select(token => token.Value<string>() ?? "")
+                .Where(tag => tag.Length > 0)
+                .ToList() ?? [],
+            Order = Unwrap(entity["order"]).Value.Value<int>(),
+            // is_global is a plain describe-only flag at the envelope root (not a typed {type,value} field).
+            IsGlobal = entity.Value<bool?>("is_global") ?? false,
+            // is_enabled is a typed {type,value} envelope scalar like name/order; absent/null ⇒ enabled.
+            IsEnabled = Unwrap(entity["is_enabled"]).Value.Value<bool?>() ?? true,
+            Components = ParseComponents(
+                entity["components"] as JObject, componentTypes, entity["component_order"] as JArray),
+        };
+    }
+
+    private List<ComponentDescription> ParseComponents(JObject? components, JObject? componentTypes, JArray? order)
+    {
+        var result = new List<ComponentDescription>();
+        if (components is null)
+            return result;
+
+        foreach (var property in components.Properties())
+        {
+            if (property.Value is not JObject raw)
+                continue;
+
+            string? icon = null, iconColor = null;
+            if (componentTypes?[property.Name] is JObject info)
+                (icon, iconColor) = (info.Value<string>(IconKey), info.Value<string>(IconColorKey));
+
+            result.Add(new ComponentDescription(property.Name, raw, ParseProperties(raw), icon, iconColor));
+        }
+
+        // Present components in the engine's registration order (component_order), not the alphabetical key
+        // order the JSON map imposes. Any component missing from the list (or no list at all, e.g. settings)
+        // sorts after, keeping a stable result.
+        if (order is { Count: > 0 })
+        {
+            var rank = order
+                .Select((token, index) => (Name: token.Value<string>() ?? "", Index: index))
+                .ToDictionary(entry => entry.Name, entry => entry.Index);
+            result = result
+                .OrderBy(component => rank.TryGetValue(component.Name, out var index) ? index : int.MaxValue)
+                .ToList();
+        }
+
+        return result;
+    }
+
+    // Entities sort by their explicit engine order (the user's arrangement), falling back to id as a
+    // stable tie-break. The id tie-break is deliberate: it MUST match the engine's reorder, which renumbers
+    // a sibling group by (order, then id) (see WorldRpc::move_entity). If the editor tie-broke differently
+    // (e.g. by name) then siblings sharing order 0 — freshly created or legacy entities never explicitly
+    // arranged — would display in one order here but be renumbered into another on the first move, so the
+    // whole group would visibly reshuffle. Tying both sides to id keeps a move touching only the dragged row.
+    private static void SortRecursively(List<EntityDescription> nodes)
+    {
+        nodes.Sort((a, b) =>
+        {
+            var byOrder = a.Order.CompareTo(b.Order);
+            return byOrder != 0 ? byOrder : a.Id.CompareTo(b.Id);
+        });
+        foreach (var node in nodes)
+            SortRecursively(node.Children);
+    }
+
+    private static IReadOnlyList<PropertyNode> ParsePropertiesCore(JObject json)
+    {
+        var nodes = new List<PropertyNode>(json.Count);
+        foreach (var property in json.Properties())
+        {
+            // [[editor::hidden]] fields are dropped here, the single choke point feeding every grid
+            // (inspector, app settings, editor settings), so they never become widgets.
+            var node = Build(property.Name, Unwrap(property.Value));
+            if (!node.Hidden)
+                nodes.Add(node);
+        }
+
+        // Present fields in declaration (source) order, which the alphabetical JSON keys otherwise lose.
+        // OrderBy is stable, so untyped data (no order attribute → all 0) keeps its original JSON order.
+        return nodes.OrderBy(node => node.Order).ToList();
     }
 
     private static PropertyNode Build(string name, Wrapper wrapper)
@@ -258,13 +272,6 @@ public sealed class JsonParser
 
         return structural;
     }
-
-    // Aggregate leaf types whose value is a JSON object (e.g. a colour's { r, g, b, a }) rather than an
-    // array. These are always edited by a single leaf widget (a colour picker), never a sub-grid — even when
-    // the describe path expands their channels into typed { type, value } wrappers — so they're excluded from
-    // the "members are typed ⇒ composite" rule below. (vecN/quat are array-valued and route through
-    // IsCompositeArray, so they need no entry here.)
-    private static readonly HashSet<string> ObjectLeafAggregates = new(StringComparer.Ordinal) { "color" };
 
     /// <summary>
     /// An object value is composite (expands into a sub-grid) when it is plain JSON (no type tag), the
@@ -342,31 +349,6 @@ public sealed class JsonParser
         };
 
     /// <summary>
-    /// The pieces of a typed-JSON property wrapper, after splitting off the engine's metadata keys.
-    /// </summary>
-    private readonly record struct Wrapper(
-        string Type,
-        // The unwrapped semantic type name from the describe "nested" attribute (e.g. "quat" for a rotation
-        // that shares the structural "vec4" token). Null on the lean/persisted path, which carries no
-        // attributes. Lets the parser route such a value to the right widget — see ResolveLeafType.
-        string? Nested,
-        JToken Value,
-        string? Category,
-        string? Description,
-        string? View,
-        string? Label,
-        bool ReadOnly,
-        bool Hidden,
-        int Order,
-        string? Icon,
-        string? IconColor,
-        IReadOnlyList<string>? Choices,
-        bool IsDefault,
-        // The describe-only "element_template" for a resizable list: the JSON of one default element,
-        // which the list widget clones to append. Null for everything else.
-        JToken? ElementTemplate);
-
-    /// <summary>
     /// The single place the <c>{ "type", "value", metadata… }</c> convention is decoded — used both for the
     /// entity envelope (id/name/tag/parent) and the property tree. A "variant"-typed wrapper surfaces its
     /// active alternative. A bare value (plain JSON, or a missing token) returns type "unknown".
@@ -430,4 +412,29 @@ public sealed class JsonParser
         JTokenType.Object => ObjectToken,
         _ => UnknownToken,
     };
+
+    /// <summary>
+    /// The pieces of a typed-JSON property wrapper, after splitting off the engine's metadata keys.
+    /// </summary>
+    private readonly record struct Wrapper(
+        string Type,
+        // The unwrapped semantic type name from the describe "nested" attribute (e.g. "quat" for a rotation
+        // that shares the structural "vec4" token). Null on the lean/persisted path, which carries no
+        // attributes. Lets the parser route such a value to the right widget — see ResolveLeafType.
+        string? Nested,
+        JToken Value,
+        string? Category,
+        string? Description,
+        string? View,
+        string? Label,
+        bool ReadOnly,
+        bool Hidden,
+        int Order,
+        string? Icon,
+        string? IconColor,
+        IReadOnlyList<string>? Choices,
+        bool IsDefault,
+        // The describe-only "element_template" for a resizable list: the JSON of one default element,
+        // which the list widget clones to append. Null for everything else.
+        JToken? ElementTemplate);
 }

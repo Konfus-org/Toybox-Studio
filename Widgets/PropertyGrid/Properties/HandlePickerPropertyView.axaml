@@ -7,9 +7,11 @@
                        Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
         <Border Classes="fieldHost">
             <DockPanel>
-                <!-- Picker: opens the asset chooser filtered to this handle's type. The icon needs an
-                     explicit foreground — an IconView with no colour leaves its glyph unpainted. -->
-                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding PickCommand}"
+                <!-- Picker: opens the asset chooser filtered to this handle's type. Docked LEFT so the value
+                     text always begins at the same x across rows (the icon's fixed width sets the gutter)
+                     rather than the picker shrinking the text from the right. The icon needs an explicit
+                     foreground — an IconView with no colour leaves its glyph unpainted. -->
+                <Button DockPanel.Dock="Left" Classes="fieldButton" Command="{Binding PickCommand}"
                         VerticalAlignment="Stretch" ToolTip.Tip="Pick from asset database">
                     <local:IconView Width="14" Height="14" IconName="Target"
                                     Foreground="{DynamicResource ThemeTextBrush}"/>
@@ -17,7 +19,7 @@
                 <!-- Current reference as a hyperlink: a set reference reveals it in the catalog; "None" opens
                      the asset chooser to pick one. -->
                 <Button Command="{Binding ActivateCommand}" Cursor="Hand"
-                        HorizontalAlignment="Left" HorizontalContentAlignment="Left" Margin="7,0,0,0"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Left" Margin="3,0,0,0"
                         Padding="0" Background="Transparent" BorderThickness="0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding DisplayName}" FontSize="12"
                                Foreground="{DynamicResource SystemAccentColor}" TextDecorations="Underline"/>

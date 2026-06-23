@@ -14,13 +14,13 @@ public static class DoubleTapCommand
     public static readonly AttachedProperty<ICommand?> CommandProperty =
         AvaloniaProperty.RegisterAttached<Control, ICommand?>("Command", typeof(DoubleTapCommand));
 
-    public static void SetCommand(Control control, ICommand? value) => control.SetValue(CommandProperty, value);
-    public static ICommand? GetCommand(Control control) => control.GetValue(CommandProperty);
-
     static DoubleTapCommand()
     {
         CommandProperty.Changed.AddClassHandler<Control>(OnCommandChanged);
     }
+
+    public static void SetCommand(Control control, ICommand? value) => control.SetValue(CommandProperty, value);
+    public static ICommand? GetCommand(Control control) => control.GetValue(CommandProperty);
 
     private static void OnCommandChanged(Control control, AvaloniaPropertyChangedEventArgs args)
     {

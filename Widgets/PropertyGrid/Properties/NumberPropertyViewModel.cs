@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
@@ -15,6 +16,9 @@ public sealed partial class NumberPropertyViewModel : PropertyViewModel
     private readonly JsonValueSlot _slot;
     private readonly bool _integer;
 
+    [ObservableProperty]
+    private decimal? _value;
+
     public NumberPropertyViewModel(PropertyNode node, bool integer) : base(node)
     {
         _integer = integer;
@@ -28,19 +32,6 @@ public sealed partial class NumberPropertyViewModel : PropertyViewModel
     /// <summary>Spinner / drag-scrub step: whole numbers for integers, tenths for floats.</summary>
     public decimal Increment => _integer ? 1m : 0.1m;
 
-    [ObservableProperty]
-    private decimal? _value;
-
-    partial void OnValueChanged(decimal? value)
-    {
-        if (value is null)
-            return;
-
-        var token = _integer ? new JValue((long)value.Value) : new JValue((double)value.Value);
-        if (_slot.Set(token))
-            RaiseCommit();
-    }
-
     public override JToken? CurrentValue =>
         _integer ? new JValue((long)(Value ?? 0m)) : new JValue((double)(Value ?? 0m));
 
@@ -50,5 +41,15 @@ public sealed partial class NumberPropertyViewModel : PropertyViewModel
     {
         Value = PropertyConvert.TryDecimal(node.Value);
         return true;
+    }
+
+    partial void OnValueChanged(decimal? value)
+    {
+        if (value is null)
+            return;
+
+        var token = _integer ? new JValue((long)value.Value) : new JValue((double)value.Value);
+        if (_slot.Set(token))
+            RaiseCommit();
     }
 }

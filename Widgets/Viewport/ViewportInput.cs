@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -5,6 +6,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
+using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Widgets.Toolbar;
 
 namespace Toybox.Studio.Widgets.Viewport;
 
@@ -41,13 +45,23 @@ public sealed class ViewportInput
     private sealed class Handler
     {
         private readonly Control _control;
-        private readonly HashSet<int> _scancodes = [];
+        private readonly HashSet<InputKey> _keys = [];
         private Point _lastPointer;
         private Point _pointer;
         private bool _hasPointer;
         private int _buttons;
         private int _moveKeys;
         private bool _suppressNextMove; // True for the single PointerMoved our own re-centre warp triggers, so it isn't read as a delta.
+
+        // A left press becomes a pick on release if it didn't turn into a drag (camera look/pan use right/middle,
+        // so the left button is free for selection). The press records its spot + Shift state; movement past a
+        // small slop cancels the pick so a future left-drag (the marquee) isn't read as a click.
+        private const double ClickSlopSquared = 16; // ~4px
+        private Point _pressPosition;
+        private bool _pendingPick;
+        private bool _pickAdditive;
+        // True once a left-drag has grown past the slop into a rubber-band marquee selection.
+        private bool _marqueeActive;
 
         public Handler(Control control)
         {
@@ -63,6 +77,8 @@ public sealed class ViewportInput
             control.LostFocus += OnLostFocus;
         }
 
+        private IViewportInputSink? Sink => _control.DataContext as IViewportInputSink;
+
         public void Detach()
         {
             _control.PointerPressed -= OnPointerPressed;
@@ -75,17 +91,22 @@ public sealed class ViewportInput
             _control.LostFocus -= OnLostFocus;
         }
 
-        private IViewportInputSink? Sink => _control.DataContext as IViewportInputSink;
-
         private void Send(double dx, double dy, double wheel)
         {
+            var bounds = _control.Bounds;
             Sink?.ForwardInput(new ViewportInputPayload(
-                _control.IsFocused, _buttons, _moveKeys, _scancodes.ToArray(),
-                _pointer.X, _pointer.Y, dx, dy, wheel));
+                _control.IsFocused, _buttons, _moveKeys, _keys.ToArray(),
+                _pointer.X, _pointer.Y, dx, dy, wheel, bounds.Width, bounds.Height));
         }
 
         private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
         {
+            // A press that lands on the floating viewport toolbar (the grip or a tool) drives that toolbar —
+            // not the viewport camera/pick/marquee. Bail out so the toolbar's own drag/reorder gestures own it;
+            // otherwise this bubbled press would arm a pick and a drag would start a box-select over the tools.
+            if (e.Source is Visual source && source.FindAncestorOfType<ToolbarView>(includeSelf: true) is not null)
+                return;
+
             // Click to focus so the keyboard drives this viewport; capture so look-drag keeps receiving
             // moves even past the control's bounds.
             _control.Focus();
@@ -95,15 +116,57 @@ public sealed class ViewportInput
             _pointer = point.Position;
             _hasPointer = true;
             e.Pointer.Capture(_control);
+
+            // Arm a pick for a plain left press (no camera-drag button held); a drag past the slop cancels it.
+            _pendingPick = point.Properties.IsLeftButtonPressed
+                && !point.Properties.IsRightButtonPressed
+                && !point.Properties.IsMiddleButtonPressed;
+            _pressPosition = point.Position;
+            _pickAdditive = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
             Send(0, 0, 0);
         }
 
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
-            _buttons = ButtonsOf(e.GetCurrentPoint(_control).Properties);
+            var point = e.GetCurrentPoint(_control);
+            _buttons = ButtonsOf(point.Properties);
             if (_buttons == 0)
                 e.Pointer.Capture(null);
             Send(0, 0, 0);
+
+            // Finish a marquee, else treat a left press that never became a drag as a selection click. Both
+            // hand control-space coordinates to the sink, which letterbox-maps them and asks the engine.
+            // Editor views only — the game owns its input.
+            if (_marqueeActive && e.InitialPressMouseButton == MouseButton.Left)
+            {
+                _marqueeActive = false;
+                var bounds = _control.Bounds;
+                var (x, y, width, height) = MarqueeRect(point.Position);
+                Sink?.EndMarquee(x, y, width, height, bounds.Width, bounds.Height, _pickAdditive);
+            }
+            else if (_pendingPick && e.InitialPressMouseButton == MouseButton.Left
+                     && Sink is { IsGame: false } sink)
+            {
+                var bounds = _control.Bounds;
+                sink.Pick(point.Position.X, point.Position.Y, bounds.Width, bounds.Height, _pickAdditive);
+            }
+
+            _pendingPick = false;
+        }
+
+        // The marquee rectangle (normalized to top-left + size, control space) from the press anchor to `current`.
+        private (double X, double Y, double Width, double Height) MarqueeRect(Point current) =>
+            (Math.Min(_pressPosition.X, current.X),
+             Math.Min(_pressPosition.Y, current.Y),
+             Math.Abs(current.X - _pressPosition.X),
+             Math.Abs(current.Y - _pressPosition.Y));
+
+        // Pushes the current marquee rectangle to the sink.
+        private void UpdateMarqueeRect(Point current)
+        {
+            var (x, y, width, height) = MarqueeRect(current);
+            Sink?.UpdateMarquee(x, y, width, height);
         }
 
         private void OnPointerMoved(object? sender, PointerEventArgs e)
@@ -126,6 +189,24 @@ public sealed class ViewportInput
                 _lastPointer = point.Position;
                 return;
             }
+
+            // A press that moves past the slop is a drag, not a click: disarm the pick and, in an editor
+            // viewport, begin a rubber-band marquee instead.
+            if (_pendingPick)
+            {
+                var movedX = point.Position.X - _pressPosition.X;
+                var movedY = point.Position.Y - _pressPosition.Y;
+                if (movedX * movedX + movedY * movedY > ClickSlopSquared)
+                {
+                    _pendingPick = false;
+                    // Box-select only with the select tool active; a transform tool owns the left-drag.
+                    if (Sink is { IsGame: false, MarqueeEnabled: true })
+                        _marqueeActive = true;
+                }
+            }
+
+            if (_marqueeActive)
+                UpdateMarqueeRect(point.Position);
 
             var dx = _hasPointer ? point.Position.X - _lastPointer.X : 0;
             var dy = _hasPointer ? point.Position.Y - _lastPointer.Y : 0;
@@ -183,9 +264,9 @@ public sealed class ViewportInput
                 changed = true;
             }
 
-            var scancode = SdlScancodes.Map(e.Key);
-            if (scancode != 0)
-                changed |= _scancodes.Add(scancode);
+            var inputKey = InputKeyMap.Map(e.Key);
+            if (inputKey != InputKey.Unknown)
+                changed |= _keys.Add(inputKey);
 
             if (changed)
             {
@@ -203,9 +284,9 @@ public sealed class ViewportInput
                 changed = true;
             }
 
-            var scancode = SdlScancodes.Map(e.Key);
-            if (scancode != 0)
-                changed |= _scancodes.Remove(scancode);
+            var inputKey = InputKeyMap.Map(e.Key);
+            if (inputKey != InputKey.Unknown)
+                changed |= _keys.Remove(inputKey);
 
             if (changed)
             {
@@ -221,7 +302,14 @@ public sealed class ViewportInput
             // Releasing focus drops all input so the engine camera/game stops receiving it.
             _buttons = 0;
             _moveKeys = 0;
-            _scancodes.Clear();
+            _keys.Clear();
+            _pendingPick = false;
+            if (_marqueeActive)
+            {
+                _marqueeActive = false;
+                Sink?.CancelMarquee();
+            }
+
             Send(0, 0, 0);
         }
 

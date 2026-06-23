@@ -4,8 +4,8 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Models.Ecs;
 using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.World;
 using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Ecs;
@@ -17,9 +17,8 @@ namespace Toybox.Studio.Widgets.Ecs;
 /// </summary>
 public sealed partial class ComponentViewModel : ObservableObject
 {
-    private readonly ulong _entityId;
+    private readonly Component _component;
     private readonly JObject _raw;
-    private readonly EngineRpc _engine;
     private readonly Func<Task> _resync;
 
     // Invoked after any edit/reset the engine accepts; the host uses it to mark the world dirty and to guard
@@ -37,22 +36,22 @@ public sealed partial class ComponentViewModel : ObservableObject
     // Null only for the (legacy) case of a component whose payload carries no is_enabled field.
     private readonly JValue? _enabled;
 
+    private bool _isEnabled = true;
+
     public ComponentViewModel(
-        ulong entityId,
         Component component,
-        EngineRpc engine,
+        ComponentDescription snapshot,
         Func<Task> resync,
         Action onEdited)
     {
-        _entityId = entityId;
-        _raw = component.Raw;
-        _engine = engine;
+        _component = component;
+        _raw = snapshot.Raw;
         _resync = resync;
         _onEdited = onEdited;
-        Name = component.Name;
-        DisplayName = NameHumanizer.Humanize(component.Name);
-        Icon = component.Icon;
-        IconColor = component.IconColor;
+        Name = snapshot.Name;
+        DisplayName = NameHumanizer.Humanize(snapshot.Name);
+        Icon = snapshot.Icon;
+        IconColor = snapshot.IconColor;
         Properties = [];
 
         _enabled = ReadEnabledToken(_raw);
@@ -60,7 +59,7 @@ public sealed partial class ComponentViewModel : ObservableObject
 
         // A material instance is not a generic property bag: its "overrides" are edited against the base
         // material's slots (fetched live), so it gets a dedicated, base-aware editor instead of the grid.
-        if (component.Name == MaterialInstanceName && TryBuildMaterialInstance(component))
+        if (snapshot.Name == MaterialInstanceName && TryBuildMaterialInstance(snapshot))
             return;
 
         // A component whose entire payload is a single STRUCT repeats itself: the component header and that lone
@@ -70,7 +69,7 @@ public sealed partial class ComponentViewModel : ObservableObject
         // promoted members are nested fields and so (like any nested field) carry no individual reset —
         // reflect.reset is whole-property granular. A single ARRAY is NOT flattened: it must keep its own list
         // row so it stays addable/removable (promoting its elements to the root would lose the "+" affordance).
-        var single = component.Properties.Count == 1 ? component.Properties[0] : null;
+        var single = snapshot.Properties.Count == 1 ? snapshot.Properties[0] : null;
         if (single is { HasChildren: true, Type: not "array" })
         {
             var commit = single.ReadOnly ? (Action?)null : () => OnPropertyEdited(single.Name);
@@ -89,7 +88,7 @@ public sealed partial class ComponentViewModel : ObservableObject
 
         // Each top-level property gets a commit/reset bound to its name — the engine's reflect.set/reset is
         // top-level-property granular, so an edit to any leaf within it pushes just that one property.
-        foreach (var node in component.Properties)
+        foreach (var node in snapshot.Properties)
         {
             var property = node.Name;
             var viewModel = PropertyViewModelFactory.Create(node, () => OnPropertyEdited(property));
@@ -101,40 +100,6 @@ public sealed partial class ComponentViewModel : ObservableObject
 
             Properties.Add(viewModel);
         }
-    }
-
-    // Builds the material-instance editor: a "Base" material picker plus a base-aware override editor that
-    // shows the referenced material's parameter/texture slots. Reuses the same wiring as the nested/list
-    // editor (MaterialInstancePropertyViewModel.Build) but, at the component's top level, flattens the pair
-    // into the component's own rows (so the component header alone names the group) and routes the base and
-    // overrides to their own reflect.set properties — each is a top-level component property here, whereas a
-    // nested instance commits both together. Returns false (falling back to the generic grid) if the component
-    // isn't shaped as expected.
-    private bool TryBuildMaterialInstance(Component component)
-    {
-        var materialNode = component.Properties.FirstOrDefault(node => node.Name == "material");
-        var overridesNode = component.Properties.FirstOrDefault(node => node.Name == "overrides");
-        if (materialNode is null || overridesNode is null)
-            return false;
-
-        var (material, overrides) = MaterialInstancePropertyViewModel.Build(
-            materialNode,
-            overridesNode,
-            _engine,
-            () => MaterialInstancePropertyViewModel.ReadHandleId(_raw["material"]),
-            () => OnPropertyEdited("material"),
-            () => OnPropertyEdited("overrides"),
-            depth: 0);
-
-        if (!materialNode.ReadOnly)
-        {
-            material.ResetToDefault = () => OnPropertyReset("material");
-            _resettable["material"] = material;
-        }
-
-        Properties.Add(material);
-        Properties.Add(overrides);
-        return true;
     }
 
     public string Name { get; }
@@ -155,8 +120,6 @@ public sealed partial class ComponentViewModel : ObservableObject
     /// </summary>
     public bool HasEnableToggle => _enabled is not null;
 
-    private bool _isEnabled = true;
-
     /// <summary>
     /// Whether this component is active, mirrored from the base <c>is_enabled</c> field. Toggling mutates the
     /// backing JSON in place and pushes the change through the same per-property round-trip an ordinary edit
@@ -175,15 +138,9 @@ public sealed partial class ComponentViewModel : ObservableObject
         }
     }
 
-    // Pulls the live bool value token for is_enabled out of a component's raw JSON. The field arrives as a
-    // typed/attributed wrapper ({ ..., "value": true }); a bare value is tolerated for resilience.
-    private static JValue? ReadEnabledToken(JObject raw)
-    {
-        var token = raw[EnabledProperty];
-        if (token is JObject wrapper && wrapper["value"] is JValue wrapped)
-            return wrapped;
-        return token as JValue;
-    }
+    /// <summary>The inspector search pushed in by the host; the component's grid filters its rows by it.</summary>
+    [ObservableProperty]
+    public partial string? Filter { get; set; }
 
     /// <summary>
     /// Pushes a fresh snapshot of the same component into the existing property rows in place, without
@@ -192,12 +149,12 @@ public sealed partial class ComponentViewModel : ObservableObject
     /// no longer matches these rows (a property added/removed/retyped, or a value of a type that can't update
     /// in place actually moved), in which case the host rebuilds the component instead.
     /// </summary>
-    public bool SyncFrom(Component component)
+    public bool SyncFrom(ComponentDescription snapshot)
     {
         // Track the live enable flag too (it's not a grid row, so it isn't covered by the row zip below).
-        SyncEnabled(component);
+        SyncEnabled(snapshot);
 
-        var nodes = EffectiveNodes(component);
+        var nodes = EffectiveNodes(snapshot);
         if (nodes.Count != Properties.Count)
             return false;
 
@@ -212,29 +169,6 @@ public sealed partial class ComponentViewModel : ObservableObject
         return synced;
     }
 
-    // Mirrors the latest is_enabled value into both the canonical backing token (kept in Raw) and the bound
-    // property, without re-committing — the value already came from the engine. Used by the live-value sync.
-    private void SyncEnabled(Component component)
-    {
-        var incoming = ReadEnabledToken(component.Raw)?.Value<bool>() ?? true;
-        if (_enabled is not null)
-            _enabled.Value = incoming;
-        SetProperty(ref _isEnabled, incoming, nameof(IsEnabled));
-    }
-
-    // The top-level property nodes the grid actually shows: a single-struct component is flattened to its
-    // child's members (see the constructor), so the row set is that child's children; otherwise it's the
-    // component's own properties. Kept in step with the constructor so SyncFrom zips against the same rows.
-    private static IReadOnlyList<PropertyNode> EffectiveNodes(Component component)
-    {
-        var single = component.Properties.Count == 1 ? component.Properties[0] : null;
-        return single is { HasChildren: true } ? single.Children : component.Properties;
-    }
-
-    /// <summary>The inspector search pushed in by the host; the component's grid filters its rows by it.</summary>
-    [ObservableProperty]
-    public partial string? Filter { get; set; }
-
     /// <summary>
     /// Refreshes the "modified" (set vs default) flag for every top-level property by asking the engine
     /// whether each currently equals its default. Driven on selection (and after edits) so the indicator
@@ -246,10 +180,78 @@ public sealed partial class ComponentViewModel : ObservableObject
             await RefreshModifiedAsync(property, viewModel, ct).ContinueOnSameContext();
     }
 
+    // Builds the material-instance editor: a "Base" material picker plus a base-aware override editor that
+    // shows the referenced material's parameter/texture slots. Reuses the same wiring as the nested/list
+    // editor (MaterialInstancePropertyViewModel.Build) but, at the component's top level, flattens the pair
+    // into the component's own rows (so the component header alone names the group) and routes the base and
+    // overrides to their own reflect.set properties — each is a top-level component property here, whereas a
+    // nested instance commits both together. Returns false (falling back to the generic grid) if the component
+    // isn't shaped as expected.
+    private bool TryBuildMaterialInstance(ComponentDescription snapshot)
+    {
+        // The base-aware editor needs the asset catalog (to fetch the referenced material's slots); it's wired
+        // at startup, so its absence just means falling back to the generic grid.
+        if (PropertyViewRegistry.Assets is not { } assets)
+            return false;
+
+        var materialNode = snapshot.Properties.FirstOrDefault(node => node.Name == "material");
+        var overridesNode = snapshot.Properties.FirstOrDefault(node => node.Name == "overrides");
+        if (materialNode is null || overridesNode is null)
+            return false;
+
+        var (material, overrides) = MaterialInstancePropertyViewModel.Build(
+            materialNode,
+            overridesNode,
+            assets,
+            () => MaterialInstancePropertyViewModel.ReadHandleId(_raw["material"]),
+            () => OnPropertyEdited("material"),
+            () => OnPropertyEdited("overrides"),
+            depth: 0);
+
+        if (!materialNode.ReadOnly)
+        {
+            material.ResetToDefault = () => OnPropertyReset("material");
+            _resettable["material"] = material;
+        }
+
+        Properties.Add(material);
+        Properties.Add(overrides);
+        return true;
+    }
+
+    // Pulls the live bool value token for is_enabled out of a component's raw JSON. The field arrives as a
+    // typed/attributed wrapper ({ ..., "value": true }); a bare value is tolerated for resilience.
+    private static JValue? ReadEnabledToken(JObject raw)
+    {
+        var token = raw[EnabledProperty];
+        if (token is JObject wrapper && wrapper["value"] is JValue wrapped)
+            return wrapped;
+        return token as JValue;
+    }
+
+    // Mirrors the latest is_enabled value into both the canonical backing token (kept in Raw) and the bound
+    // property, without re-committing — the value already came from the engine. Used by the live-value sync.
+    private void SyncEnabled(ComponentDescription snapshot)
+    {
+        var incoming = ReadEnabledToken(snapshot.Raw)?.Value<bool>() ?? true;
+        if (_enabled is not null)
+            _enabled.Value = incoming;
+        SetProperty(ref _isEnabled, incoming, nameof(IsEnabled));
+    }
+
+    // The top-level property nodes the grid actually shows: a single-struct component is flattened to its
+    // child's members (see the constructor), so the row set is that child's children; otherwise it's the
+    // component's own properties. Kept in step with the constructor so SyncFrom zips against the same rows.
+    private static IReadOnlyList<PropertyNode> EffectiveNodes(ComponentDescription snapshot)
+    {
+        var single = snapshot.Properties.Count == 1 ? snapshot.Properties[0] : null;
+        return single is { HasChildren: true } ? single.Children : snapshot.Properties;
+    }
+
     private async Task RefreshModifiedAsync(string property, PropertyViewModel viewModel, CancellationToken ct)
     {
-        var result = await _engine
-            .IsPropertyDefaultAsync(_entityId, Name, property, ct)
+        var result = await _component
+            .IsPropertyDefaultAsync(property, ct)
             .ContinueOnSameContext();
         if (result.Success)
             viewModel.IsModified = !result.Value;
@@ -264,8 +266,8 @@ public sealed partial class ComponentViewModel : ObservableObject
         if (bare is null)
             return;
 
-        var result = await _engine
-            .SetPropertyAsync(_entityId, Name, property, bare, CancellationToken.None)
+        var result = await _component
+            .SetPropertyAsync(property, bare, CancellationToken.None)
             .ContinueOnSameContext();
         if (result.Success)
         {
@@ -287,8 +289,8 @@ public sealed partial class ComponentViewModel : ObservableObject
 
     private async void OnPropertyReset(string property)
     {
-        var result = await _engine
-            .ResetPropertyAsync(_entityId, Name, property, CancellationToken.None)
+        var result = await _component
+            .ResetPropertyAsync(property, CancellationToken.None)
             .ContinueOnSameContext();
         if (result.Success)
             _onEdited();

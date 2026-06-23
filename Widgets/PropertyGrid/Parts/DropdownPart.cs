@@ -13,7 +13,8 @@ public sealed class DropdownPart : PropertyPart
 {
     private readonly IExpandable _owner;
 
-    public DropdownPart(IExpandable owner)
+    // Order 10: the chevron sits just right of a list element's drag grip, immediately left of the icon/label.
+    public DropdownPart(IExpandable owner) : base(PartSlot.Leading, order: 10)
     {
         _owner = owner;
         _owner.PropertyChanged += OnOwnerChanged;

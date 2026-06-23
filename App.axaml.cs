@@ -1,6 +1,7 @@
 using Toybox.Studio.Services;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Extensions;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -14,18 +15,17 @@ using Toybox.Studio.Shell;
 using Toybox.Studio.Widgets.Ecs;
 using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;
-using Toybox.Studio.Widgets.GameToolbar;
 using Toybox.Studio.Widgets.PropertyGrid;
+using Toybox.Studio.Widgets.Toolbar;
 using Toybox.Studio.Shell.Workspace;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
-using Toybox.Studio.Services.Motion;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Settings;
 using Toybox.Studio.Services.Theming;
-using Toybox.Studio.Models;
-using Toybox.Studio.Models.Ecs;
 using Toybox.Studio.Widgets.Behaviors;
+using Toybox.Studio.Widgets.Behaviors.Animations;
 
 namespace Toybox.Studio;
 
@@ -103,18 +103,19 @@ public partial class App : Application
             foreach (var warning in themeManager.LoadWarnings)
                 log.Warning(warning);
 
-            // Publish the motion tokens from the saved Animation-intensity setting so the juicy transitions are
-            // live from the first frame (independent of the theme).
-            MotionTokens.Publish(
-                _host.Services.GetRequiredService<EditorSettings>().Accessibility.AnimationIntensity);
+            // Keep the motion tokens in sync with the saved Animation-intensity setting: Listen fires immediately
+            // (so the juicy transitions are live from the first frame, independent of the theme) and again on every
+            // settings save, so a changed intensity re-publishes without the Settings panel pushing it by hand.
+            var settingsManager = _host.Services.GetRequiredService<SettingsManager>();
+            settingsManager.Listen(
+                () => MotionTokens.Publish(settingsManager.Settings.Accessibility.AnimationIntensity));
 
             // Give the property grid's custom widgets (asset pickers, script links) the services they
             // need before any inspector or settings grid is built.
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
             PropertyViewRegistry.Configure(
                 catalog,
-                _host.Services.GetRequiredService<WorldManager>(),
-                _host.Services.GetRequiredService<EngineRpc>());
+                _host.Services.GetRequiredService<WorldManager>());
 
             // The Accessibility ▸ Animation intensity setting renders as a clay slider rather than a numeric
             // field (tagged [View("intensitySlider")] by the settings grid; see SettingsViewModel.TagView).
@@ -167,6 +168,15 @@ public partial class App : Application
             // Bring the inspector's live-refresh coordinator to life so it drives the play-mode pull (it holds
             // the shared inspector view-model and the play/selection subscriptions).
             _host.Services.GetRequiredService<InspectorRefreshCoordinator>();
+            // Bring selection-sync to life so viewport selection changes are pushed to the engine for
+            // highlighting (and re-pushed on every (re)connect).
+            _host.Services.GetRequiredService<SelectionSync>();
+            // Bring gizmo-sync to life so the transform-tool toolbar is pushed to the engine.
+            _host.Services.GetRequiredService<GizmoSync>();
+            // Bring the gizmo→toolbar bridge to life so the data-driven toolbar reflects the active gizmo.
+            _host.Services.GetRequiredService<GizmoToolbarBridge>();
+            // And the pause→toolbar bridge so the game transport's Pause/Resume toggle reflects pause state.
+            _host.Services.GetRequiredService<PlayToolbarBridge>();
             var locator = _host.Services.GetRequiredService<Locator>();
             var locatorReport = locator.ResolveAtStartup();
             log.Info(locatorReport);
@@ -181,7 +191,7 @@ public partial class App : Application
             // Launch into a world at startup (the default). With no project open, fall back to the
             // bundled template world (skybox + grass ground + a cube that falls). The compile/launch
             // runs in the background so the editor opens immediately.
-            var settings = _host.Services.GetRequiredService<EditorSettings>();
+            var settings = _host.Services.GetRequiredService<SettingsManager>().Settings;
             var projects = _host.Services.GetRequiredService<ProjectManager>();
             var wantsLaunch = settings.Engine.AutoLaunchEngine
                 || desktop.Args?.Contains("--auto-launch") == true;
@@ -260,7 +270,7 @@ public partial class App : Application
     private static void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<CommandRunner>();
-        services.AddSingleton(EditorSettings.Load());
+        services.AddSingleton<SettingsManager>();
         services.AddSingleton<ThemeManager>();
         services.AddSingleton<LogFile>();
         services.AddSingleton<Logger>();
@@ -268,8 +278,21 @@ public partial class App : Application
         services.AddSingleton<FilePicker>();
         services.AddSingleton<CMakeCompiler>();
         services.AddSingleton<EngineRpc>();
+        services.AddSingleton<EngineSettings>();
+        // Each viewport/game-view owns its own engine view stream (parameterized by ViewKind), so it's vended
+        // by a factory rather than resolved directly — keeping EngineRpc (the transport) out of the view-models.
+        services.AddSingleton<Func<ViewKind, ViewportStream>>(sp =>
+            kind => new ViewportStream(
+                sp.GetRequiredService<Session>(), sp.GetRequiredService<EngineRpc>(), kind));
         services.AddSingleton<JsonParser>();
         services.AddSingleton<WorldSelection>();
+        services.AddSingleton<SelectionSync>();
+        services.AddSingleton<GizmoTool>();
+        services.AddSingleton<GizmoSync>();
+        services.AddSingleton<ToolbarState>();
+        services.AddSingleton<GizmoToolbarBridge>();
+        services.AddSingleton<PlayToolbarBridge>();
+        services.AddSingleton<ToolCommandRunner>();
         services.AddSingleton<Session>();
         services.AddSingleton<EngineWatcher>();
         services.AddSingleton<EngineWatchdog>();
@@ -279,7 +302,6 @@ public partial class App : Application
         services.AddSingleton<Locator>();
         services.AddSingleton<ThemeCreator>();
         services.AddSingleton<StatusViewModel>();
-        services.AddSingleton<GameToolbarViewModel>();
         services.AddSingleton<InspectorRefreshCoordinator>();
 
         // Auto-registers every [Dockable] View's view-model (World, Viewport, Console, Settings, …) and the

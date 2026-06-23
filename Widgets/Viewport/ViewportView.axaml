@@ -2,13 +2,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.Viewport"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             xmlns:vtb="using:Toybox.Studio.Widgets.Toolbar"
              x:Class="Toybox.Studio.Widgets.Viewport.ViewportView"
              x:DataType="local:ViewportViewModel">
 
     <!-- ViewportInput captures pointer/keyboard while focused and forwards it to the engine view
-         (editor fly camera). Background must be non-null so the Panel receives pointer events. The cursor
-         hides while the game requests relative (mouselook) mode; the input behavior re-centres it. -->
-    <Panel x:Name="Surface" Background="Transparent" Focusable="True" local:ViewportInput.Enabled="True">
+         (editor fly camera). An opaque near-black backdrop makes the panel hit-testable AND gives the
+         aspect-preserving image its letterbox/pillarbox bars (the engine renders at a fixed resolution and the
+         image is fit Uniform, so a mismatched panel shows bars rather than a stretched, squished frame). The
+         cursor hides while the game requests relative (mouselook) mode; the input behavior re-centres it. -->
+    <Panel x:Name="Surface" Background="#FF0A0A0E" Focusable="True" local:ViewportInput.Enabled="True">
         <!-- The cursor hides only while the game wants mouselook AND this panel is focused, so Alt+Esc
              (which drops focus) hands the cursor back even though the game still requests relative mode. -->
         <Panel.Cursor>
@@ -22,6 +25,24 @@
         <local:CompositionInteropViewport
             Surface="{Binding CurrentSurface}"
             InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
+
+        <!-- Rubber-band marquee, drawn over the surface during a left-drag. Non-hit-testable so the pointer
+             events keep flowing to the input Panel underneath. -->
+        <Canvas IsHitTestVisible="False">
+            <Rectangle IsVisible="{Binding MarqueeVisible}"
+                       Canvas.Left="{Binding MarqueeX}" Canvas.Top="{Binding MarqueeY}"
+                       Width="{Binding MarqueeWidth}" Height="{Binding MarqueeHeight}"
+                       Opacity="0.25"
+                       Fill="{DynamicResource ThemeAccentSolidBrush}"
+                       Stroke="{DynamicResource ThemeAccentSolidBrush}" StrokeThickness="1"/>
+        </Canvas>
+
+        <!-- The movable, data-driven viewport toolbar (transform tools by default). It docks to a viewport
+             edge and re-orders by drag; its config persists per-viewport in the dock layout. The wrapper keeps
+             ShowToolbar bound to the viewport VM while the toolbar itself binds to the child Toolbar VM. -->
+        <Panel IsVisible="{Binding ShowToolbar}">
+            <vtb:ToolbarView DataContext="{Binding Toolbar}"/>
+        </Panel>
 
         <ghost:GhostView Message="No world loaded." IsVisible="{Binding ShowEmptyGhost}"/>
 

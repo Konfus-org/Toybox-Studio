@@ -25,6 +25,7 @@ public sealed class ViewportStream : IDisposable
         _kind = kind;
         session.StateChanged += OnSessionStateChanged;
         engine.SurfaceReceived += OnSurfaceReceived;
+        engine.MouseLockModeChanged += OnMouseLockModeChanged;
 
         // Opened mid-session (e.g. a new viewport while the engine is already running): start
         // right away rather than waiting for the next connect.
@@ -41,12 +42,20 @@ public sealed class ViewportStream : IDisposable
     /// <summary>Raised when this view's surface is gone (disconnect or stop) so the control drops it.</summary>
     public event Action? SurfaceLost;
 
+    /// <summary>
+    /// Raised when the playing game's mouse-lock mode changes ("unlocked", "relative", or "grabbed"),
+    /// forwarded from the engine. Lets the game viewport capture the cursor for mouselook without holding the
+    /// engine transport itself.
+    /// </summary>
+    public event Action<string>? MouseLockModeChanged;
+
     public void Dispose()
     {
         // The session and engine outlive the stream, so drop subscriptions or their events would keep
         // this (disposed) instance alive.
         _session.StateChanged -= OnSessionStateChanged;
         _engine.SurfaceReceived -= OnSurfaceReceived;
+        _engine.MouseLockModeChanged -= OnMouseLockModeChanged;
         StopView();
     }
 
@@ -56,12 +65,34 @@ public sealed class ViewportStream : IDisposable
     /// </summary>
     public void SendInput(
         bool focused, int buttons, int moveKeys,
-        IReadOnlyList<int> keys, double mouseX, double mouseY, double dx, double dy, double wheel)
+        IReadOnlyList<InputKey> keys, double mouseX, double mouseY, double dx, double dy, double wheel,
+        double cursorU, double cursorV)
     {
         if (_viewName is { } name && _engine.IsConnected)
-            _engine.SendViewInputAsync(name, focused, buttons, moveKeys, keys, mouseX, mouseY, dx, dy, wheel)
+            _engine.SendViewInputAsync(
+                    name, focused, buttons, moveKeys, keys, mouseX, mouseY, dx, dy, wheel, cursorU, cursorV)
                 .FireAndForget();
     }
+
+    /// <summary>
+    /// Picks the entity under a normalized viewport coordinate (top-left origin) on this stream's engine view.
+    /// Fails (without changing selection) when the view hasn't started or the engine is gone.
+    /// </summary>
+    public Task<Result<ulong?>> PickAsync(double u, double v) =>
+        _viewName is { } name && _engine.IsConnected
+            ? _engine.PickAsync(name, u, v, CancellationToken.None)
+            : Task.FromResult(Result<ulong?>.Fail("The view has not started."));
+
+    /// <summary>
+    /// Box-selects entities inside a normalized marquee rect (top-left origin) on this stream's view.
+    /// Fails (selection unchanged) when the view hasn't started or the engine is gone.
+    /// </summary>
+    public Task<Result<IReadOnlyList<ulong>>> PickRectAsync(double u0, double v0, double u1, double v1) =>
+        _viewName is { } name && _engine.IsConnected
+            ? _engine.PickRectAsync(name, u0, v0, u1, v1, CancellationToken.None)
+            : Task.FromResult(Result<IReadOnlyList<ulong>>.Fail("The view has not started."));
+
+    private void OnMouseLockModeChanged(string mode) => MouseLockModeChanged?.Invoke(mode);
 
     private void OnSessionStateChanged(ConnectionState state)
     {

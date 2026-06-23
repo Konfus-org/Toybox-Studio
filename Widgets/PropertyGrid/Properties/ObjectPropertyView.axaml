@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
-             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors" xmlns:anim="using:Toybox.Studio.Widgets.Behaviors.Animations"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.ObjectPropertyView"
              x:DataType="local:ObjectPropertyViewModel">
     <!-- A struct followed by its child rows (Depth + 1, so they shade and indent one level deeper). A
@@ -37,7 +37,7 @@
                            Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
                            IconName="{Binding Icon}" IconColor="{Binding IconColor}"
                            IsVisible="{Binding IsNested}"
-                           util:ExpandNod.State="{Binding IsExpanded}"
+                           anim:ExpandNod.State="{Binding IsExpanded}"
                            util:ToggleOnTap.Enabled="True"
                            util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}"/>
 

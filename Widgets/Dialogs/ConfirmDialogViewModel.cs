@@ -20,6 +20,9 @@ public sealed partial class ConfirmDialogViewModel : ObservableObject
         CancelText = cancelText;
     }
 
+    /// <summary>Raised when the dialog should close.</summary>
+    public event Action? CloseRequested;
+
     public string Title { get; }
 
     public string Message { get; }
@@ -30,9 +33,6 @@ public sealed partial class ConfirmDialogViewModel : ObservableObject
 
     /// <summary>True once the user chose the confirm action.</summary>
     public bool Confirmed { get; private set; }
-
-    /// <summary>Raised when the dialog should close.</summary>
-    public event Action? CloseRequested;
 
     [RelayCommand]
     private void Confirm()

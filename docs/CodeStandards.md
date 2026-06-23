@@ -30,6 +30,26 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
 
 - **One public class per `.cs` file**; one widget (View) per `.axaml` file. Small private helper types tightly owned by the file may share it, but prefer their own file.
 - **Document the "why".** Use `///` XML-doc summaries on public classes, records, and non-obvious public members. Comments explain assumptions, constraints, and non-obvious decisions — not what self-explanatory code already says.
+- **Member layout within a type.** Order members by category, in this fixed sequence:
+
+  1. Constants & Fields
+  2. Constructors (static constructor / finalizer alongside)
+  3. Events
+  4. Properties (and indexers)
+  5. Methods (including operators)
+  6. Nested Types
+
+  When a type has members in **two or more** of these categories, mark each present category with a banner comment so the sections are scannable:
+
+  ```csharp
+  // ==========================================
+  // 1. Constants & Fields
+  // ==========================================
+  ```
+
+  Keep each member's attributes, XML-doc, and leading comments attached when it moves, and preserve the existing relative order *within* a category (never reorder fields among themselves — initializer order can be load-bearing). Skip the banners for trivial single-section types — enums, interfaces, delegates, marker attributes, simple DTO `record`s, and framework code-behind (`*.axaml.cs`): the ordering still applies, but banners on a five-line type are noise. See `Widgets/Settings/EditorSettingsViewModel.cs` for a worked example.
+
+- **Order methods by accessibility**, most accessible first: `public` → `internal` → `protected` (and `protected internal` / `private protected`) → `private`. The public surface of a type reads top-down before its implementation detail. Within a single accessibility tier preserve the existing order (keep related/overload groups together; don't sort alphabetically). This ordering applies *within* the Methods section only — it does not reshuffle the category sequence above. (Fields stay in their load-bearing order; the public-first rule is for methods.)
 
 ## MVVM & Avalonia
 

@@ -12,6 +12,9 @@ public sealed partial class VectorComponentViewModel : ObservableObject
     private readonly int _index;
     private readonly Action _commit;
 
+    [ObservableProperty]
+    private decimal? _value;
+
     public VectorComponentViewModel(string label, JArray array, int index, Action commit)
     {
         Label = label;
@@ -22,9 +25,6 @@ public sealed partial class VectorComponentViewModel : ObservableObject
     }
 
     public string Label { get; }
-
-    [ObservableProperty]
-    private decimal? _value;
 
     partial void OnValueChanged(decimal? value)
     {

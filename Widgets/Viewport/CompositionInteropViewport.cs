@@ -185,7 +185,8 @@ public sealed class CompositionInteropViewport : Control
         UpdateVisualLayout();
     }
 
-    /// <summary>Letterboxes the shared texture into the control's bounds (Stretch=Uniform).</summary>
+    /// <summary>Fits the shared texture inside the control preserving its aspect ratio (Stretch=Uniform),
+    /// centred with letterbox bars on the short axis (see <see cref="ViewportMapping.ImageRect"/>).</summary>
     private void UpdateVisualLayout()
     {
         if (_visual is null)
@@ -201,14 +202,10 @@ public sealed class CompositionInteropViewport : Control
             return;
         }
 
-        var scale = Math.Min(bounds.Width / surface.Width, bounds.Height / surface.Height);
-        var width = surface.Width * scale;
-        var height = surface.Height * scale;
+        var (offsetX, offsetY, width, height) =
+            ViewportMapping.ImageRect(bounds.Width, bounds.Height, surface.Width, surface.Height);
         _visual.Size = new Vector2((float)width, (float)height);
-        _visual.Offset = new Vector3(
-            (float)((bounds.Width - width) / 2),
-            (float)((bounds.Height - height) / 2),
-            0F);
+        _visual.Offset = new Vector3((float)offsetX, (float)offsetY, 0F);
     }
 
     private void TearDown()

@@ -19,15 +19,15 @@ public static class ToggleOnTap
     public static readonly AttachedProperty<bool> StateProperty =
         AvaloniaProperty.RegisterAttached<Control, bool>("State", typeof(ToggleOnTap));
 
-    public static void SetEnabled(Control control, bool value) => control.SetValue(EnabledProperty, value);
-    public static bool GetEnabled(Control control) => control.GetValue(EnabledProperty);
-    public static void SetState(Control control, bool value) => control.SetValue(StateProperty, value);
-    public static bool GetState(Control control) => control.GetValue(StateProperty);
-
     static ToggleOnTap()
     {
         EnabledProperty.Changed.AddClassHandler<Control>(OnEnabledChanged);
     }
+
+    public static void SetEnabled(Control control, bool value) => control.SetValue(EnabledProperty, value);
+    public static bool GetEnabled(Control control) => control.GetValue(EnabledProperty);
+    public static void SetState(Control control, bool value) => control.SetValue(StateProperty, value);
+    public static bool GetState(Control control) => control.GetValue(StateProperty);
 
     private static void OnEnabledChanged(Control control, AvaloniaPropertyChangedEventArgs args)
     {

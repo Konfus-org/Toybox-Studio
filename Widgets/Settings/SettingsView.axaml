@@ -33,7 +33,7 @@
                     <!-- Engine, Build and Themes are all sections of this one grid; Themes is appended as a
                          list property in the view-model rather than drawn as a separate panel. -->
                     <pg:PropertyGridView Embedded="True"
-                                         Items="{Binding EditorSettingsProperties}"
+                                         Items="{Binding Editor.Properties}"
                                          Filter="{Binding Search}"/>
                 </ScrollViewer>
             </TabItem>
@@ -42,11 +42,11 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                         <TextBlock Text="Open a project to edit its settings." Margin="10,8"
-                                   IsVisible="{Binding !HasProject}" Opacity="0.6"/>
+                                   IsVisible="{Binding !Project.HasProject}" Opacity="0.6"/>
                         <pg:PropertyGridView Embedded="True"
-                                             Items="{Binding ProjectSettingsProperties}"
+                                             Items="{Binding Project.Properties}"
                                              Filter="{Binding Search}"
-                                             IsVisible="{Binding HasProject}"/>
+                                             IsVisible="{Binding Project.HasProject}"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

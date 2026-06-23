@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
@@ -19,6 +20,9 @@ public sealed partial class HandlePickerPropertyViewModel : PropertyViewModel
     private readonly IReadOnlyList<string>? _typeFilter;
     private readonly JsonValueSlot _slot;
 
+    [ObservableProperty]
+    private string _displayName;
+
     public HandlePickerPropertyViewModel(PropertyNode node, Action? commit, AssetCatalog? catalog) : base(node)
     {
         _catalog = catalog;
@@ -28,11 +32,8 @@ public sealed partial class HandlePickerPropertyViewModel : PropertyViewModel
         _displayName = ResolveDisplayName();
 
         if (catalog is not null)
-            catalog.CatalogUpdated += OnCatalogUpdated;
+            catalog.Changed += OnCatalogUpdated;
     }
-
-    [ObservableProperty]
-    private string _displayName;
 
     public long CurrentId => _slot.Read<long?>() ?? 0;
 

@@ -2,16 +2,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.GameView"
              xmlns:viewport="using:Toybox.Studio.Widgets.Viewport"
-             xmlns:gameToolbar="using:Toybox.Studio.Widgets.GameToolbar"
+             xmlns:toolbar="using:Toybox.Studio.Widgets.Toolbar"
              x:Class="Toybox.Studio.Widgets.GameView.GameViewView"
              x:DataType="local:GameViewViewModel">
 
-    <DockPanel>
-        <!-- Transport (Play/Stop/Pause) sits above the game camera frame. -->
-        <Border DockPanel.Dock="Top" Padding="6" Background="{DynamicResource ThemeHeaderBrush}">
-            <gameToolbar:GameToolbarView DataContext="{Binding Transport}"/>
-        </Border>
-
+    <!-- The game frame fills the whole panel; the transport (Play/Stop/Pause) is the same movable, data-driven
+         toolbar the viewport uses, floating over the frame and positioning itself from its docked edge. -->
+    <Panel>
         <viewport:ViewportView DataContext="{Binding Surface}"/>
-    </DockPanel>
+
+        <toolbar:ToolbarView DataContext="{Binding Transport}"/>
+    </Panel>
 </UserControl>

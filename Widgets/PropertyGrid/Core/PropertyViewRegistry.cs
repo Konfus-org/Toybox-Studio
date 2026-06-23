@@ -1,6 +1,5 @@
-using Toybox.Studio.Services.World;
-using Toybox.Studio.Models.Ecs;
 using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.World;
 using Toybox.Studio.Services.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
@@ -18,11 +17,18 @@ public static class PropertyViewRegistry
 {
     private static AssetCatalog? _assets;
     private static WorldManager? _world;
-    private static EngineRpc? _engine;
+
+    private static readonly Dictionary<string, Func<PropertyNode, Action?, PropertyViewModel>> Builders =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["script"] = (node, _) => new ScriptLinkPropertyViewModel(node, _assets),
+            ["themePicker"] = (node, commit) => new ThemePickerPropertyViewModel(node, commit),
+        };
 
     /// <summary>
     /// The asset catalog the custom widgets read from. Exposed so the type-driven factory can build a
-    /// handle picker directly (handles route by their "handle" type token, not a view name).
+    /// handle picker directly (handles route by their "handle" type token, not a view name) and so the
+    /// material-instance editor can fetch a base material's slots.
     /// </summary>
     public static AssetCatalog? Assets => _assets;
 
@@ -33,28 +39,13 @@ public static class PropertyViewRegistry
     public static WorldManager? World => _world;
 
     /// <summary>
-    /// The engine RPC the material-instance editor needs to fetch a base material's slots. Exposed so the
-    /// type-driven factory can build that editor for any <c>material_instance</c> node (nested or list
-    /// element), not just the top-level component.
-    /// </summary>
-    public static EngineRpc? Engine => _engine;
-
-    private static readonly Dictionary<string, Func<PropertyNode, Action?, PropertyViewModel>> Builders =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["script"] = (node, _) => new ScriptLinkPropertyViewModel(node, _assets),
-            ["themePicker"] = (node, commit) => new ThemePickerPropertyViewModel(node, commit),
-        };
-
-    /// <summary>
     /// Supplies the services the custom widgets depend on. Called once after the app's services are
     /// built; safe to call again if they are rebuilt.
     /// </summary>
-    public static void Configure(AssetCatalog assets, WorldManager world, EngineRpc engine)
+    public static void Configure(AssetCatalog assets, WorldManager world)
     {
         _assets = assets;
         _world = world;
-        _engine = engine;
     }
 
     /// <summary>

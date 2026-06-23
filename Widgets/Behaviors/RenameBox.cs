@@ -24,17 +24,17 @@ public static class RenameBox
     public static readonly AttachedProperty<ICommand?> CancelCommandProperty =
         AvaloniaProperty.RegisterAttached<TextBox, ICommand?>("CancelCommand", typeof(RenameBox));
 
+    static RenameBox()
+    {
+        ActiveProperty.Changed.AddClassHandler<TextBox>(OnActiveChanged);
+    }
+
     public static void SetActive(TextBox box, bool value) => box.SetValue(ActiveProperty, value);
     public static bool GetActive(TextBox box) => box.GetValue(ActiveProperty);
     public static void SetCommitCommand(TextBox box, ICommand? value) => box.SetValue(CommitCommandProperty, value);
     public static ICommand? GetCommitCommand(TextBox box) => box.GetValue(CommitCommandProperty);
     public static void SetCancelCommand(TextBox box, ICommand? value) => box.SetValue(CancelCommandProperty, value);
     public static ICommand? GetCancelCommand(TextBox box) => box.GetValue(CancelCommandProperty);
-
-    static RenameBox()
-    {
-        ActiveProperty.Changed.AddClassHandler<TextBox>(OnActiveChanged);
-    }
 
     private static void OnActiveChanged(TextBox box, AvaloniaPropertyChangedEventArgs args)
     {

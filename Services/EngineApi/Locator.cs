@@ -1,5 +1,5 @@
-using Toybox.Studio.Models;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Settings;
 using Toybox.Studio.Utils;
 namespace Toybox.Studio.Services.EngineApi;
 
@@ -10,9 +10,9 @@ namespace Toybox.Studio.Services.EngineApi;
 /// </summary>
 public sealed class Locator
 {
-    private readonly EditorSettings _settings;
+    private readonly SettingsManager _settings;
 
-    public Locator(EditorSettings settings)
+    public Locator(SettingsManager settings)
     {
         _settings = settings;
     }
@@ -31,7 +31,7 @@ public sealed class Locator
     /// </summary>
     public string ResolveAtStartup()
     {
-        var configured = _settings.Engine.SourcePath;
+        var configured = _settings.Settings.Engine.SourcePath;
         if (!string.IsNullOrEmpty(configured) && IsEngineSourceDirectory(configured))
         {
             SetEngine(configured, persist: false);
@@ -66,7 +66,7 @@ public sealed class Locator
         EngineSourcePath = path;
         if (persist && path is not null)
         {
-            _settings.Engine.SourcePath = path;
+            _settings.Settings.Engine.SourcePath = path;
             // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
             _settings.SaveAsync().FireAndForget();
         }

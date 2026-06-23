@@ -1,4 +1,3 @@
-using Toybox.Studio.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,6 +29,9 @@ public sealed partial class AssetPickerViewModel : ObservableObject
         Refilter();
     }
 
+    /// <summary>Raised when the dialog should close.</summary>
+    public event Action? CloseRequested;
+
     public string Title { get; }
 
     [ObservableProperty]
@@ -50,9 +52,6 @@ public sealed partial class AssetPickerViewModel : ObservableObject
 
     /// <summary>The user's choice. Confirmed is false until they select or clear; on clear, Id is 0.</summary>
     public AssetPick Result { get; private set; }
-
-    /// <summary>Raised when the dialog should close.</summary>
-    public event Action? CloseRequested;
 
     partial void OnSearchTextChanged(string value) => Refilter();
 

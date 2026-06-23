@@ -4,7 +4,7 @@
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              xmlns:search="using:Toybox.Studio.Widgets.Searching"
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
-             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors" xmlns:anim="using:Toybox.Studio.Widgets.Behaviors.Animations"
              xmlns:wt="using:Toybox.Studio.Widgets.WorldTree"
              x:Class="Toybox.Studio.Widgets.WorldTree.WorldTreeView"
              x:DataType="ecs:WorldViewModel">
@@ -49,7 +49,10 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="0"/>
-            <Setter Property="Padding" Value="4,0"/>
+            <!-- Tight left padding so the twisty hugs the gutter's left edge (matching the property grid),
+                 nudging every name a touch left while still reserving the gutter on leaf rows. -->
+            <Setter Property="Padding" Value="0,0,2,0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="ToggleButton.entityExpander /template/ ContentPresenter#PART_ContentPresenter,
@@ -60,6 +63,7 @@
         </Style>
         <Style Selector="ToggleButton.entityExpander Path">
             <Setter Property="Opacity" Value="0.55"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
             <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
         </Style>
         <Style Selector="ToggleButton.entityExpander:checked Path">
@@ -74,6 +78,14 @@
         </Style>
         <Style Selector="TreeViewItem:empty ToggleButton.entityExpander Path">
             <Setter Property="Opacity" Value="0"/>
+        </Style>
+
+        <!-- Each row's expansion lives on its EntityViewModel (IsExpanded), not just the container, so it
+             survives a reconcile and can be driven from code: selecting a nested entity (e.g. from the
+             viewport) expands its ancestors here to reveal it. The in-row chevron and tap-to-open both
+             still write the container's IsExpanded, which stays in sync through this two-way binding. -->
+        <Style Selector="TreeView.entities TreeViewItem" x:DataType="ecs:EntityViewModel">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
         </Style>
 
         <!-- The default Fluent expand chevron is removed: we render our own (entityExpander) in the row, so the
@@ -113,7 +125,7 @@
     </UserControl.Styles>
 
     <!-- Shared row content: a centred drag handle, the entity name (double-tap to rename in place), a centred
-         red delete button, and a right-hand expand chevron. Used by both the scene tree and the Globals tree;
+         red delete button, and a right-hand expand chevron. Used by both the world tree and the Globals tree;
          the command resolves against the owning WorldViewModel. A TreeDataTemplate (recursing on Children) so
          both forests render their parent/child hierarchy. -->
     <UserControl.Resources>
@@ -124,12 +136,12 @@
             <!-- The whole row grows on hover (Pop) and shows the primary-accent underline on hover, like every
                  property row; a parent row also nods in the direction it opens/closes (ExpandNod, bound to its
                  tree node — leaf rows never toggle, so they never nod). -->
-            <Border Classes="entityRow" Background="Transparent" util:Pop.Enabled="True"
-                    util:ExpandNod.State="{Binding $parent[TreeViewItem].IsExpanded}">
+            <Border Classes="entityRow" Background="Transparent" anim:Pop.Enabled="True"
+                    anim:ExpandNod.State="{Binding $parent[TreeViewItem].IsExpanded}">
             <DockPanel>
                 <Border DockPanel.Dock="Left" Cursor="SizeAll" Background="Transparent"
                         Padding="0,0,4,0" VerticalAlignment="Center"
-                        ToolTip.Tip="Drag to reorder, reparent, or move between scene and globals"
+                        ToolTip.Tip="Drag to reorder, reparent, or move between streamed and globals"
                         wt:EntityTreeDragDrop.Handle="True">
                     <pg:IconView Width="12" Height="12" IconName="GripVertical" Opacity="0.45"
                                  Foreground="{DynamicResource ThemeTextBrush}"/>
@@ -156,7 +168,7 @@
                        util:ExpandOnTap.Enabled="True">
                     <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                IsVisible="{Binding !IsRenaming}"
-                               Classes.entityDisabled="{Binding !IsEnabled}"
+                               Classes.entityDisabled="{Binding !IsEffectivelyEnabled}"
                                util:DoubleTapCommand.Command="{Binding BeginRenameCommand}"/>
                     <TextBox Classes="renameBox" Text="{Binding RenameDraft, Mode=TwoWay}"
                              IsVisible="{Binding IsRenaming}"
@@ -184,7 +196,7 @@
 
         <Panel>
             <!-- Browse the world as two collapsible lists when not searching, each styled like a property-grid
-                 list section: Globals first, then the scene tree ("Streamed"). Each header carries a "+" that
+                 list section: Globals first, then the world tree ("Streamed"). Each header carries a "+" that
                  adds an entity to that bucket. A right inset keeps the rows' controls clear of the scrollbar. -->
             <ScrollViewer IsVisible="{Binding ShowTree}"
                           HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -195,7 +207,7 @@
                     <Border wt:EntityTreeDragDrop.GlobalsZone="True" Background="Transparent">
                         <StackPanel>
                             <ToggleButton x:Name="GlobalsToggle" Classes="sectionHeader" IsChecked="False"
-                                          ToolTip.Tip="Full-lifetime entities, outside the scene stream">
+                                          ToolTip.Tip="Full-lifetime entities, outside the world stream">
                                 <DockPanel>
                                     <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
                                           Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
@@ -217,8 +229,7 @@
 
                             <StackPanel IsVisible="{Binding #GlobalsToggle.IsChecked}">
                                 <TreeView Classes="entities" ItemsSource="{Binding Globals}"
-                                          util:SharedSelection.Selected="{Binding SelectedEntity, Mode=TwoWay}"
-                                          SelectionMode="Single"
+                                          wt:WorldTreeSelection.Selection="{Binding Selection}"
                                           ItemTemplate="{StaticResource EntityRow}"
                                           wt:EntityTreeDragDrop.Enabled="True"/>
                                 <TextBlock Text="Drag entities here to make them global."
@@ -232,7 +243,7 @@
                          handle to reorder/reparent and an x to delete. -->
                     <StackPanel>
                         <ToggleButton x:Name="StreamedToggle" Classes="sectionHeader" IsChecked="True"
-                                      ToolTip.Tip="Entities streamed in with the scene">
+                                      ToolTip.Tip="Entities streamed in with the world">
                             <DockPanel>
                                 <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
                                       Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
@@ -254,8 +265,7 @@
 
                         <TreeView Classes="entities" ItemsSource="{Binding RootEntities}"
                                   IsVisible="{Binding #StreamedToggle.IsChecked}"
-                                  util:SharedSelection.Selected="{Binding SelectedEntity, Mode=TwoWay}"
-                                  SelectionMode="Single"
+                                  wt:WorldTreeSelection.Selection="{Binding Selection}"
                                   ItemTemplate="{StaticResource EntityRow}"
                                   wt:EntityTreeDragDrop.Enabled="True"/>
                     </StackPanel>
@@ -264,8 +274,7 @@
 
             <!-- …and as a flat, name-filtered list while a search is active. -->
             <ListBox Classes="entities" ItemsSource="{Binding SearchResults}"
-                     SelectedItem="{Binding SelectedEntity}"
-                     SelectionMode="Single"
+                     wt:WorldTreeSelection.Selection="{Binding Selection}"
                      IsVisible="{Binding ShowResults}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="ecs:EntityViewModel">

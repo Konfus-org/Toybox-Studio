@@ -3,7 +3,6 @@ using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Widgets.Status;
-using Toybox.Studio.Widgets.GameToolbar;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
@@ -31,7 +30,6 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public ShellViewModel(
         StatusViewModel status,
-        GameToolbarViewModel gameToolbar,
         WorkspaceViewModel workspace,
         Session session,
         Logger log,
@@ -41,7 +39,6 @@ public sealed partial class ShellViewModel : ObservableObject
         WorldManager world)
     {
         Status = status;
-        GameToolbar = gameToolbar;
         Workspace = workspace;
 
         _session = session;
@@ -58,8 +55,6 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     public StatusViewModel Status { get; }
-
-    public GameToolbarViewModel GameToolbar { get; }
 
     /// <summary>The window manager: registered dockables, live dock state, and open/reset/save actions.</summary>
     public WorkspaceViewModel Workspace { get; }

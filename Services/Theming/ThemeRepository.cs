@@ -1,5 +1,5 @@
 using Newtonsoft.Json;
-using Toybox.Studio.Models;
+using Toybox.Studio.Services.Settings;
 
 namespace Toybox.Studio.Services.Theming;
 

@@ -1,12 +1,12 @@
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Extensions;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Models.Ecs;
-using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.World;
 
 namespace Toybox.Studio.Widgets.Ecs;
 
@@ -26,39 +26,38 @@ public sealed partial class EntityViewModel : ObservableObject
     // Pinned to the top of the Components tab — it's the component you reach for most often.
     private const string TransformComponentName = "transform";
 
-    private readonly EngineRpc _engine;
+    private readonly Entity _entity;
     private readonly Func<Task> _resync;
     private readonly Action _onEdited;
-
-    public EntityViewModel(ulong id, EngineRpc engine, Func<Task> resync, Action onEdited)
-    {
-        Id = id;
-        _engine = engine;
-        _resync = resync;
-        _onEdited = onEdited;
-    }
-
-    public ulong Id { get; }
-
-    [ObservableProperty]
-    public partial string Name { get; private set; } = "";
-
-    [ObservableProperty]
-    public partial string Tag { get; private set; } = "";
-
-    [ObservableProperty]
-    public partial string Subtitle { get; private set; } = "";
-
-    /// <summary>True when this entity is global (a full-lifetime resident); the world view shows it in the
-    /// Globals section rather than the scene tree.</summary>
-    [ObservableProperty]
-    public partial bool IsGlobal { get; private set; }
 
     // Guards the enable toggle while UpdateFrom seeds it from a snapshot, so reconciling to engine truth
     // doesn't echo back a redundant entity.setEnabled.
     private bool _suppressEnabledCommit;
 
     private bool _isEnabled = true;
+
+    public EntityViewModel(Entity entity, Func<Task> resync, Action onEdited)
+    {
+        _entity = entity;
+        _resync = resync;
+        _onEdited = onEdited;
+    }
+
+    public ulong Id => _entity.Id;
+
+    [ObservableProperty]
+    public partial string Name { get; private set; } = "";
+
+    [ObservableProperty]
+    public partial IReadOnlyList<string> Tags { get; private set; } = [];
+
+    [ObservableProperty]
+    public partial string Subtitle { get; private set; } = "";
+
+    /// <summary>True when this entity is global (a full-lifetime resident); the world view shows it in the
+    /// Globals section rather than the world tree.</summary>
+    [ObservableProperty]
+    public partial bool IsGlobal { get; private set; }
 
     /// <summary>
     /// Whether the entity is enabled. Flipping it turns the entity off wholesale in the engine — every
@@ -70,26 +69,28 @@ public sealed partial class EntityViewModel : ObservableObject
         get => _isEnabled;
         set
         {
-            if (!SetProperty(ref _isEnabled, value) || _suppressEnabledCommit)
+            if (!SetProperty(ref _isEnabled, value))
+                return;
+
+            // The own flag drives this entity's effective state and that of its whole subtree (a disabled
+            // parent dims its children), so cascade the dim notification down regardless of whether this is
+            // a user toggle or a snapshot seed.
+            NotifyEffectiveEnabledChanged();
+
+            if (_suppressEnabledCommit)
                 return;
 
             CommitEnabledAsync(value).FireAndForget();
         }
     }
 
-    private async Task CommitEnabledAsync(bool enabled)
-    {
-        var result = await _engine.SetEntityEnabledAsync(Id, enabled, CancellationToken.None)
-            .ContinueOnSameContext();
-        if (result.Success)
-        {
-            _onEdited();
-            return;
-        }
-
-        await Popups.ShowErrorAsync("Couldn't change entity state", result.Error!).ContinueOnSameContext();
-        await _resync().ContinueOnSameContext();
-    }
+    /// <summary>
+    /// Whether this entity is effectively enabled in the tree: its own <see cref="IsEnabled"/> flag AND
+    /// every ancestor's. A disabled parent dims its whole subtree — matching the engine, which skips a
+    /// disabled ancestor's descendants in every runtime query — without changing each child's own flag, so
+    /// the children light back up the moment the parent is re-enabled.
+    /// </summary>
+    public bool IsEffectivelyEnabled => IsEnabled && (Parent?.IsEffectivelyEnabled ?? true);
 
     /// <summary>True while the entity's name is being edited inline in the world list.</summary>
     [ObservableProperty]
@@ -98,42 +99,6 @@ public sealed partial class EntityViewModel : ObservableObject
     /// <summary>The in-progress rename text; committed to the engine on Enter / focus loss.</summary>
     [ObservableProperty]
     public partial string RenameDraft { get; set; } = "";
-
-    /// <summary>Enters inline-rename mode, seeding the draft with the current name.</summary>
-    [RelayCommand]
-    public void BeginRename()
-    {
-        RenameDraft = Name;
-        IsRenaming = true;
-    }
-
-    /// <summary>Leaves inline-rename mode without applying the draft.</summary>
-    [RelayCommand]
-    private void CancelRename() => IsRenaming = false;
-
-    /// <summary>Commits the inline-rename draft to the engine (no-op if blank/unchanged), then leaves edit
-    /// mode. The name is updated in place on success so the row refreshes without a tree rebuild.</summary>
-    [RelayCommand]
-    private async Task CommitRenameAsync()
-    {
-        if (!IsRenaming)
-            return;
-        IsRenaming = false;
-
-        var name = RenameDraft.Trim();
-        if (name.Length == 0 || name == Name)
-            return;
-
-        var result = await _engine.SetEntityNameAsync(Id, name, CancellationToken.None)
-            .ContinueOnSameContext();
-        if (result.Success)
-        {
-            Name = name;
-            _onEdited();
-        }
-        else
-            await Popups.ShowErrorAsync("Couldn't rename entity", result.Error!).ContinueOnSameContext();
-    }
 
     /// <summary>Ordinary components (everything except the script container) — the "Components" tab.</summary>
     public ObservableCollection<ComponentViewModel> Components { get; } = [];
@@ -165,6 +130,14 @@ public sealed partial class EntityViewModel : ObservableObject
         false;
 #endif
 
+    /// <summary>
+    /// Whether this node is expanded in the world tree. Held on the VM (not just the TreeViewItem) so it
+    /// survives a reconcile and can be set programmatically — selecting a nested entity (e.g. from the
+    /// viewport) expands its ancestors to reveal it. The tree binds the container's IsExpanded to this.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsExpanded { get; set; }
+
     public ObservableCollection<EntityViewModel> Children { get; } = [];
 
     /// <summary>
@@ -173,17 +146,25 @@ public sealed partial class EntityViewModel : ObservableObject
     /// </summary>
     public EntityViewModel? Parent { get; set; }
 
+    /// <summary>Enters inline-rename mode, seeding the draft with the current name.</summary>
+    [RelayCommand]
+    public void BeginRename()
+    {
+        RenameDraft = Name;
+        IsRenaming = true;
+    }
+
     /// <summary>Reconciles this VM against a fresh snapshot (same id), rebuilding its components.</summary>
-    public void UpdateFrom(Entity data)
+    public void UpdateFrom(EntityDescription data)
     {
         Name = data.Name;
-        Tag = data.Tag;
+        Tags = data.Tags;
         IsGlobal = data.IsGlobal;
         // Seed the enable flag from engine truth without echoing a setEnabled back.
         _suppressEnabledCommit = true;
         IsEnabled = data.IsEnabled;
         _suppressEnabledCommit = false;
-        // Tag is intentionally left out of the header for now; just the id, shown right-aligned.
+        // Tags are intentionally left out of the header for now; just the id, shown right-aligned.
         Subtitle = $"#{data.Id}";
 
         Components.Clear();
@@ -196,9 +177,11 @@ public sealed partial class EntityViewModel : ObservableObject
         {
             rawComponents[component.Name] = component.Raw;
             if (component.Name == ScriptComponentName)
-                scripts = new ScriptContainerViewModel(Id, component, _engine, _resync, _onEdited);
+                scripts = new ScriptContainerViewModel(
+                    _entity.Component(component.Name), component, _resync, _onEdited);
             else
-                Components.Add(new ComponentViewModel(Id, component, _engine, _resync, _onEdited));
+                Components.Add(new ComponentViewModel(
+                    _entity.Component(component.Name), component, _resync, _onEdited));
         }
 
         Scripts = scripts;
@@ -216,7 +199,7 @@ public sealed partial class EntityViewModel : ObservableObject
     /// Scripts and the raw-JSON tab are deliberately left untouched: script overrides are authored values,
     /// not live game state, and re-serializing the JSON each tick would clobber an in-progress edit.
     /// </summary>
-    public bool TrySyncValues(Entity data)
+    public bool TrySyncValues(EntityDescription data)
     {
         // Same transform-first ordering as UpdateFrom (OrderBy is stable), so the rows zip one to one.
         var ordered = data.Components
@@ -260,7 +243,66 @@ public sealed partial class EntityViewModel : ObservableObject
         foreach (var child in children)
             child.Parent = this;
         // Reconcile in place so an unchanged subtree keeps its expansion/selection and only real changes move.
-        ListReconcile.Apply(Children, children);
+        Children.Reconcile(children);
+        // Re-parenting can change a child's effective-enabled (this node may be disabled), so refresh the dim
+        // of each child's subtree now its ancestor chain is settled.
+        foreach (var child in children)
+            child.NotifyEffectiveEnabledChanged();
+    }
+
+    // Re-raises IsEffectivelyEnabled for this node and every descendant: a node's effective state depends on
+    // its ancestors, so a change at one level must refresh the dimming of the whole subtree below it.
+    internal void NotifyEffectiveEnabledChanged()
+    {
+        OnPropertyChanged(nameof(IsEffectivelyEnabled));
+        foreach (var child in Children)
+            child.NotifyEffectiveEnabledChanged();
+    }
+
+    // Reflects a drag between the streamed and globals sections locally (the optimistic move), ahead of the
+    // engine round-trip confirming it. The IsGlobal setter is otherwise driven only by UpdateFrom.
+    internal void SetGlobalLocal(bool global) => IsGlobal = global;
+
+    private async Task CommitEnabledAsync(bool enabled)
+    {
+        var result = await _entity.SetEnabledAsync(enabled, CancellationToken.None)
+            .ContinueOnSameContext();
+        if (result.Success)
+        {
+            _onEdited();
+            return;
+        }
+
+        await Popups.ShowErrorAsync("Couldn't change entity state", result.Error!).ContinueOnSameContext();
+        await _resync().ContinueOnSameContext();
+    }
+
+    /// <summary>Leaves inline-rename mode without applying the draft.</summary>
+    [RelayCommand]
+    private void CancelRename() => IsRenaming = false;
+
+    /// <summary>Commits the inline-rename draft to the engine (no-op if blank/unchanged), then leaves edit
+    /// mode. The name is updated in place on success so the row refreshes without a tree rebuild.</summary>
+    [RelayCommand]
+    private async Task CommitRenameAsync()
+    {
+        if (!IsRenaming)
+            return;
+        IsRenaming = false;
+
+        var name = RenameDraft.Trim();
+        if (name.Length == 0 || name == Name)
+            return;
+
+        var result = await _entity.RenameAsync(name, CancellationToken.None)
+            .ContinueOnSameContext();
+        if (result.Success)
+        {
+            Name = name;
+            _onEdited();
+        }
+        else
+            await Popups.ShowErrorAsync("Couldn't rename entity", result.Error!).ContinueOnSameContext();
     }
 
     /// <summary>
@@ -287,8 +329,8 @@ public sealed partial class EntityViewModel : ObservableObject
             if (component.Value is not JObject value)
                 continue;
 
-            var result = await _engine
-                .SetComponentAsync(Id, component.Name, value, CancellationToken.None)
+            var result = await _entity.Component(component.Name)
+                .SetAsync(value, CancellationToken.None)
                 .ContinueOnSameContext();
             if (!result.Success)
             {

@@ -12,6 +12,9 @@ namespace Toybox.Studio.Widgets.Dialogs;
 /// </summary>
 public sealed partial class AddEntityDialogViewModel : ObservableObject
 {
+    /// <summary>Raised when the dialog should close.</summary>
+    public event Action? CloseRequested;
+
     [ObservableProperty]
     public partial string Name { get; set; } = "";
 
@@ -20,9 +23,6 @@ public sealed partial class AddEntityDialogViewModel : ObservableObject
 
     /// <summary>True once the user committed with Add.</summary>
     public bool Confirmed { get; private set; }
-
-    /// <summary>Raised when the dialog should close.</summary>
-    public event Action? CloseRequested;
 
     [RelayCommand]
     private void Add()

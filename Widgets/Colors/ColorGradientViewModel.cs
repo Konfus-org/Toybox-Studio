@@ -12,13 +12,13 @@ namespace Toybox.Studio.Widgets.Colors;
 /// </summary>
 public sealed partial class ColorGradientViewModel : ObservableObject
 {
+    // Preserved as-is (not user-editable in the creator yet) so a radial palette colour round-trips.
+    private readonly ColorGradientKind _kind;
+
     public ColorGradientViewModel()
         : this(ColorGradient.Solid(Avalonia.Media.Colors.Black))
     {
     }
-
-    // Preserved as-is (not user-editable in the creator yet) so a radial palette colour round-trips.
-    private readonly ColorGradientKind _kind;
 
     /// <param name="solidOnly">
     /// When true the editor is locked to a single flat colour: the Solid/Gradient toggle, end stop and angle

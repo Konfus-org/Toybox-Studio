@@ -2,6 +2,7 @@ using Toybox.Studio.Utils;
 using System.IO;
 using System.Runtime.CompilerServices;
 using Toybox.Studio.Services.Theming;
+using TaskExtensions = Toybox.Studio.Utils.TaskExtensions;
 namespace Toybox.Studio.Services.Logging;
 
 /// <summary>
@@ -32,7 +33,7 @@ public sealed class Logger
         // Re-push colors to the engine whenever the theme changes (a no-op while disconnected).
         _theme.ThemeChanged += PushLogColors;
         // Unobserved fire-and-forget failures (with no explicit handler) flow into the unified log.
-        Toybox.Studio.Utils.TaskExtensions.SetDefaultErrorHandler(
+        TaskExtensions.SetDefaultErrorHandler(
             exception => Error($"Background task failed: {exception.GetType().Name}: {exception.Message}"));
     }
 
@@ -42,16 +43,16 @@ public sealed class Logger
     public event Action<LogEntry>? Logged;
 
     public void Info(string message, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
-        Studio(LogLevel.Info, message, file, line);
+        Emit(LogLevel.Info, message, file, line);
 
     public void Warning(string message, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
-        Studio(LogLevel.Warning, message, file, line);
+        Emit(LogLevel.Warning, message, file, line);
 
     public void Error(string message, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
-        Studio(LogLevel.Error, message, file, line);
+        Emit(LogLevel.Error, message, file, line);
 
     public void Critical(string message, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
-        Studio(LogLevel.Critical, message, file, line);
+        Emit(LogLevel.Critical, message, file, line);
 
     /// <summary>
     /// Logs a studio-originated line at a level chosen at runtime. Prefer <see cref="Info"/>/
@@ -64,20 +65,21 @@ public sealed class Logger
         string message,
         [CallerFilePath] string file = "",
         [CallerLineNumber] int line = 0) =>
-        Studio(level, message, file, line);
+        Emit(level, message, file, line);
 
     /// <summary>
     /// Logs a line from an arbitrary external source under its own category (e.g. "CMake"), with no source
     /// file. Generic by design — no per-source method or hard-coded category list.
     /// </summary>
-    public void External(LogLevel level, string category, string message) =>
+    public void Log(LogLevel level, string category, string message) =>
         Emit(new LogEntry(level, $"[{category}] {message}"), forwardRaw: message);
 
     /// <summary>
-    /// Surfaces a line streamed from the engine (engine.log). It is already tagged by the engine's core
+    /// Surfaces a line as is. Useful for lines already tagged with a category, we use this for logs
+    /// from the engine (engine.log). It is already tagged by the engine's core
     /// logger ("[Category][file:line] …"), so it is shown verbatim and never forwarded back.
     /// </summary>
-    public void IngestEngine(LogLevel level, string message) =>
+    public void Log(LogLevel level, string message) =>
         Emit(new LogEntry(level, message), forwardRaw: null);
 
     /// <summary>
@@ -98,7 +100,7 @@ public sealed class Logger
             PushLogColors();
     }
 
-    private void Studio(LogLevel level, string message, string file, int line)
+    private void Emit(LogLevel level, string message, string file, int line)
     {
         var name = Path.GetFileName(file);
         var composed = string.IsNullOrEmpty(name)

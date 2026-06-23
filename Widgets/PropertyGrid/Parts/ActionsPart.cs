@@ -9,7 +9,8 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed class ActionsPart : PropertyPart
 {
-    public ActionsPart(ICommand? add = null, ICommand? remove = null)
+    // Order 0: the add/remove affordances sit left of the always-rightmost state indicator.
+    public ActionsPart(ICommand? add = null, ICommand? remove = null) : base(PartSlot.Trailing, order: 0)
     {
         AddCommand = add;
         RemoveCommand = remove;

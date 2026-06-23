@@ -1,6 +1,6 @@
 using Toybox.Studio.Utils;
+using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.EngineApi;
-using Toybox.Studio.Models;
 namespace Toybox.Studio.Services.Project;
 
 /// <summary>
@@ -18,7 +18,7 @@ public sealed record AssetCatalogReply(List<Asset> Assets, List<ScriptEntry> Scr
 /// grid can resolve handle/script ids to names and populate asset pickers. Mirrors the
 /// <see cref="Toybox.Studio.Services.World.WorldManager"/>'s describe-on-connect pattern.
 /// </summary>
-public sealed class AssetCatalog
+public sealed class AssetCatalog : IListenable
 {
     private readonly EngineRpc _engine;
     private Dictionary<long, Asset> _byId = [];
@@ -32,7 +32,7 @@ public sealed class AssetCatalog
     /// <summary>
     /// Raised on the thread pool after the catalog is refreshed; widgets marshal to the UI thread.
     /// </summary>
-    public event Action? CatalogUpdated;
+    public event Action? Changed;
 
     /// <summary>
     /// Raised when a script/asset link is activated (clicked). No-op until a host subscribes.
@@ -55,6 +55,14 @@ public sealed class AssetCatalog
         return Assets.Where(asset => wanted.Contains(asset.Type)).ToList();
     }
 
+    /// <summary>
+    /// Fetches one asset's reflected fields by id (the enriched per-field shape entity.describe emits), so the
+    /// inspector can show a material's base parameter/texture values — the slots a MaterialInstance's overrides
+    /// apply on top of. Replies <c>{ material }</c> for a material. Fronts <c>asset.describe</c>.
+    /// </summary>
+    public Task<Result<JObject>> DescribeAsync(long id, CancellationToken ct) =>
+        _engine.InvokeAsync<JObject>("asset.describe", new { AssetId = id }, ct);
+
     public Asset? Resolve(long id) => _byId.GetValueOrDefault(id);
 
     public string? ResolveName(long id) => Resolve(id)?.Name;
@@ -68,7 +76,8 @@ public sealed class AssetCatalog
     {
         // A failure (not connected, disconnect mid-fetch, engine error) surfaces as an empty catalog; the
         // session's disconnect handling owns connection state.
-        var result = await _engine.ListAssetsAsync(ct).ContinueOnAnyContext();
+        var result = await _engine
+            .InvokeAsync<AssetCatalogReply>("editor.listAssets", null, ct).ContinueOnAnyContext();
         Publish(result is { Success: true, Value: { } reply } ? reply : new AssetCatalogReply([], []));
     }
 
@@ -93,6 +102,6 @@ public sealed class AssetCatalog
             byId.TryAdd(asset.Id, asset);
         _byId = byId;
 
-        CatalogUpdated?.Invoke();
+        Changed?.Invoke();
     }
 }

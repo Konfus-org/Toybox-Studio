@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Theming;

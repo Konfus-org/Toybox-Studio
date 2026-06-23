@@ -1,4 +1,4 @@
-using Toybox.Studio.Models;
+using Toybox.Studio.Services.Settings;
 using Toybox.Studio.Services.Project;
 namespace Toybox.Studio.Services.Logging;
 
@@ -23,15 +23,15 @@ public sealed class LogFile : IDisposable
     private readonly object _sync = new();
     private StreamWriter? _writer;
 
-    /// <summary>
-    /// The file currently being written (this run's TbxStudio.log).
-    /// </summary>
-    public string? CurrentFilePath { get; private set; }
-
     public LogFile()
     {
         OpenFreshLog();
     }
+
+    /// <summary>
+    /// The file currently being written (this run's TbxStudio.log).
+    /// </summary>
+    public string? CurrentFilePath { get; private set; }
 
     /// <summary>
     /// Appends one entry to the current log file.

@@ -69,6 +69,17 @@ public class ConsoleListBox : ListBox
             _scrollViewer.ScrollChanged += OnScrollChanged;
     }
 
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.C && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            CopySelection();
+            e.Handled = true;
+        }
+
+        base.OnKeyDown(e);
+    }
+
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
         if (_scrollViewer is not { } scrollViewer)
@@ -82,17 +93,6 @@ public class ConsoleListBox : ListBox
 
         _stickToBottom =
             scrollViewer.Offset.Y >= scrollViewer.Extent.Height - scrollViewer.Viewport.Height - BottomThreshold;
-    }
-
-    protected override void OnKeyDown(KeyEventArgs e)
-    {
-        if (e.Key == Key.C && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-        {
-            CopySelection();
-            e.Handled = true;
-        }
-
-        base.OnKeyDown(e);
     }
 
     private void OnLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)

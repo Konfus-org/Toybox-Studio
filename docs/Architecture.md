@@ -21,9 +21,11 @@ This keeps the editor's UI responsive and decoupled from the engine's frame loop
 - `DockableCatalog.RegisterDockables` reflection-scans the assembly for `[Dockable]` views and auto-registers their view models — so panels are never registered by hand here.
 - `StartupAsync` brings the app up step by step behind a splash window, narrating each step through the shared `Logger` (so every startup line lands in both the splash log and `TbxStudio.log`): apply theme → build the workspace (hidden) → locate the engine → start watching for running engines → optionally launch into a world → reveal the main window.
 
-## The engine connection (`Services/EngineApi/`)
+## The engine connection (`Services/Rpc/` + `Services/EngineApi/`)
 
-- **`EngineRpc`** is the single, always-injectable engine API. It owns the StreamJsonRpc connection — newline-delimited JSON over a loopback TCP socket — to the engine's `StudioBridge` plugin. Every engine call is a transactional wrapper that returns a `Result` with a helpful message on failure (including "not connected") rather than throwing. Everyone who needs the engine injects `EngineRpc` and calls a wrapper; nobody else touches the socket.
+- **`RpcClient`** (in `Services/Rpc/`) is the **generic transport**: it owns the StreamJsonRpc connection — newline-delimited JSON over a loopback TCP socket — with connect-with-retry, the `InvokeAsync`/`NotifyAsync` request/notification primitives, `RunAsync(RpcCall)`, and a `Disconnected` event (every call returns a `Result` with a helpful message on failure, including "not connected", rather than throwing). It is peer-agnostic — it knows nothing about the engine's methods; a caller registers its inbound handlers at connect time via `RpcHandlers`.
+- **`EngineRpc`** (in `Services/EngineApi/`) is the **engine connection**: a thin engine-specific facade over an `RpcClient`. It performs the `editor.hello` handshake, surfaces the engine's inbound notifications as typed events, fronts the connection lifecycle / viewport calls that only services make, and exposes the internal `InvokeAsync`/`NotifyAsync` forwarders the domain constructs build on. Nobody else touches the socket, and VMs never hold the raw `RpcClient`.
+- **Domain constructs** front the engine's actual operations so view-models never call the wire directly. The world's entity graph is reached through `WorldManager` (the "World": describe/save/dirty + `CreateEntityAsync` + `Entity(id)`), which vends lightweight identity-only `Entity` handles (rename/enable/global/move/destroy/describe), which in turn vend `Component` handles (set component, get/set/reset/is-default property). Assets go through `AssetCatalog` (`asset.describe`, `asset.save`, `editor.listAssets`) and the engine's settings schema through `EngineSettings` (`app.describeSettings`). Each construct calls `EngineRpc`'s primitives; a VM holds a construct, never `EngineRpc`.
 - **`Session`** drives the connection lifecycle. It either **owns** an engine process it launched or **attaches** to an existing one (`SessionKind`). It runs a ping loop, relaunches the engine when the open project changes, and tears everything down cleanly. The engine is launched with a "die-together" tie to the editor PID so it never orphans.
 - **`Locator`** finds the engine source checkout at startup; **`InstanceDetector`** notices an already-running engine to attach to; **`EngineWatcher`** observes connection/compile/launch state to drive busy/loading UI.
 - **`CMakeCompiler`** (under `Services/Project/`) performs the in-tree engine build. Because the engine is built with the project, the editor's build configuration selects the engine binary: Debug↔Debug, Release↔Release.
@@ -34,7 +36,7 @@ Notifications flow the other way too: engine log lines stream into the unified `
 
 Editor viewport frames are **zero-copy**. The engine renders each view into a shared Direct3D 11 texture; the editor imports that texture via the `WGL_NV_DX_interop2` extension and composites it directly through Avalonia's composition interop (`CompositionInteropViewport`). There is no PBO readback, shared-memory blit, or `WriteableBitmap` round-trip. This path is **Windows-only** and there is no CPU fallback.
 
-Each viewport panel is a non-singleton dockable: every viewport window drives its own engine camera. Input is forwarded to the engine through the viewport input sink (mouse, keyboard via SDL scancodes, and a mouse-lock mode for in-game mouselook).
+Each viewport panel is a non-singleton dockable: every viewport window drives its own engine camera. Input is forwarded to the engine through the viewport input sink (mouse, keyboard via the engine's `InputKey` codes, and a mouse-lock mode for in-game mouselook).
 
 ## The docking workspace (`Shell/Workspace/`)
 
@@ -51,7 +53,7 @@ The inspector and settings editor share one generic, type-driven property grid r
 - The engine describes component/data shapes as **typed JSON** — every value is `{ "type": ..., "value": ... }` (the keys are literally `type`/`value`). There is no legacy bare-value reading; data is typed-only.
 - `PropertyViewModelFactory` maps each typed value to a **per-type widget** (number, bool, string, enum, color, vector, rotation/Euler, asset/handle/entity pickers, material overrides, …). `PropertyViewRegistry` is where per-type widgets and their backing services are registered (configured once at startup).
 - Inline attributes from the engine's `describe` (nested shapes, enum choices, readonly/hidden/category/icon) disambiguate things like quaternion-vs-vec4 and drive widget choice and presentation.
-- Edits round-trip back through `EngineRpc` (`entity.setComponent` and friends).
+- Edits round-trip back to the engine through the `Component` handle (`SetProperty`/`ResetProperty`/`SetComponent`), and the inspector builds its rows from `EntityDescription`/`ComponentDescription` (the parsed, immutable `world.describe` data the VMs reconcile against, living in `Services/World/`).
 
 ## Data ownership & documents (`Shell/Documents/`)
 
@@ -76,5 +78,5 @@ Editors own their data through the `DataOwner` / `IDocumentOwner` pattern:
 ## Conventions that hold across the codebase
 
 - **No code-behind routing** — behavior lives in commands, attached behaviors, control subclasses, and services (see [`CodeStandards.md`](CodeStandards.md)).
-- **Namespaces follow folders**; tiers (`Utils` → `Models` → `Services` → `Shell`/`Widgets`) don't depend upward.
+- **Namespaces follow folders**; tiers (`Utils` → `Services` → `Shell`/`Widgets`) don't depend upward. Plain data types live beside the service that owns them, not in a separate `Models` tier.
 - **Widgets are self-contained** and reach the rest of the app only through injected services.

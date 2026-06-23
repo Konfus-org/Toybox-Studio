@@ -12,10 +12,6 @@ namespace Toybox.Studio.Services.Dialogs;
 /// </summary>
 public static class Popups
 {
-    /// <summary>The main window, which owns every dialog so it centres and stays modal over the editor.</summary>
-    private static Window? MainWindow() =>
-        (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-
     /// <summary>Shows an error message with an alert icon and an OK button.</summary>
     public static async Task ShowErrorAsync(string title, string message)
     {
@@ -82,4 +78,8 @@ public static class Popups
             : $"Save changes to the following before closing?\n\n{list}";
         return await SaveChangesDialog.ShowAsync(owner, "Unsaved changes", message).ContinueOnAnyContext();
     }
+
+    /// <summary>The main window, which owns every dialog so it centres and stays modal over the editor.</summary>
+    private static Window? MainWindow() =>
+        (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 }

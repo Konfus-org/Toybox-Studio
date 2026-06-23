@@ -3,6 +3,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Project;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
@@ -18,14 +19,14 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
 {
     private readonly JArray _paramOverrides;
     private readonly JArray _textureOverrides;
-    private readonly EngineRpc _engine;
+    private readonly AssetCatalog _assets;
     private readonly Action? _commit;
 
     public MaterialOverridesViewModel(
-        PropertyNode node, long materialId, EngineRpc engine, Action? commit, int depth)
+        PropertyNode node, long materialId, AssetCatalog assets, Action? commit, int depth)
         : base(node)
     {
-        _engine = engine;
+        _assets = assets;
         _commit = commit;
         // The category bands render at this depth; their slot rows sit one level deeper (see AddSlots).
         Depth = depth;
@@ -83,7 +84,7 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
         if (materialId == 0)
             return;
 
-        var result = await _engine.DescribeAssetAsync(materialId, CancellationToken.None)
+        var result = await _assets.DescribeAsync(materialId, CancellationToken.None)
             .ContinueOnSameContext();
         if (!result.Success || result.Value?["material"] is not JObject material)
             return;

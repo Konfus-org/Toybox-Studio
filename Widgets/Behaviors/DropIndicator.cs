@@ -9,14 +9,20 @@ namespace Toybox.Studio.Widgets.Behaviors;
 /// <summary>Where a drag would land relative to the row under the pointer.</summary>
 public enum DropMarker
 {
-    /// <summary>Insert above the row (a line at its top edge).</summary>
+    /// <summary>Insert above the row (a horizontal line at its top edge).</summary>
     Before,
 
     /// <summary>Drop onto the row itself — reparent/contain (the row is highlighted).</summary>
     Onto,
 
-    /// <summary>Insert below the row (a line at its bottom edge).</summary>
+    /// <summary>Insert below the row (a horizontal line at its bottom edge).</summary>
     After,
+
+    /// <summary>Insert before the item in a horizontal list (a vertical line at its left edge).</summary>
+    Left,
+
+    /// <summary>Insert after the item in a horizontal list (a vertical line at its right edge).</summary>
+    Right,
 }
 
 /// <summary>
@@ -58,8 +64,7 @@ public static class DropIndicator
 
         AdornerLayer.SetAdornedElement(shown, target);
         if (marker != DropMarker.Onto)
-            _lineBar!.VerticalAlignment =
-                marker == DropMarker.Before ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+            ConfigureLine(marker);
     }
 
     /// <summary>Hides the indicator (drag ended or left every target).</summary>
@@ -67,6 +72,32 @@ public static class DropIndicator
     {
         Detach(_onto);
         Detach(_linePanel);
+    }
+
+    // Lays the insertion bar along the requested edge: a horizontal bar (top/bottom) for vertical lists,
+    // a vertical bar (left/right) for horizontal lists. The bar fills the cross axis and is 2px on the
+    // insertion axis.
+    private static void ConfigureLine(DropMarker marker)
+    {
+        switch (marker)
+        {
+            case DropMarker.Before:
+            case DropMarker.After:
+                _lineBar!.Width = double.NaN;
+                _lineBar.Height = 2;
+                _lineBar.HorizontalAlignment = HorizontalAlignment.Stretch;
+                _lineBar.VerticalAlignment =
+                    marker == DropMarker.Before ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+                break;
+            case DropMarker.Left:
+            case DropMarker.Right:
+                _lineBar!.Width = 2;
+                _lineBar.Height = double.NaN;
+                _lineBar.VerticalAlignment = VerticalAlignment.Stretch;
+                _lineBar.HorizontalAlignment =
+                    marker == DropMarker.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                break;
+        }
     }
 
     private static void Detach(Control? control)

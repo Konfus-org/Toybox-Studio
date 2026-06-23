@@ -19,7 +19,7 @@ public sealed class EngineWatcher
     private bool _playing;
 
     // True from reaching Connected until the first frame is actually presented; keeps us in Loading
-    // ("Preparing scene…") so the ghost outlives the bare connection.
+    // ("Preparing world…") so the ghost outlives the bare connection.
     private bool _awaitingFirstFrame;
 
     // True from a play request until it resolves; shows the game-loading phase during the transition.
@@ -120,7 +120,7 @@ public sealed class EngineWatcher
         if (_connection == ConnectionState.Connected)
         {
             if (_awaitingFirstFrame)
-                return (EngineState.Loading, "Preparing scene…", false);
+                return (EngineState.Loading, "Preparing world…", false);
             if (_playLoading)
                 return (EngineState.Loading, "Loading into game…", true);
             return _playing

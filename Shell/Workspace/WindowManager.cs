@@ -92,53 +92,6 @@ public sealed class WindowManager : Factory
     public IEnumerable<DataPanel> OpenPanels() =>
         _titleBindings.Values.Select(binding => binding.Owner).Distinct();
 
-    // The live view-model behind a tool id: a tracked spawned instance, a title-bound owner, or (for an
-    // already-shown singleton) its DI instance. Never starts a not-yet-shown singleton's view-model.
-    private object? ResolveLiveViewModel(string toolId)
-    {
-        if (_instances.TryGetValue(toolId, out var instance))
-            return instance;
-        if (_titleBindings.TryGetValue(toolId, out var binding))
-            return binding.Owner;
-        if (TryResolveDescriptor(toolId, out var descriptor) && descriptor.Singleton)
-            return descriptor.CreateViewModel();
-        return null;
-    }
-
-    // Intercepts a dockable close: a buffered data panel with unsaved edits (e.g. Settings) vetoes the close
-    // and asks Save / Don't Save / Cancel, then re-closes (or stays open on Cancel). Live panels (the world
-    // viewport) and clean panels close immediately.
-    private void OnDockableClosing(object? sender, DockableClosingEventArgs args)
-    {
-        if (args.Dockable is not Tool tool)
-            return;
-
-        // Second pass after the prompt — let it through.
-        if (_forceClosing.Remove(tool.Id))
-            return;
-
-        if (!_titleBindings.TryGetValue(tool.Id, out var binding) || !binding.Owner.HasUnsavedChanges)
-            return;
-
-        args.Cancel = true;
-        PromptThenCloseAsync(tool, binding.Owner).FireAndForget();
-    }
-
-    private async Task PromptThenCloseAsync(Tool tool, DataPanel panel)
-    {
-        var choice = await Popups.ShowSaveChangesAsync([panel.BaseTitle]).ContinueOnSameContext();
-        if (choice == SaveChoice.Cancel)
-            return; // Keep the tab open.
-
-        if (choice == SaveChoice.Save)
-            await panel.SaveAsync().ContinueOnSameContext();
-        else
-            panel.Cancel(); // Discard the buffered edits.
-
-        _forceClosing.Add(tool.Id);
-        CloseDockable(tool);
-    }
-
     public override IRootDock CreateLayout() => CreateDefaultLayout();
 
     /// <summary>
@@ -187,6 +140,7 @@ public sealed class WindowManager : Factory
             var viewModel = ResolveViewModelForTool(tool.Id, descriptor);
             tool.Content = DeferredContent(descriptor, viewModel);
             BindTitle(tool, viewModel);
+            BindToolbar(tool, viewModel);
         }
 
         if (dockable is IDock dock && dock.VisibleDockables is { } children)
@@ -210,6 +164,86 @@ public sealed class WindowManager : Factory
             foreach (var pinned in PinnedAndHidden(root))
                 AttachContent(pinned);
         }
+    }
+
+    /// <summary>
+    /// For a singleton dockable: focuses it if it already exists anywhere, otherwise docks it open.
+    /// For a non-singleton dockable: always docks a fresh instance with its own view-model.
+    /// </summary>
+    public void OpenOrFocus(DockableDescriptor descriptor, IRootDock root, Window owner)
+    {
+        if (descriptor.Singleton && TryFindExisting(descriptor.Id, root, out var existing, out var floatingHost))
+            Focus(root, existing, floatingHost);
+        else
+            Open(descriptor, root);
+    }
+
+    /// <summary>
+    /// Surfaces the dockable (used to bring up the game view on Play): focuses it if open, otherwise
+    /// docks it. Same behavior as <see cref="OpenOrFocus"/> — kept as a named entry point for the
+    /// Play flow.
+    /// </summary>
+    public void EnsureOpen(DockableDescriptor descriptor, IRootDock root, Window owner) =>
+        OpenOrFocus(descriptor, root, owner);
+
+    // State queries match by base id so a non-singleton with any open instance (e.g. "Viewport#2")
+    // reads as docked/floating for its descriptor id ("Viewport").
+    public bool IsDocked(string id, IRootDock root) =>
+        ContainsBaseId(root, id);
+
+    public bool IsFloating(string id, IRootDock root)
+    {
+        if (root.Windows is not { } windows)
+            return false;
+
+        return windows.Any(window => window.Layout is { } layout && ContainsBaseId(layout, id));
+    }
+
+    // The live view-model behind a tool id: a tracked spawned instance, a title-bound owner, or (for an
+    // already-shown singleton) its DI instance. Never starts a not-yet-shown singleton's view-model.
+    private object? ResolveLiveViewModel(string toolId)
+    {
+        if (_instances.TryGetValue(toolId, out var instance))
+            return instance;
+        if (_titleBindings.TryGetValue(toolId, out var binding))
+            return binding.Owner;
+        if (TryResolveDescriptor(toolId, out var descriptor) && descriptor.Singleton)
+            return descriptor.CreateViewModel();
+        return null;
+    }
+
+    // Intercepts a dockable close: a buffered data panel with unsaved edits (e.g. Settings) vetoes the close
+    // and asks Save / Don't Save / Cancel, then re-closes (or stays open on Cancel). Live panels (the world
+    // viewport) and clean panels close immediately.
+    private void OnDockableClosing(object? sender, DockableClosingEventArgs args)
+    {
+        if (args.Dockable is not Tool tool)
+            return;
+
+        // Second pass after the prompt — let it through.
+        if (_forceClosing.Remove(tool.Id))
+            return;
+
+        if (!_titleBindings.TryGetValue(tool.Id, out var binding) || !binding.Owner.HasUnsavedChanges)
+            return;
+
+        args.Cancel = true;
+        PromptThenCloseAsync(tool, binding.Owner).FireAndForget();
+    }
+
+    private async Task PromptThenCloseAsync(Tool tool, DataPanel panel)
+    {
+        var choice = await Popups.ShowSaveChangesAsync([panel.BaseTitle]).ContinueOnSameContext();
+        if (choice == SaveChoice.Cancel)
+            return; // Keep the tab open.
+
+        if (choice == SaveChoice.Save)
+            await panel.SaveAsync().ContinueOnSameContext();
+        else
+            panel.Cancel(); // Discard the buffered edits.
+
+        _forceClosing.Add(tool.Id);
+        CloseDockable(tool);
     }
 
     // The root's off-layout dockables: the four edge pin strips plus the hidden set. Null-safe — any of
@@ -245,39 +279,6 @@ public sealed class WindowManager : Factory
             dock.DockCapabilityPolicy ??= new DockCapabilityPolicy();
         if (dockable is IRootDock root)
             root.RootDockCapabilityPolicy ??= new DockCapabilityPolicy();
-    }
-
-    /// <summary>
-    /// For a singleton dockable: focuses it if it already exists anywhere, otherwise docks it open.
-    /// For a non-singleton dockable: always docks a fresh instance with its own view-model.
-    /// </summary>
-    public void OpenOrFocus(DockableDescriptor descriptor, IRootDock root, Window owner)
-    {
-        if (descriptor.Singleton && TryFindExisting(descriptor.Id, root, out var existing, out var floatingHost))
-            Focus(root, existing, floatingHost);
-        else
-            Open(descriptor, root);
-    }
-
-    /// <summary>
-    /// Surfaces the dockable (used to bring up the game view on Play): focuses it if open, otherwise
-    /// docks it. Same behavior as <see cref="OpenOrFocus"/> — kept as a named entry point for the
-    /// Play flow.
-    /// </summary>
-    public void EnsureOpen(DockableDescriptor descriptor, IRootDock root, Window owner) =>
-        OpenOrFocus(descriptor, root, owner);
-
-    // State queries match by base id so a non-singleton with any open instance (e.g. "Viewport#2")
-    // reads as docked/floating for its descriptor id ("Viewport").
-    public bool IsDocked(string id, IRootDock root) =>
-        ContainsBaseId(root, id);
-
-    public bool IsFloating(string id, IRootDock root)
-    {
-        if (root.Windows is not { } windows)
-            return false;
-
-        return windows.Any(window => window.Layout is { } layout && ContainsBaseId(layout, id));
     }
 
     private IToolDock? BuildToolDock(DockSlot slot, Alignment alignment)
@@ -334,13 +335,14 @@ public sealed class WindowManager : Factory
     {
         if (descriptor.Singleton)
         {
-            var tool = new Tool { Id = descriptor.Id, Title = descriptor.Title, CanClose = true };
+            var tool = NewTool(descriptor, descriptor.Id);
             // A title-owning (DataPanel) singleton is resolved eagerly so its tab title can track dirty state;
             // every other singleton stays lazily resolved by the deferred template (null), so panels with side
             // effects on construction — e.g. the game view's frame stream — aren't started before they show.
             var viewModel = OwnsTitle(descriptor) ? descriptor.CreateViewModel() : null;
             tool.Content = DeferredContent(descriptor, viewModel);
             BindTitle(tool, viewModel);
+            BindToolbar(tool, viewModel);
             EnsureDockCapabilities(tool);
             return tool;
         }
@@ -348,14 +350,36 @@ public sealed class WindowManager : Factory
         return CreateInstanceTool(descriptor, NextInstanceId(descriptor), descriptor.CreateViewModel());
     }
 
+    // A fresh dock tool for a descriptor: a ToolbarTool (carrying a persisted ToolbarLayout) when the
+    // dockable's view-model hosts a toolbar, otherwise a plain Tool.
+    private static Tool NewTool(DockableDescriptor descriptor, string id)
+    {
+        Tool tool = typeof(IToolbarHost).IsAssignableFrom(descriptor.ViewModelType)
+            ? new ToolbarTool()
+            : new Tool();
+        tool.Id = id;
+        tool.Title = descriptor.Title;
+        tool.CanClose = true;
+        return tool;
+    }
+
+    // Hands an IToolbarHost view-model the persisted ToolbarLayout its dock tool carries, so toolbar edits
+    // mutate the serialized layout in place. Idempotent: BindToolbar no-ops when re-bound to the same layout.
+    private static void BindToolbar(Tool tool, object? viewModel)
+    {
+        if (tool is ToolbarTool toolbarTool && viewModel is IToolbarHost host)
+            host.BindToolbar(toolbarTool.Toolbar);
+    }
+
     // Builds a spawned tool bound to a specific view-model, registering it so the deferred template
     // reuses the same instance and the close handler can dispose it.
     private Tool CreateInstanceTool(DockableDescriptor descriptor, string toolId, object viewModel)
     {
         _instances[toolId] = viewModel;
-        var tool = new Tool { Id = toolId, Title = descriptor.Title, CanClose = true };
+        var tool = NewTool(descriptor, toolId);
         tool.Content = DeferredContent(descriptor, viewModel);
         BindTitle(tool, viewModel);
+        BindToolbar(tool, viewModel);
         EnsureDockCapabilities(tool);
         return tool;
     }

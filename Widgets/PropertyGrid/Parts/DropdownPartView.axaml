@@ -4,12 +4,14 @@
              x:Class="Toybox.Studio.Widgets.PropertyGrid.DropdownPartView"
              x:DataType="local:DropdownPart">
     <!-- The disclosure chevron: a chromeless button that toggles the composite, rotating when expanded
-         (the shared pgChevron style). The whole row may also toggle (ToggleOnTap), but the chevron is itself
-         a click target so it works on its own. -->
-    <Button Classes="Basic" Command="{Binding ToggleCommand}" Padding="2,0" VerticalAlignment="Center"
+         (the shared pgChevron style). It fills the row's reserved disclosure gutter (so the whole gutter is a
+         click target) but the glyph hugs the left edge, reading as a tight tree twisty. The whole row may also
+         toggle (ToggleOnTap), but the chevron is itself a click target so it works on its own. -->
+    <Button Classes="Basic" Command="{Binding ToggleCommand}" Padding="0" VerticalAlignment="Center"
+            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
             ToolTip.Tip="Expand / collapse">
         <Path Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
-              Width="8" Height="8" Stretch="Uniform" VerticalAlignment="Center"
+              Width="8" Height="8" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Left"
               Fill="{DynamicResource ThemeTextBrush}" Data="M 0,0 L 8,4 L 0,8 Z"/>
     </Button>
 </UserControl>

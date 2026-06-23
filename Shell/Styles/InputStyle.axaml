@@ -1,6 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors">
+        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors.Animations">
 
     <!-- INPUTS — text boxes, combo boxes, numeric fields and toggles, all rendered as PRESSED toy wells: a
          recessed fill (routed onto the FluentTheme surface keys in ThemeApplier) plus an inset BoxShadow on

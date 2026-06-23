@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
-             xmlns:util="using:Toybox.Studio.Widgets.Behaviors"
+             xmlns:util="using:Toybox.Studio.Widgets.Behaviors" xmlns:anim="using:Toybox.Studio.Widgets.Behaviors.Animations"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.ArrayPropertyView"
              x:DataType="local:ArrayPropertyViewModel">
     <StackPanel IsVisible="{Binding Visible}">
@@ -46,7 +46,7 @@
                            Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}"
                            IconName="{Binding Icon}" IconColor="{Binding IconColor}"
                            IsVisible="{Binding IsNested}"
-                           util:ExpandNod.State="{Binding IsExpanded}"
+                           anim:ExpandNod.State="{Binding IsExpanded}"
                            util:ToggleOnTap.Enabled="True"
                            util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}">
             <TextBlock Text="{Binding Summary}" FontSize="12" VerticalAlignment="Center"

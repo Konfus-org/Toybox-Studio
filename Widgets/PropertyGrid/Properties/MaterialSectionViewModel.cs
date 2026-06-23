@@ -3,6 +3,8 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 
+using Toybox.Studio.Services.EngineApi;
+
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>
@@ -15,13 +17,15 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed class MaterialSectionViewModel : PropertyViewModel, IExpandable
 {
+    private bool _isExpanded = true;
+
     public MaterialSectionViewModel(
         string name, ObservableCollection<MaterialSlotViewModel> slots, int depth)
         : base(new PropertyNode { Name = name, Type = "struct", IsDefault = true })
     {
         Slots = slots;
         Depth = depth;
-        Dropdown = new DropdownPart(this);
+        Disclosure = new DropdownPart(this);
         // A struct-style reset: revert every slot in the section to its base value (a no-op for slots that
         // aren't overridden). Always offered, like a real struct row; the indicator shows whether it's set.
         ResetToDefault = ResetAll;
@@ -40,8 +44,6 @@ public sealed class MaterialSectionViewModel : PropertyViewModel, IExpandable
 
     /// <summary>True once at least one slot exists, so the section is shown.</summary>
     public bool HasSlots => Slots.Count > 0;
-
-    private bool _isExpanded = true;
 
     public bool IsExpanded
     {

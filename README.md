@@ -13,11 +13,10 @@ and a full theming system (gradient palettes, a live theme creator, and a "Claym
 
 Code is organized into tiers; namespaces follow folders.
 
-- `Utils/` — pure, dependency-free helpers (`Result`, dispatching, color math, list reconciliation).
-- `Models/` — plain data types (`EditorSettings`, the ECS view models' backing data).
-- `Services/` — the editor's behavior, split into focused sub-namespaces: `EngineApi/` (RPC, session, viewport streaming), `World/`, `Project/`, `Logging/`, `Theming/`, `Dialogs/`.
+- `Utils/` — pure, dependency-free helpers (`Result`, dispatching, contrast maths) plus `Utils/Extensions/` (color and list-reconciliation extensions).
+- `Services/` — the editor's behavior, split into focused sub-namespaces: `Rpc/` (the generic, peer-agnostic JSON-RPC transport), `EngineApi/` (the engine-specific connection over it, session, viewport streaming), `World/`, `Project/`, `Settings/`, `Logging/`, `Theming/`, `Dialogs/`. Plain data types (`EditorSettings`, the ECS snapshots, `Asset`, `PropertyNode`, `RpcCall`) live beside the construct that owns them rather than in a separate tier.
 - `Shell/` — the application frame: the main window, splash, workspace docking system, document/data-ownership plumbing, and the split XAML style sheets.
-- `Widgets/` — self-contained editor panels and reusable controls (viewport, world tree, entity inspector, property grid, console, settings, theme creator, behaviors).
+- `Widgets/` — self-contained editor panels and reusable controls (viewport, viewport toolbar, world tree, entity inspector, property grid, console, settings, theme creator, behaviors). The viewport toolbar owns its data-driven model (`ToolbarLayout`/`ToolbarItem`/`ToolCommand`) and the runner that executes a tool's command.
 - `Assets/` — icons and the on-disk `DefaultProject` template the editor copies and builds.
 - `App.axaml(.cs)`, `Program.cs` — Avalonia entry point and dependency-injection composition root.
 

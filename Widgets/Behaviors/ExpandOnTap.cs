@@ -17,13 +17,13 @@ public static class ExpandOnTap
     public static readonly AttachedProperty<bool> EnabledProperty =
         AvaloniaProperty.RegisterAttached<Control, bool>("Enabled", typeof(ExpandOnTap));
 
-    public static void SetEnabled(Control control, bool value) => control.SetValue(EnabledProperty, value);
-    public static bool GetEnabled(Control control) => control.GetValue(EnabledProperty);
-
     static ExpandOnTap()
     {
         EnabledProperty.Changed.AddClassHandler<Control>(OnEnabledChanged);
     }
+
+    public static void SetEnabled(Control control, bool value) => control.SetValue(EnabledProperty, value);
+    public static bool GetEnabled(Control control) => control.GetValue(EnabledProperty);
 
     private static void OnEnabledChanged(Control control, AvaloniaPropertyChangedEventArgs args)
     {
@@ -34,6 +34,11 @@ public static class ExpandOnTap
 
     private static void OnTapped(object? sender, TappedEventArgs args)
     {
+        // A Ctrl/Shift tap is a multi-select gesture (see WorldTreeSelection), not an open/close — leave the
+        // node's expansion alone so extending the selection across parent rows doesn't fold them.
+        if ((args.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Shift)) != 0)
+            return;
+
         if (sender is Control control
             && control.FindAncestorOfType<TreeViewItem>() is { ItemCount: > 0 } item)
             item.IsExpanded = !item.IsExpanded;

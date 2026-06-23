@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
-             xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors"
+             xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors.Animations"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.PropertyGridView"
              x:Name="Root">
 
@@ -29,28 +29,16 @@
                         <Grid Background="{TemplateBinding Depth,
                                           Converter={x:Static local:DepthToBrushConverter.Instance}}">
                             <Grid.ColumnDefinitions>
-                                <!-- The row is assembled from PropertyParts in left-to-right slots; each non-value
-                                     slot binds to its part on the row's view-model and collapses to zero width
-                                     when that part is null (so a plain leaf reads exactly as before). -->
-                                <ColumnDefinition Width="Auto"/>                                          <!-- Handle (reorder grip) -->
                                 <!-- Auto + the shared size group defaults the label column to the widest header
                                      (so the longest name reads in full); the splitter then lets it be dragged
-                                     down to a sliver. -->
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="PgLabel" MinWidth="20"/>   <!-- Label -->
+                                     down to a sliver. The row's parts render in two dynamic slots — Leading
+                                     (inside the label gutter) and Trailing (after the value) — each an
+                                     ItemsControl bound to the matching bucket on the view-model. -->
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="PgLabel" MinWidth="20"/>   <!-- Label + leading parts -->
                                 <ColumnDefinition Width="Auto"/>                                          <!-- resize splitter -->
                                 <ColumnDefinition Width="*"/>                                             <!-- Value editor -->
-                                <ColumnDefinition Width="Auto"/>                                          <!-- Add/Remove -->
-                                <ColumnDefinition Width="Auto"/>                                          <!-- State indicator -->
+                                <ColumnDefinition Width="Auto"/>                                          <!-- Trailing parts -->
                             </Grid.ColumnDefinitions>
-
-                            <!-- Handle slot: the drag-to-reorder grip on list elements; empty (zero width) elsewhere.
-                                 Part bindings anchor to the row's DataContext via the templated parent: a
-                                 ContentPresenter reassigns its OWN DataContext to its resolved Content, so a plain
-                                 {ReflectionBinding Handle} would re-evaluate the path against the part itself and
-                                 fault ("cannot cast StateIndicatorPart to PropertyViewModel"). -->
-                            <ContentPresenter Grid.Column="0"
-                                              Content="{ReflectionBinding DataContext.Handle, RelativeSource={RelativeSource TemplatedParent}}"
-                                              VerticalAlignment="Stretch"/>
 
                             <!-- Label gutter. A DockPanel (not a StackPanel) so the label is the fill child:
                                  that constrains its width to whatever the gutter has left, which is what makes
@@ -58,19 +46,33 @@
                                  spills into the value column when the splitter is dragged narrow. Depth is
                                  conveyed purely by the per-level shading on the inner Grid (no elbow), with a
                                  small indent so nested labels still tuck under their parent. -->
-                            <Border Grid.Column="1" Background="Transparent"
+                            <Border Grid.Column="0" Background="Transparent"
                                     ClipToBounds="True">
                                 <DockPanel LastChildFill="True" VerticalAlignment="Center"
                                            Margin="{TemplateBinding Depth,
                                                 Converter={x:Static local:DepthToIndentConverter.Instance}}">
-                                    <!-- Disclosure chevron for a composite (object/array) row, tucked in just
-                                         left of the header so a nested/list-element row reads like a tree node.
-                                         Empty (zero width) on a leaf row. Lives in the template so its presenter
-                                         has a TemplatedParent and the DropdownPart template resolves. -->
-                                    <ContentPresenter DockPanel.Dock="Left" VerticalAlignment="Center"
-                                                      Content="{ReflectionBinding DataContext.Dropdown, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                    <!-- Leading parts: the drag-to-reorder grip (list elements), tucked in just
+                                         left of the disclosure gutter so a list-element row reads like a tree
+                                         node. Empty (zero width) on a plain leaf. Each item's DataContext is its
+                                         part, matched to its view by the PropertyPart DataTemplates below. -->
+                                    <ItemsControl DockPanel.Dock="Left" VerticalAlignment="Stretch"
+                                                  ItemsSource="{ReflectionBinding DataContext.LeadingParts, RelativeSource={RelativeSource TemplatedParent}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <!-- Disclosure gutter: a fixed-width slot reserved on EVERY row. It holds the
+                                         expand/collapse chevron on a composite row and stays empty (but still
+                                         occupies its width) on a leaf, so the icon and label line up at the same x
+                                         whether or not the row has children. The chevron hugs the gutter's left
+                                         edge so it reads as a tight tree twisty. -->
+                                    <ContentControl DockPanel.Dock="Left" Width="14" VerticalAlignment="Center"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    Content="{ReflectionBinding DataContext.Disclosure, RelativeSource={RelativeSource TemplatedParent}}"/>
                                     <local:IconView DockPanel.Dock="Left" Width="15" Height="15"
-                                                    Margin="8,0,6,0" VerticalAlignment="Center"
+                                                    Margin="4,0,6,0" VerticalAlignment="Center"
                                                     IconName="{TemplateBinding IconName}"
                                                     IconColor="{TemplateBinding IconColor}"/>
                                     <TextBlock x:Name="PART_Label" Text="{TemplateBinding HeaderText}"
@@ -84,28 +86,29 @@
                             <!-- Drag handle: resizes the shared label column for every row at once. A visible
                                  hairline marks the column edge; the wider transparent splitter on top is the
                                  grab area (west-east cursor), and it brightens to the accent on hover/drag. -->
-                            <Border Grid.Column="2" Width="1" HorizontalAlignment="Center"
+                            <Border Grid.Column="1" Width="1" HorizontalAlignment="Center"
                                     Background="{DynamicResource ThemeBorderBrush}" IsHitTestVisible="False"/>
-                            <GridSplitter Grid.Column="2" Width="7" ResizeDirection="Columns"
+                            <GridSplitter Grid.Column="1" Width="7" ResizeDirection="Columns"
                                           Cursor="SizeWestEast" Background="Transparent"/>
 
                             <!-- Value editor: the per-type widget hosted as the row's Content. -->
-                            <Border Grid.Column="3" Padding="9,2,4,2">
+                            <Border Grid.Column="2" Padding="9,2,4,2">
                                 <ContentPresenter Content="{TemplateBinding Content}"
                                                   VerticalAlignment="Center"
                                                   HorizontalAlignment="Stretch"/>
                             </Border>
 
-                            <!-- Trailing part slots: add/remove and the state/reset indicator. Each is its own
-                                 PropertyPart view-model + view; an empty slot is zero width, so a leaf row's
-                                 indicator still sits immediately right of its value. The disclosure chevron is
-                                 NOT here — a composite row carries it on the LEFT, just before its header. -->
-                            <ContentPresenter Grid.Column="4"
-                                              Content="{ReflectionBinding DataContext.Actions, RelativeSource={RelativeSource TemplatedParent}}"
-                                              VerticalAlignment="Center"/>
-                            <ContentPresenter Grid.Column="5"
-                                              Content="{ReflectionBinding DataContext.StateIndicator, RelativeSource={RelativeSource TemplatedParent}}"
-                                              VerticalAlignment="Center"/>
+                            <!-- Trailing parts: the add/remove affordances and the state/reset indicator, on the
+                                 right edge. Empty on a plain read-only leaf except for its state dot, so the
+                                 indicator still sits immediately right of the value. -->
+                            <ItemsControl Grid.Column="3" VerticalAlignment="Center"
+                                          ItemsSource="{ReflectionBinding DataContext.TrailingParts, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
                         </Grid>
                     </Border>
                 </ControlTemplate>

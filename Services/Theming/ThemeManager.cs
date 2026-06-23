@@ -1,4 +1,4 @@
-using Toybox.Studio.Models;
+using Toybox.Studio.Services.Settings;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Services.Theming;
@@ -11,11 +11,11 @@ namespace Toybox.Studio.Services.Theming;
 /// </summary>
 public sealed class ThemeManager
 {
-    private readonly EditorSettings _settings;
+    private readonly SettingsManager _settings;
     private readonly ThemeRepository _repository = new();
     private readonly ThemeApplier _applier = new();
 
-    public ThemeManager(EditorSettings settings)
+    public ThemeManager(SettingsManager settings)
     {
         _settings = settings;
         ApplySavedTheme();
@@ -54,7 +54,7 @@ public sealed class ThemeManager
     /// <summary>
     /// Applies the saved active theme, falling back to any loaded theme and finally the clay default.
     /// </summary>
-    public void ApplySavedTheme() => _applier.Apply(_repository.ResolveSaved(_settings.Theme.Active));
+    public void ApplySavedTheme() => _applier.Apply(_repository.ResolveSaved(_settings.Settings.Theme.Active));
 
     /// <summary>Selects the active theme by name and applies it.</summary>
     public void SetActiveTheme(string name)
@@ -63,7 +63,7 @@ public sealed class ThemeManager
         if (theme is null)
             return;
 
-        _settings.Theme.Active = theme.Name;
+        _settings.Settings.Theme.Active = theme.Name;
         // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
         _settings.SaveAsync().FireAndForget();
         _applier.Apply(theme);

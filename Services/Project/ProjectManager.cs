@@ -1,5 +1,5 @@
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Models;
+using Toybox.Studio.Services.Settings;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Services.Project;
@@ -29,13 +29,13 @@ public sealed class ProjectManager
     private const string AppSettingsFileName = "AppSettings.json";
     private const string EditorSettingsFileName = "EditorSettings.json";
 
-    private readonly EditorSettings _settings;
+    private readonly SettingsManager _settings;
 
-    public ProjectManager(EditorSettings settings)
+    public ProjectManager(SettingsManager settings)
     {
         _settings = settings;
 
-        var lastOpened = settings.Projects.LastOpened;
+        var lastOpened = settings.Settings.Projects.LastOpened;
         if (!string.IsNullOrEmpty(lastOpened) && (File.Exists(lastOpened) || Directory.Exists(lastOpened)))
             TryOpen(lastOpened, out _);
     }
@@ -131,19 +131,6 @@ public sealed class ProjectManager
         return TryOpen(destination, out error);
     }
 
-    private void RememberProject(string rootDirectory)
-    {
-        var projects = _settings.Projects;
-        projects.LastOpened = rootDirectory;
-        projects.Recent.RemoveAll(entry => string.Equals(entry, rootDirectory, StringComparison.OrdinalIgnoreCase));
-        projects.Recent.Insert(0, rootDirectory);
-        if (projects.Recent.Count > MaxRecentProjects)
-            projects.Recent.RemoveRange(MaxRecentProjects, projects.Recent.Count - MaxRecentProjects);
-
-        // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
-        _settings.SaveAsync().FireAndForget();
-    }
-
     /// <summary>
     /// Re-reads the current project's display name from its AppSettings (it can change via the "name" field)
     /// and updates it in place, raising <see cref="ProjectRenamed"/>. Unlike <see cref="TryOpen"/> / a reopen
@@ -161,6 +148,19 @@ public sealed class ProjectManager
 
         CurrentProject = project with { Name = name };
         ProjectRenamed?.Invoke(CurrentProject);
+    }
+
+    private void RememberProject(string rootDirectory)
+    {
+        var projects = _settings.Settings.Projects;
+        projects.LastOpened = rootDirectory;
+        projects.Recent.RemoveAll(entry => string.Equals(entry, rootDirectory, StringComparison.OrdinalIgnoreCase));
+        projects.Recent.Insert(0, rootDirectory);
+        if (projects.Recent.Count > MaxRecentProjects)
+            projects.Recent.RemoveRange(MaxRecentProjects, projects.Recent.Count - MaxRecentProjects);
+
+        // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
+        _settings.SaveAsync().FireAndForget();
     }
 
     private static string? ReadProjectName(string appSettingsPath)

@@ -7,7 +7,8 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed class HandlePart : PropertyPart
 {
-    public HandlePart(ArrayPropertyViewModel list, PropertyViewModel element)
+    // Order 0: the grip sits at the far left of the leading slot, before the disclosure chevron.
+    public HandlePart(ArrayPropertyViewModel list, PropertyViewModel element) : base(PartSlot.Leading, order: 0)
     {
         List = list;
         Element = element;

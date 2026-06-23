@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Media;
+using Toybox.Studio.Utils.Extensions;
 
 namespace Toybox.Studio.Utils;
 
@@ -20,7 +21,7 @@ public static class Contrast
         var toward = RelativeLuminance(background) > 0.5 ? Colors.Black : Colors.White;
         var c = baseColor;
         for (var i = 0; i < 40 && Ratio(c, background) < minRatio; i++)
-            c = ColorMath.Blend(c, toward, 0.05f);
+            c = c.Blend(toward, 0.05f);
         return c;
     }
 

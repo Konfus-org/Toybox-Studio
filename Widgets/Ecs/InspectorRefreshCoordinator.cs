@@ -36,7 +36,7 @@ public sealed class InspectorRefreshCoordinator : IDisposable
 
         // PlayingChanged can resume off the UI thread; the timer and view-model touch must marshal to UI.
         session.PlayingChanged += playing => Dispatch.To(DispatchContext.UI, () => OnPlayingChanged(playing));
-        selection.SelectionChanged += _ => Dispatch.To(DispatchContext.UI, UpdateRunning);
+        selection.SelectionChanged += () => Dispatch.To(DispatchContext.UI, UpdateRunning);
         _playing = session.IsPlaying;
         UpdateRunning();
     }

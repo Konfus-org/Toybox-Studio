@@ -1,9 +1,9 @@
 using Toybox.Studio.Utils;
 using System.Net;
 using System.Net.Sockets;
-using Toybox.Studio.Models;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Settings;
 
 namespace Toybox.Studio.Services.EngineApi;
 
@@ -66,14 +66,14 @@ public sealed class Session : IAsyncDisposable
     private int _isUnresponsive;
 
     public Session(
-        EditorSettings settings,
+        SettingsManager settings,
         Locator locator,
         ProjectManager projects,
         CMakeCompiler compiler,
         Logger log,
         EngineRpc engine)
     {
-        _settings = settings;
+        _settings = settings.Settings;
         _locator = locator;
         _projects = projects;
         _compiler = compiler;
@@ -81,7 +81,7 @@ public sealed class Session : IAsyncDisposable
         _engine = engine;
         // The engine is a stable singleton, so wire its streams once: log lines flow into the unified log,
         // and a dropped connection funnels into the same loss handler as a process exit.
-        _engine.LogReceived += entry => _log.IngestEngine(entry.Level, entry.Message);
+        _engine.LogReceived += entry => _log.Log(entry.Level, entry.Message);
         _engine.Disconnected += OnEngineDisconnected;
         // The engine now runs continuously in editor mode, one per open project: switching projects
         // relaunches it so its world matches.
@@ -314,22 +314,6 @@ public sealed class Session : IAsyncDisposable
         }
     }
 
-    private static string? FindProjectLauncher(string buildDirectory, string configuration)
-    {
-        var binDirectory = Path.Combine(buildDirectory, "bin");
-        if (!Directory.Exists(binDirectory))
-            return null;
-
-        // Prefer the launcher for the configuration we just built; fall back to the newest anywhere.
-        var preferred = Path.Combine(binDirectory, configuration, "Launcher.exe");
-        if (File.Exists(preferred))
-            return preferred;
-
-        return Directory.EnumerateFiles(binDirectory, "Launcher.exe", SearchOption.AllDirectories)
-            .OrderByDescending(File.GetLastWriteTimeUtc)
-            .FirstOrDefault();
-    }
-
     /// <summary>
     /// Ships the current project in the given configuration (Debug or Release): builds it, copies the
     /// engine + launcher (and the project's assets and settings) into <paramref name="outputDirectory"/>,
@@ -388,31 +372,6 @@ public sealed class Session : IAsyncDisposable
         {
             _log.Error($"Ship ({configuration}) failed: {exception.Message}");
         }
-    }
-
-    private static bool TryDeleteDirectory(string path, out string? error)
-    {
-        error = null;
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-            return true;
-        }
-        catch (Exception exception)
-        {
-            error = exception.Message;
-            return false;
-        }
-    }
-
-    private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
-    {
-        Directory.CreateDirectory(destinationDirectory);
-        foreach (var file in Directory.EnumerateFiles(sourceDirectory))
-            File.Copy(file, Path.Combine(destinationDirectory, Path.GetFileName(file)), overwrite: true);
-        foreach (var directory in Directory.EnumerateDirectories(sourceDirectory))
-            CopyDirectory(directory, Path.Combine(destinationDirectory, Path.GetFileName(directory)));
     }
 
     /// <summary>
@@ -502,6 +461,139 @@ public sealed class Session : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopAsync().ContinueOnAnyContext();
+    }
+
+    /// <summary>
+    /// The user chose to keep waiting on a frozen engine: treat now as the last good moment so the
+    /// watchdog re-arms and prompts again only if the engine stays frozen for another full threshold.
+    /// </summary>
+    public void SnoozeWatchdog()
+    {
+        Interlocked.Exchange(ref _lastPingOkTicks, DateTime.UtcNow.Ticks);
+        Interlocked.Exchange(ref _isUnresponsive, 0);
+    }
+
+    /// <summary>
+    /// Pauses or resumes the connected engine's simulation.
+    /// </summary>
+    public async Task SetPausedAsync(bool isPaused)
+    {
+        if (!_engine.IsConnected)
+            return;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await _engine.SetPausedAsync(isPaused, cts.Token).ContinueOnAnyContext();
+        if (!result.Success)
+        {
+            _log.Error($"Pause request failed: {result.Error}");
+            return;
+        }
+
+        IsPaused = isPaused;
+        PausedChanged?.Invoke(isPaused);
+        _log.Info(isPaused ? "Engine paused." : "Engine resumed.");
+    }
+
+    /// <summary>
+    /// Enters play mode: the engine snapshots its world and starts running the game loop. The engine
+    /// itself keeps running, so the viewports stay live.
+    /// </summary>
+    public Task StartPlayAsync() => SetPlayingAsync(true);
+
+    /// <summary>
+    /// Exits play mode: the engine restores the pre-play world and stops simulating, without stopping
+    /// the engine or the viewports.
+    /// </summary>
+    public Task StopPlayAsync() => SetPlayingAsync(false);
+
+    /// <summary>
+    /// Stops and relaunches the current project's engine, recompiling as part of launch (a compiler change
+    /// clean-reconfigures inside <see cref="CompileProjectAsync(CancellationToken)"/>). Used when an editor
+    /// setting that changes the native build — the C++ compiler or the engine source path — was edited and
+    /// confirmed. No-op when nothing is running; the change applies on the next launch.
+    /// </summary>
+    public async Task RebuildAndRelaunchAsync()
+    {
+        if (State == ConnectionState.Disconnected)
+            return;
+
+        await RestartForProjectAsync().ContinueOnAnyContext();
+    }
+
+    /// <summary>
+    /// Force-restarts a frozen engine: hard-kills the process (skipping the graceful <c>engine.shutdown</c>
+    /// handshake a frozen engine would never answer) and relaunches it. Unlike crash auto-restart, this is
+    /// an explicit user action, so it ignores the <c>RestartOnCrash</c> setting and the minimum-uptime guard.
+    /// An attached engine isn't owned, so it can only be detached from, not killed or relaunched.
+    /// </summary>
+    public async Task ForceRestartAsync()
+    {
+        lock (_sync)
+        {
+            if (State == ConnectionState.Disconnected || _isStopping)
+                return;
+
+            _isStopping = true;
+        }
+
+        var wasOwned = Kind == SessionKind.Owned;
+        try
+        {
+            await TearDownAsync(killProcess: wasOwned).ContinueOnAnyContext();
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                _isStopping = false;
+            }
+        }
+
+        if (wasOwned)
+            await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
+        else
+            _log.Info("Detached from the unresponsive engine; it was not owned, so it keeps running.");
+    }
+
+    private static string? FindProjectLauncher(string buildDirectory, string configuration)
+    {
+        var binDirectory = Path.Combine(buildDirectory, "bin");
+        if (!Directory.Exists(binDirectory))
+            return null;
+
+        // Prefer the launcher for the configuration we just built; fall back to the newest anywhere.
+        var preferred = Path.Combine(binDirectory, configuration, "Launcher.exe");
+        if (File.Exists(preferred))
+            return preferred;
+
+        return Directory.EnumerateFiles(binDirectory, "Launcher.exe", SearchOption.AllDirectories)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+    }
+
+    private static bool TryDeleteDirectory(string path, out string? error)
+    {
+        error = null;
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            return false;
+        }
+    }
+
+    private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
+    {
+        Directory.CreateDirectory(destinationDirectory);
+        foreach (var file in Directory.EnumerateFiles(sourceDirectory))
+            File.Copy(file, Path.Combine(destinationDirectory, Path.GetFileName(file)), overwrite: true);
+        foreach (var directory in Directory.EnumerateDirectories(sourceDirectory))
+            CopyDirectory(directory, Path.Combine(destinationDirectory, Path.GetFileName(directory)));
     }
 
     private void CompleteConnection(Hello hello)
@@ -597,16 +689,6 @@ public sealed class Session : IAsyncDisposable
 
         _log.Info("Engine resumed responding.");
         Responsive?.Invoke();
-    }
-
-    /// <summary>
-    /// The user chose to keep waiting on a frozen engine: treat now as the last good moment so the
-    /// watchdog re-arms and prompts again only if the engine stays frozen for another full threshold.
-    /// </summary>
-    public void SnoozeWatchdog()
-    {
-        Interlocked.Exchange(ref _lastPingOkTicks, DateTime.UtcNow.Ticks);
-        Interlocked.Exchange(ref _isUnresponsive, 0);
     }
 
     private void OnProcessExited(int exitCode)
@@ -724,39 +806,6 @@ public sealed class Session : IAsyncDisposable
         SetState(ConnectionState.Disconnected);
     }
 
-    /// <summary>
-    /// Pauses or resumes the connected engine's simulation.
-    /// </summary>
-    public async Task SetPausedAsync(bool isPaused)
-    {
-        if (!_engine.IsConnected)
-            return;
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        var result = await _engine.SetPausedAsync(isPaused, cts.Token).ContinueOnAnyContext();
-        if (!result.Success)
-        {
-            _log.Error($"Pause request failed: {result.Error}");
-            return;
-        }
-
-        IsPaused = isPaused;
-        PausedChanged?.Invoke(isPaused);
-        _log.Info(isPaused ? "Engine paused." : "Engine resumed.");
-    }
-
-    /// <summary>
-    /// Enters play mode: the engine snapshots its world and starts running the game loop. The engine
-    /// itself keeps running, so the viewports stay live.
-    /// </summary>
-    public Task StartPlayAsync() => SetPlayingAsync(true);
-
-    /// <summary>
-    /// Exits play mode: the engine restores the pre-play world and stops simulating, without stopping
-    /// the engine or the viewports.
-    /// </summary>
-    public Task StopPlayAsync() => SetPlayingAsync(false);
-
     private async Task SetPlayingAsync(bool isPlaying)
     {
         if (!_engine.IsConnected || IsPlaying == isPlaying)
@@ -802,55 +851,6 @@ public sealed class Session : IAsyncDisposable
     {
         await StopAsync().ContinueOnAnyContext();
         await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
-    }
-
-    /// <summary>
-    /// Stops and relaunches the current project's engine, recompiling as part of launch (a compiler change
-    /// clean-reconfigures inside <see cref="CompileProjectAsync(CancellationToken)"/>). Used when an editor
-    /// setting that changes the native build — the C++ compiler or the engine source path — was edited and
-    /// confirmed. No-op when nothing is running; the change applies on the next launch.
-    /// </summary>
-    public async Task RebuildAndRelaunchAsync()
-    {
-        if (State == ConnectionState.Disconnected)
-            return;
-
-        await RestartForProjectAsync().ContinueOnAnyContext();
-    }
-
-    /// <summary>
-    /// Force-restarts a frozen engine: hard-kills the process (skipping the graceful <c>engine.shutdown</c>
-    /// handshake a frozen engine would never answer) and relaunches it. Unlike crash auto-restart, this is
-    /// an explicit user action, so it ignores the <c>RestartOnCrash</c> setting and the minimum-uptime guard.
-    /// An attached engine isn't owned, so it can only be detached from, not killed or relaunched.
-    /// </summary>
-    public async Task ForceRestartAsync()
-    {
-        lock (_sync)
-        {
-            if (State == ConnectionState.Disconnected || _isStopping)
-                return;
-
-            _isStopping = true;
-        }
-
-        var wasOwned = Kind == SessionKind.Owned;
-        try
-        {
-            await TearDownAsync(killProcess: wasOwned).ContinueOnAnyContext();
-        }
-        finally
-        {
-            lock (_sync)
-            {
-                _isStopping = false;
-            }
-        }
-
-        if (wasOwned)
-            await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
-        else
-            _log.Info("Detached from the unresponsive engine; it was not owned, so it keeps running.");
     }
 
     /// <summary>

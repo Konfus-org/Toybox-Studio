@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.Theming;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Theming;
@@ -22,6 +23,11 @@ public sealed partial class ThemePropertyViewModel : PropertyViewModel
     private readonly FilePicker _files;
     private readonly Action<string> _onSelect;
 
+    // Expanded by default — the theme list is short and the active selection should be visible at a glance.
+    private bool _isExpanded = true;
+
+    private string _summary = "";
+
     public ThemePropertyViewModel(
         ThemeManager themes, ThemeCreator creator, FilePicker files, Action<string> onSelect)
         : base(new PropertyNode { Name = "Themes", Label = "Themes", Type = "array" })
@@ -38,9 +44,6 @@ public sealed partial class ThemePropertyViewModel : PropertyViewModel
 
     public override bool HasChildren => true;
 
-    // Expanded by default — the theme list is short and the active selection should be visible at a glance.
-    private bool _isExpanded = true;
-
     public bool IsExpanded
     {
         get => _isExpanded;
@@ -49,8 +52,6 @@ public sealed partial class ThemePropertyViewModel : PropertyViewModel
 
     /// <summary>Every loaded theme, as a selectable child row.</summary>
     public ObservableCollection<ThemeItemViewModel> Items { get; } = [];
-
-    private string _summary = "";
 
     /// <summary>The collapsed-state count shown beside the header's add button (e.g. "3 themes").</summary>
     public string Summary

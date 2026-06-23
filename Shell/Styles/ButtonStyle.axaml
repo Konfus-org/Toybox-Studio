@@ -49,11 +49,17 @@
     <Style Selector="Button, ToggleButton">
         <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
         <Setter Property="RenderTransform" Value="{DynamicResource ThemeControlRestTransform}"/>
+        <!-- Every button reads as clickable: the hand/pointer cursor on hover (reverting to the normal arrow
+             when the button is disabled, so a dead control doesn't advertise itself as interactive). -->
+        <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Transitions">
             <Transitions>
                 <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" Easing="CubicEaseOut"/>
             </Transitions>
         </Setter>
+    </Style>
+    <Style Selector="Button:disabled, ToggleButton:disabled">
+        <Setter Property="Cursor" Value="Arrow"/>
     </Style>
     <Style Selector="Button:pointerover, ToggleButton:pointerover">
         <Setter Property="RenderTransform" Value="{DynamicResource ThemeButtonHoverTransform}"/>
@@ -122,6 +128,24 @@
     <Style Selector="Button.Basic /template/ ContentPresenter#PART_ContentPresenter,
                      Button.Basic:pointerover /template/ ContentPresenter#PART_ContentPresenter,
                      Button.Basic:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+
+    <!-- Basic ToggleButtons (the floating viewport tools): same chrome-less glyph as Button.Basic, but the
+         CHECKED state reads as fully lit so the active tool stands out against the dimmed rest. -->
+    <Style Selector="ToggleButton.Basic">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Opacity" Value="0.7"/>
+    </Style>
+    <Style Selector="ToggleButton.Basic:pointerover, ToggleButton.Basic:checked">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="ToggleButton.Basic /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.Basic:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.Basic:pressed /template/ ContentPresenter#PART_ContentPresenter,
+                     ToggleButton.Basic:checked /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
     </Style>

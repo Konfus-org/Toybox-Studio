@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Avalonia.Media;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Theming;
 using Toybox.Studio.Widgets.Colors;
 

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Services.EngineApi;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 

@@ -29,6 +29,9 @@ public abstract partial class DataPanel : ObservableObject
         };
     }
 
+    /// <summary>Raised whenever <see cref="Title"/> changes — the hook the window manager subscribes to.</summary>
+    public event Action? TitleChanged;
+
     /// <summary>The undecorated title (e.g. "Settings"). Constant for the current panels.</summary>
     public abstract string BaseTitle { get; }
 
@@ -39,9 +42,6 @@ public abstract partial class DataPanel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     public partial bool IsDirty { get; protected set; }
-
-    /// <summary>Raised whenever <see cref="Title"/> changes — the hook the window manager subscribes to.</summary>
-    public event Action? TitleChanged;
 
     /// <summary>
     /// Whether this panel commits edits immediately rather than buffering them. The world is the only live

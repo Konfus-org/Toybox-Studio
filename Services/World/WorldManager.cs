@@ -1,18 +1,18 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Utils;
-// Aliased: the simple name "World" would bind to this enclosing namespace, not the model type.
-using WorldModel = Toybox.Studio.Models.Ecs.World;
 
 namespace Toybox.Studio.Services.World;
 
 /// <summary>
-/// The editor-side world service: owns the current <see cref="Models.Ecs.World"/> snapshot, keeps it in sync
-/// with the engine (re-fetched on connect), tracks whether it has unsaved editor changes, and saves it back to
-/// the engine. The engine owns the authoritative data; this mirrors the engine's own WorldManager.
+/// The editor-side "World" construct: owns the current <see cref="WorldDescription"/>, keeps it in sync with the
+/// engine (re-fetched on connect), tracks whether it has unsaved editor changes, saves it back, and is the
+/// entry point for world-level mutations — creating entities and vending <see cref="Entity"/> handles for
+/// per-entity operations. The engine owns the authoritative data; this mirrors the engine's own WorldManager.
 ///
 /// Edits made while the game is playing don't dirty the world: the engine snapshots the world on Play and
 /// restores it on Stop, so those changes hit a throwaway copy. A fresh engine session (Connected) reloads the
@@ -32,19 +32,39 @@ public sealed class WorldManager
         _parser = parser;
         _log = log;
         session.StateChanged += OnSessionStateChanged;
+        // The engine's transform gizmo edits entities directly; mirror that back into the editor.
+        engine.TransformEdited += OnTransformEdited;
     }
 
-    /// <summary>The current world snapshot (empty until the first refresh / while disconnected).</summary>
-    public WorldModel Current { get; private set; } = WorldModel.Empty;
-
     /// <summary>Raised with the new snapshot whenever the world changes.</summary>
-    public event Action<WorldModel>? WorldChanged;
+    public event Action<WorldDescription>? WorldChanged;
+
+    /// <summary>Raised whenever <see cref="IsDirty"/> changes.</summary>
+    public event Action<bool>? DirtyChanged;
+
+    /// <summary>The current world snapshot (empty until the first refresh / while disconnected).</summary>
+    public WorldDescription Current { get; private set; } = WorldDescription.Empty;
 
     /// <summary>Whether the world holds unsaved editor changes.</summary>
     public bool IsDirty { get; private set; }
 
-    /// <summary>Raised whenever <see cref="IsDirty"/> changes.</summary>
-    public event Action<bool>? DirtyChanged;
+    /// <summary>A handle to one entity in the world, by id, for per-entity operations (rename, move, …).</summary>
+    public Entity Entity(ulong id) => new(_engine, _parser, id);
+
+    /// <summary>
+    /// Creates a new entity (optionally named and parented; a zero/omitted parent means a root entity) and
+    /// returns a handle to it. The engine appends it after its last sibling. The caller marks the world dirty
+    /// and refreshes — this performs no implicit re-pull.
+    /// </summary>
+    public async Task<Result<Entity>> CreateEntityAsync(string? name, ulong parent, CancellationToken ct)
+    {
+        var result = await _engine
+            .InvokeAsync<JObject>("entity.create", new { Name = name ?? "", Parent = parent }, ct)
+            .ContinueOnAnyContext();
+        return result is { Success: true, Value: { } reply }
+            ? Result<Entity>.Ok(Entity(reply.Value<ulong>("id")))
+            : Result<Entity>.Fail(result.Error ?? "The engine returned no result.");
+    }
 
     /// <summary>
     /// Re-fetches the world from the engine. Failures surface as an empty world. All fetching and tree
@@ -52,15 +72,16 @@ public sealed class WorldManager
     /// </summary>
     public async Task RefreshAsync(CancellationToken ct = default)
     {
-        var result = await _engine.DescribeWorldAsync(ct).ContinueOnAnyContext();
+        var result = await _engine
+            .InvokeAsync<JObject>("world.describe", null, ct).ContinueOnAnyContext();
         if (result is not { Success: true, Value: { } reply })
         {
-            Publish(WorldModel.Empty);
+            Publish(WorldDescription.Empty);
             return;
         }
 
         var roots = await Task.Run(() => _parser.ParseWorld(reply), ct).ContinueOnAnyContext();
-        Publish(new WorldModel(roots));
+        Publish(new WorldDescription(roots));
     }
 
     /// <summary>
@@ -77,7 +98,8 @@ public sealed class WorldManager
     /// <summary>Saves the world back to the engine (its chunk + globals asset files); clears dirty on success.</summary>
     public async Task SaveAsync(CancellationToken ct = default)
     {
-        var result = await _engine.SaveWorldAsync(ct).ContinueOnAnyContext();
+        var result = await _engine
+            .InvokeAsync("world.save", null, ct).ContinueOnAnyContext();
         if (result.Success)
         {
             SetDirty(false);
@@ -89,6 +111,14 @@ public sealed class WorldManager
         }
     }
 
+    // The viewport gizmo moved one or more entities engine-side: mark the world dirty and re-pull so the
+    // tree/inspector show the new transforms.
+    private void OnTransformEdited()
+    {
+        MarkDirty();
+        RefreshAsync().FireAndForget();
+    }
+
     private void OnSessionStateChanged(ConnectionState state)
     {
         // A new session reloads the world from disk, so any prior dirty state is gone.
@@ -96,10 +126,10 @@ public sealed class WorldManager
         if (state == ConnectionState.Connected)
             RefreshAsync().FireAndForget();
         else
-            Publish(WorldModel.Empty);
+            Publish(WorldDescription.Empty);
     }
 
-    private void Publish(WorldModel world)
+    private void Publish(WorldDescription world)
     {
         Current = world;
         WorldChanged?.Invoke(world);

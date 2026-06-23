@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Project;
 using Toybox.Studio.Widgets.PropertyGrid;
 
@@ -28,6 +29,10 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
     private readonly Action _commit;
     private readonly AssetCatalog? _catalog;
     private readonly long _scriptId;
+
+    private bool _enabledValue;
+
+    private string _filter = "";
 
     public ScriptBindingViewModel(PropertyNode binding, Action commit, AssetCatalog? catalog)
     {
@@ -57,7 +62,7 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
         }
 
         if (catalog is not null)
-            catalog.CatalogUpdated += OnCatalogUpdated;
+            catalog.Changed += OnCatalogUpdated;
     }
 
     /// <summary>The bound script's display name (or its raw id until the asset catalog loads).</summary>
@@ -74,8 +79,6 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
 
     public string IconColor => "GREEN";
 
-    private bool _enabledValue;
-
     /// <summary>Whether this binding runs. Toggling mutates the backing JSON in place and re-commits.</summary>
     public bool Enabled
     {
@@ -89,8 +92,6 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
             _commit();
         }
     }
-
-    private string _filter = "";
 
     /// <summary>The inspector search, pushed down by the container; drives this card's visibility.</summary>
     public string Filter

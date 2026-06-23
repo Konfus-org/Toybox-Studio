@@ -64,16 +64,16 @@ public sealed partial class ThemeCreatorViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Raised when the dialog should close (after a successful create, or on cancel).
+    /// </summary>
+    public event Action? CloseRequested;
+
+    /// <summary>
     /// Shows the "switch to the new theme?" prompt and returns the choice. Set by the host window so the
     /// prompt nests under the dialog; falls back to a main-window-owned popup when unset.
     /// </summary>
     public Func<string, string, Task<bool>> Confirm { get; set; } =
         (title, message) => Popups.ConfirmAsync(title, message);
-
-    /// <summary>
-    /// Raised when the dialog should close (after a successful create, or on cancel).
-    /// </summary>
-    public event Action? CloseRequested;
 
     [ObservableProperty]
     public partial string Name { get; set; }
@@ -132,6 +132,17 @@ public sealed partial class ThemeCreatorViewModel : ObservableObject
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
 
+    /// <summary>
+    /// Reverts a live preview to the theme that was active when the dialog opened, unless the user committed
+    /// to the new one. Called when the window closes (covers Cancel and the window's close button). A no-op
+    /// when nothing was previewed, so a fast cancel costs nothing.
+    /// </summary>
+    public void OnClosed()
+    {
+        if (_previewed && !_committed)
+            _theme.Apply(_original);
+    }
+
     /// <summary>Snapshots the current editor fields into a <see cref="Theme"/>.</summary>
     private Theme BuildTheme() => new()
     {
@@ -166,17 +177,6 @@ public sealed partial class ThemeCreatorViewModel : ObservableObject
     {
         _previewed = true;
         _theme.PreviewTheme(BuildTheme());
-    }
-
-    /// <summary>
-    /// Reverts a live preview to the theme that was active when the dialog opened, unless the user committed
-    /// to the new one. Called when the window closes (covers Cancel and the window's close button). A no-op
-    /// when nothing was previewed, so a fast cancel costs nothing.
-    /// </summary>
-    public void OnClosed()
-    {
-        if (_previewed && !_committed)
-            _theme.Apply(_original);
     }
 
     [RelayCommand]

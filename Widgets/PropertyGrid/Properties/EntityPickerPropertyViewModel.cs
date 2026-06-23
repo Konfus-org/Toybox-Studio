@@ -1,11 +1,10 @@
-using Toybox.Studio.Models;
+using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Models.Ecs;
 using Toybox.Studio.Services.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
@@ -21,6 +20,9 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
     private readonly WorldManager? _world;
     private readonly JsonValueSlot _slot;
 
+    [ObservableProperty]
+    private string _displayName;
+
     public EntityPickerPropertyViewModel(PropertyNode node, Action? commit, WorldManager? world) : base(node)
     {
         _world = world;
@@ -32,14 +34,11 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
             world.WorldChanged += OnWorldChanged;
     }
 
-    [ObservableProperty]
-    private string _displayName;
-
     public long CurrentId => _slot.Read<long?>() ?? 0;
 
     public bool HasReference => CurrentId != 0;
 
-    private void OnWorldChanged(World _) => Dispatch.To(DispatchContext.UI, RefreshDisplay);
+    private void OnWorldChanged(WorldDescription _) => Dispatch.To(DispatchContext.UI, RefreshDisplay);
 
     private void RefreshDisplay()
     {
@@ -79,12 +78,12 @@ public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
     private string? FindName(ulong id) =>
         Flatten().FirstOrDefault(entity => entity.Id == id)?.Name;
 
-    private IEnumerable<Entity> Flatten()
+    private IEnumerable<EntityDescription> Flatten()
     {
         if (_world is null)
             yield break;
 
-        var stack = new Stack<Entity>(_world.Current.Roots);
+        var stack = new Stack<EntityDescription>(_world.Current.Roots);
         while (stack.Count > 0)
         {
             var entity = stack.Pop();

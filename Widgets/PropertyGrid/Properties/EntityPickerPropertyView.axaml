@@ -7,8 +7,9 @@
                        Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
         <Border Classes="fieldHost">
             <DockPanel>
-                <!-- Picker: opens a chooser over the world's entities. -->
-                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding PickCommand}"
+                <!-- Picker: opens a chooser over the world's entities. Docked LEFT so the entity name always
+                     begins at the same x across rows rather than the picker shrinking it from the right. -->
+                <Button DockPanel.Dock="Left" Classes="fieldButton" Command="{Binding PickCommand}"
                         VerticalAlignment="Stretch" ToolTip.Tip="Pick an entity">
                     <local:IconView Width="14" Height="14" IconName="Search"
                                     Foreground="{DynamicResource ThemeTextBrush}"/>

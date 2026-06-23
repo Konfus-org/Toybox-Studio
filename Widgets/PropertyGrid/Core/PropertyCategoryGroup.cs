@@ -15,6 +15,8 @@ namespace Toybox.Studio.Widgets.PropertyGrid;
 /// </summary>
 public sealed class PropertyCategoryGroup : ObservableObject
 {
+    private bool _visible = true;
+
     public PropertyCategoryGroup(string? name, IEnumerable<PropertyViewModel> items)
     {
         Name = name;
@@ -35,29 +37,11 @@ public sealed class PropertyCategoryGroup : ObservableObject
 
     public ObservableCollection<PropertyViewModel> Items { get; }
 
-    private bool _visible = true;
-
     /// <summary>Whether the group (header + rows) is shown — false once a filter hides all its rows.</summary>
     public bool Visible
     {
         get => _visible;
         private set => SetProperty(ref _visible, value);
-    }
-
-    /// <summary>Recomputes group visibility from its rows' current filter state.</summary>
-    public void RefreshVisibility() => Visible = Items.Any(item => item.Visible);
-
-    private void OnItemChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (args.PropertyName is nameof(PropertyViewModel.IsModified)
-            or nameof(PropertyViewModel.State)
-            or nameof(PropertyViewModel.CanReset))
-        {
-            OnPropertyChanged(nameof(State));
-            OnPropertyChanged(nameof(CanReset));
-            OnPropertyChanged(nameof(IsResettable));
-            OnPropertyChanged(nameof(Hint));
-        }
     }
 
     /// <summary>True when any row in the group differs from its default — drives the header's "set" indicator.</summary>
@@ -81,6 +65,22 @@ public sealed class PropertyCategoryGroup : ObservableObject
 
     /// <summary>Reverts the whole group: resets every resettable row to its default (rows without a reset are skipped).</summary>
     public ICommand ResetCommand { get; }
+
+    /// <summary>Recomputes group visibility from its rows' current filter state.</summary>
+    public void RefreshVisibility() => Visible = Items.Any(item => item.Visible);
+
+    private void OnItemChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(PropertyViewModel.IsModified)
+            or nameof(PropertyViewModel.State)
+            or nameof(PropertyViewModel.CanReset))
+        {
+            OnPropertyChanged(nameof(State));
+            OnPropertyChanged(nameof(CanReset));
+            OnPropertyChanged(nameof(IsResettable));
+            OnPropertyChanged(nameof(Hint));
+        }
+    }
 
     private void ResetChildren()
     {

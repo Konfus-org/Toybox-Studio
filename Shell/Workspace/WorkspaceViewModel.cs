@@ -54,6 +54,8 @@ public sealed partial class WorkspaceViewModel : ObservableObject
     /// <summary>The layout to show on launch: the saved working layout, or the built-in default.</summary>
     public IRootDock InitialLayout => _initialLayout ??= BuildInitialLayout();
 
+    private Window? Owner => _control is null ? null : TopLevel.GetTopLevel(_control) as Window;
+
     /// <summary>Hooks up the live <see cref="DockControl"/>: assigns factory + layout, then tracks state.</summary>
     public void Bind(DockControl control)
     {
@@ -131,8 +133,6 @@ public sealed partial class WorkspaceViewModel : ObservableObject
     public IEnumerable<DataPanel> OpenPanels() => _windows.OpenPanels();
 
     private DockableDescriptor? Resolve(string id) => _byId.GetValueOrDefault(id);
-
-    private Window? Owner => _control is null ? null : TopLevel.GetTopLevel(_control) as Window;
 
     private IRootDock BuildInitialLayout()
     {

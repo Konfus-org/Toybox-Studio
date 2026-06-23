@@ -232,10 +232,14 @@ public static class EntityTreeDragDrop
             parentId = target.Parent?.Id ?? 0UL;
         }
 
-        // Match the destination bucket first (so the move positions it within that forest), then position it.
-        if (dragged.IsGlobal != targetIsGlobal)
-            await world.SetEntityGlobalAsync(dragged.Id, targetIsGlobal);
-        await world.MoveEntityAsync(dragged.Id, parentId, index);
+        // Capture the bucket change before the optimistic move flips the dragged VM's global flag.
+        var changeBucket = dragged.IsGlobal != targetIsGlobal;
+
+        // Reflect the drop in the tree immediately, then commit it to the engine; the refresh that follows
+        // reconciles to the same arrangement (same persistent VMs, matching sort), so the row lands exactly
+        // where it was dropped with no hitch and no reshuffle.
+        world.ApplyLocalMove(dragged, parentId, index, targetIsGlobal);
+        await world.MoveEntityAsync(dragged.Id, parentId, index, targetIsGlobal, changeBucket);
     }
 
     // The Globals section is a single drop target: dropping any entity onto it promotes that entity to

@@ -26,12 +26,12 @@ public readonly record struct Result<T>(bool Success, T? Value, string? Error)
 /// </summary>
 public readonly record struct Result(bool Success, string? Error)
 {
+    /// <summary>The success flag as the result's value, so this reads as a <see cref="Result{T}"/> of bool.</summary>
+    public bool Value => Success;
+
     public static Result Ok() => new(true, null);
 
     public static Result Fail(string error) => new(false, error);
-
-    /// <summary>The success flag as the result's value, so this reads as a <see cref="Result{T}"/> of bool.</summary>
-    public bool Value => Success;
 
     /// <summary>Lets <c>if (result)</c> and other boolean contexts test success directly.</summary>
     public static implicit operator bool(Result result) => result.Success;

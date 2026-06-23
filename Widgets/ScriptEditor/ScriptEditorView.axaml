@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:se="using:Toybox.Studio.Widgets.ScriptEditor"
+             x:Class="Toybox.Studio.Widgets.ScriptEditor.ScriptEditorView"
+             x:DataType="se:ScriptEditorViewModel">
+
+    <Grid RowDefinitions="Auto,*,Auto" Background="#FF1E1E1E">
+
+        <!-- Tab strip: one tab per open document, selection drives the active model. -->
+        <ListBox Grid.Row="0"
+                 ItemsSource="{Binding Tabs}"
+                 SelectedItem="{Binding ActiveTab, Mode=TwoWay}"
+                 IsVisible="{Binding HasTabs}"
+                 Background="#FF252526"
+                 Padding="0"
+                 BorderThickness="0,0,0,1"
+                 BorderBrush="#FF111111">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="se:ScriptTabViewModel">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" Foreground="#FFD4D4D4" VerticalAlignment="Center"/>
+                        <TextBlock Text="●" Foreground="#FFE0A030" FontSize="12" VerticalAlignment="Center"
+                                   IsVisible="{Binding IsDirty}"/>
+                        <Button Command="{Binding CloseCommand}"
+                                Content="✕" FontSize="11" Padding="4,0" MinWidth="0" MinHeight="0"
+                                Background="Transparent" BorderThickness="0" Foreground="#FF9A9A9A"
+                                VerticalAlignment="Center"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Editor surface plus its empty/error overlays. -->
+        <Panel Grid.Row="1">
+            <se:MonacoEditorControl Session="{Binding Session}"/>
+
+            <TextBlock IsVisible="{Binding ShowEmptyState}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" Foreground="#FF8A8A8A" MaxWidth="320"
+                       Text="No script open.&#x0a;Open an entity's Script tab and click Pop out to edit its source here."/>
+
+            <TextBlock IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" Foreground="#FFE07070" MaxWidth="360"
+                       Text="{Binding ErrorMessage}"/>
+        </Panel>
+
+        <!-- Status bar: compile state (placeholder until Phase 4), cursor position, language. -->
+        <Border Grid.Row="2" Background="#FF007ACC" Padding="10,3">
+            <DockPanel LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left" Foreground="#FFEFF6FF" Text="C++ · clangd pending"/>
+                <TextBlock DockPanel.Dock="Right" Foreground="#FFEFF6FF" Text="UTF-8" Margin="14,0,0,0"/>
+                <TextBlock DockPanel.Dock="Right" Foreground="#FFEFF6FF" Text="{Binding CursorText}"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

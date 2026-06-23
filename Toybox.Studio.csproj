@@ -13,6 +13,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The script editor's vendored Monaco web bundle lives beside its widget. The embedded WebView loads it
+         from disk (served over loopback HTTP), so it's copied to the output dir rather than embedded as an
+         AvaloniaResource. Copied preserving its path (no Link, so the solution tree shows it under
+         ScriptEditor/ rather than as a virtual root folder); MonacoAssetServer reads it from the mirrored path. -->
+    <None Remove="Widgets\ScriptEditor\Monaco\**" />
+    <None Include="Widgets\ScriptEditor\Monaco\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AvaloniaXaml Remove="build\**" />
     <Compile Remove="build\**" />
     <EmbeddedResource Remove="build\**" />
@@ -40,6 +49,8 @@
     <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="12.0.0.2" />
     <PackageReference Include="Dock.Serializer.Newtonsoft" Version="12.0.0.2" />
     <PackageReference Include="IconPacks.Avalonia" Version="2.0.0" />
+    <!-- Official Avalonia WebView (WebView2 backend on Windows) — hosts the vendored Monaco script editor. -->
+    <PackageReference Include="Avalonia.Controls.WebView" Version="12.0.1" />
     <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="12.0.4" PrivateAssets="All" Publish="True" />
     <PackageReference Include="HotAvalonia" Version="3.*" PrivateAssets="All" Publish="True" />
   </ItemGroup>

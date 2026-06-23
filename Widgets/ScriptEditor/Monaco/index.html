@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Toybox Script Editor</title>
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #1e1e1e; }
+    #root { position: absolute; inset: 0; }
+    /* Until Monaco paints, avoid a white flash that clashes with the dark editor chrome. */
+    #boot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            color: #6a6a6a; font: 13px/1.4 system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="boot">Loading editor&hellip;</div>
+
+  <!-- Monaco's AMD loader (vendored prebuilt distribution; no build step). -->
+  <script src="vs/loader.js"></script>
+  <script src="app/bridge.js"></script>
+  <script src="app/lsp.js"></script>
+  <script src="app/editor.js"></script>
+</body>
+</html>

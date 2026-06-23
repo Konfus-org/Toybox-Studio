@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ecs="using:Toybox.Studio.Widgets.Ecs"
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+             xmlns:se="using:Toybox.Studio.Widgets.ScriptEditor"
+             xmlns:sc="using:Toybox.Studio.Services.Scripting"
              x:Class="Toybox.Studio.Widgets.Ecs.ScriptContainerView"
              x:DataType="ecs:ScriptContainerViewModel">
 
@@ -48,6 +50,104 @@
                             <!-- A binding with no overrides still shows its header; this fills the empty body. -->
                             <TextBlock Text="No overrides." Margin="12,6" FontSize="11" Opacity="0.5"
                                        IsVisible="{Binding !HasOverrides}"/>
+
+                            <!-- Source: the script's C++ shown/edited inline behind a dropdown, with a popout
+                                 icon (to the dockable editor) and a hot-reload bolt. Only shown when the .cpp
+                                 was located. The inline editor is realized lazily by the ContentControl — its
+                                 WebView exists only while the section is expanded, not for every binding card. -->
+                            <StackPanel IsVisible="{Binding HasSource}" Margin="12,2,8,8">
+                                <DockPanel Margin="0,6,0,4">
+                                    <!-- Dropdown header: chevron + "Source", clicking expands/collapses. -->
+                                    <Button DockPanel.Dock="Left" Command="{Binding ToggleSourceCommand}"
+                                            Background="Transparent" BorderThickness="0" Padding="0"
+                                            HorizontalContentAlignment="Left">
+                                        <StackPanel Orientation="Horizontal" Spacing="5">
+                                            <pg:IconView Width="12" Height="12" VerticalAlignment="Center"
+                                                         IconName="ChevronRight" IconColor="GREY"
+                                                         IsVisible="{Binding !IsSourceExpanded}"/>
+                                            <pg:IconView Width="12" Height="12" VerticalAlignment="Center"
+                                                         IconName="ChevronDown" IconColor="GREY"
+                                                         IsVisible="{Binding IsSourceExpanded}"/>
+                                            <TextBlock Text="Source" FontSize="11" FontWeight="Medium"
+                                                       Opacity="0.7" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <!-- Top-right controls: hot-reload bolt then the standard popout icon. -->
+                                    <ToggleButton DockPanel.Dock="Right" Padding="4,2" Margin="4,0,0,0"
+                                                  Background="Transparent" BorderThickness="0"
+                                                  IsChecked="{Binding HotReload.Enabled, Mode=TwoWay}"
+                                                  ToolTip.Tip="Hot reload this script on save">
+                                        <pg:IconView Width="14" Height="14" IconName="Zap" IconColor="YELLOW"/>
+                                    </ToggleButton>
+                                    <Button DockPanel.Dock="Right" Command="{Binding PopOutCommand}"
+                                            Padding="4,2" Background="Transparent" BorderThickness="0"
+                                            ToolTip.Tip="Open this script in a dockable editor window">
+                                        <pg:IconView Width="14" Height="14" IconName="ExternalLink" IconColor="BLUE"/>
+                                    </Button>
+                                    <Panel/>
+                                </DockPanel>
+
+                                <Panel IsVisible="{Binding IsSourceExpanded}">
+                                    <ContentControl Content="{Binding Inline}">
+                                        <ContentControl.ContentTemplate>
+                                            <DataTemplate x:DataType="se:InlineScriptEditorViewModel">
+                                              <DockPanel>
+                                                <!-- .h / .cpp toggle (only when the script has both). -->
+                                                <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Documents}"
+                                                         SelectedItem="{Binding ActiveDocument, Mode=TwoWay}"
+                                                         IsVisible="{Binding HasMultipleFiles}"
+                                                         Background="#FF252526" Padding="0"
+                                                         BorderThickness="0,0,0,1" BorderBrush="#FF111111">
+                                                    <ListBox.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Orientation="Horizontal"/>
+                                                        </ItemsPanelTemplate>
+                                                    </ListBox.ItemsPanel>
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="sc:ScriptDocument">
+                                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                                <TextBlock Text="{Binding FileName}" FontSize="11"
+                                                                           Foreground="#FFD4D4D4"
+                                                                           VerticalAlignment="Center"/>
+                                                                <TextBlock Text="●" FontSize="11"
+                                                                           Foreground="#FFE0A030"
+                                                                           VerticalAlignment="Center"
+                                                                           IsVisible="{Binding IsDirty}"/>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
+
+                                                <Panel Height="280">
+                                                    <Border CornerRadius="4" ClipToBounds="True"
+                                                            BorderThickness="1" BorderBrush="#22000000">
+                                                        <se:MonacoEditorControl Session="{Binding Session}"
+                                                                                Offscreen="True"/>
+                                                    </Border>
+                                                    <!-- Spinner over the editor until the page has loaded; the
+                                                         WebView loads off the UI thread, so this never blocks. -->
+                                                    <Border IsVisible="{Binding !IsReady}" CornerRadius="4"
+                                                            Background="#FF1E1E1E">
+                                                        <StackPanel HorizontalAlignment="Center"
+                                                                    VerticalAlignment="Center" Spacing="10">
+                                                            <ProgressBar IsIndeterminate="True" Width="140"/>
+                                                            <TextBlock Text="Loading source…" FontSize="11"
+                                                                       Foreground="#FF8A8A8A"
+                                                                       HorizontalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Panel>
+                                              </DockPanel>
+                                            </DataTemplate>
+                                        </ContentControl.ContentTemplate>
+                                    </ContentControl>
+                                </Panel>
+
+                                <TextBlock IsVisible="{Binding SourceError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Text="{Binding SourceError}" Foreground="#FFE07070"
+                                           FontSize="11" Margin="0,4" TextWrapping="Wrap"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </DataTemplate>

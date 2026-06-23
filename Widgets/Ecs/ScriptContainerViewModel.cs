@@ -76,8 +76,15 @@ public sealed class ScriptContainerViewModel : ObservableObject
         if (bare is null)
             return;
 
+        // The engine folds each bound script's asset-type filter into the override wrappers as a
+        // describe-only "choices" key, so override handle pickers can filter. That enrichment must not
+        // round-trip: the overrides field is persisted verbatim as an opaque blob, so a committed
+        // "choices" would be saved into the world. Send a sanitized clone; the live tree keeps "choices"
+        // for the picker's display.
+        var payload = StripOverrideChoices(bare.DeepClone());
+
         var result = await _component
-            .SetPropertyAsync(ScriptsProperty, bare, CancellationToken.None)
+            .SetPropertyAsync(ScriptsProperty, payload, CancellationToken.None)
             .ContinueOnSameContext();
         if (result.Success)
         {
@@ -91,4 +98,30 @@ public sealed class ScriptContainerViewModel : ObservableObject
             .ContinueOnSameContext();
         await _resync().ContinueOnSameContext();
     }
+
+    // Drops the describe-only "choices" the engine injects into each override wrapper, leaving the lean
+    // { type, value } overrides the engine stores. Mutates and returns the given (already-cloned) tree.
+    private static JToken StripOverrideChoices(JToken scripts)
+    {
+        if (scripts is not JArray bindings)
+            return scripts;
+
+        foreach (var binding in bindings.OfType<JObject>())
+        {
+            // overrides is { …, value: { field: { type, value, choices? } } } in describe form (or its
+            // lean { type, value } equivalent); reach the blob's per-field wrappers either way.
+            if (Inner(binding["overrides"]) is not JObject blob)
+                continue;
+
+            foreach (var field in blob.Properties())
+                if (field.Value is JObject wrapper)
+                    wrapper.Remove("choices");
+        }
+
+        return scripts;
+    }
+
+    // The value inside a typed field wrapper ({ …, value: … }), or the token itself when already bare.
+    private static JToken? Inner(JToken? token) =>
+        token is JObject obj && obj.TryGetValue("value", out var value) ? value : token;
 }

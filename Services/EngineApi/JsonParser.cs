@@ -255,6 +255,12 @@ public sealed class JsonParser
     /// </summary>
     private static string ResolveLeafType(Wrapper wrapper)
     {
+        // A handle's choices are its asset-type filter, not a dropdown's options — so a reference type
+        // (handle/entity) keeps its own token and routes to its picker, with the choices flowing through as
+        // the filter. Only a genuine enum turns its choices into a dropdown.
+        if (wrapper.Type is "handle" or "entity")
+            return wrapper.Type;
+
         if (wrapper.Choices is { Count: > 0 })
             return "enum";
 

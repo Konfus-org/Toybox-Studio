@@ -19,6 +19,7 @@ using Toybox.Studio.Widgets.PropertyGrid;
 using Toybox.Studio.Widgets.Toolbar;
 using Toybox.Studio.Shell.Workspace;
 using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
@@ -116,6 +117,9 @@ public partial class App : Application
             PropertyViewRegistry.Configure(
                 catalog,
                 _host.Services.GetRequiredService<WorldManager>());
+
+            // Give the inspector's script cards their inline editor / pop-out / source-resolution service.
+            ScriptEditing.Current = _host.Services.GetRequiredService<ScriptEditing>();
 
             // The Accessibility ▸ Animation intensity setting renders as a clay slider rather than a numeric
             // field (tagged [View("intensitySlider")] by the settings grid; see SettingsViewModel.TagView).
@@ -303,6 +307,15 @@ public partial class App : Application
         services.AddSingleton<ThemeCreator>();
         services.AddSingleton<StatusViewModel>();
         services.AddSingleton<InspectorRefreshCoordinator>();
+
+        // Script editor: the loopback server that hosts the vendored Monaco bundle and the shared document
+        // buffers both editor surfaces (inline strip + popped-out window) bind to. The server is IDisposable
+        // and disposed with the host on shutdown.
+        services.AddSingleton<MonacoAssetServer>();
+        services.AddSingleton<ScriptDocumentService>();
+        services.AddSingleton<ScriptEditorLauncher>();
+        services.AddSingleton<ScriptHotReload>();
+        services.AddSingleton<ScriptEditing>();
 
         // Auto-registers every [Dockable] View's view-model (World, Viewport, Console, Settings, …) and the
         // catalog itself, so panels are declared only on their Views — no per-panel registration here.

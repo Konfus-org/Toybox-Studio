@@ -5,9 +5,11 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Project;
 using Toybox.Studio.Widgets.PropertyGrid;
+using Toybox.Studio.Widgets.ScriptEditor;
 
 namespace Toybox.Studio.Widgets.Ecs;
 
@@ -33,6 +35,11 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
     private bool _enabledValue;
 
     private string _filter = "";
+
+    // The bound script's C++ source, resolved lazily (and once) through ScriptEditing; null when there's no
+    // open project, the catalog hasn't named the script yet, or no matching file exists.
+    private bool _sourceLookupDone;
+    private string? _sourcePath;
 
     public ScriptBindingViewModel(PropertyNode binding, Action commit, AssetCatalog? catalog)
     {
@@ -73,6 +80,31 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
     public ObservableCollection<PropertyViewModel> Overrides { get; }
 
     public bool HasOverrides => Overrides.Count > 0;
+
+    /// <summary>True when the bound script's C++ source was found, so the Source section and Pop out are usable.</summary>
+    public bool HasSource
+    {
+        get
+        {
+            EnsureSourceResolved();
+            return _sourcePath is not null;
+        }
+    }
+
+    /// <summary>Whether the inline source editor is expanded under this binding's fields.</summary>
+    [ObservableProperty]
+    public partial bool IsSourceExpanded { get; private set; }
+
+    /// <summary>The inline editor, created lazily when the Source section is first expanded.</summary>
+    [ObservableProperty]
+    public partial InlineScriptEditorViewModel? Inline { get; private set; }
+
+    /// <summary>Set when the inline editor can't be created (asset server / file failure); shown in the section.</summary>
+    [ObservableProperty]
+    public partial string? SourceError { get; private set; }
+
+    /// <summary>The shared hot-reload toggle the lightning-bolt control binds to (null before startup wiring).</summary>
+    public ScriptHotReload? HotReload => ScriptEditing.Current?.HotReload;
 
     /// <summary>Header icon — matches the script-container component's [[tbx::icon]].</summary>
     public string Icon => "ScrollText";
@@ -121,7 +153,72 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
             _catalog?.Activate(_scriptId);
     }
 
-    private void OnCatalogUpdated() => Dispatch.To(DispatchContext.UI, () => Title = ResolveTitle());
+    /// <summary>Expands the inline source editor (creating it on first open) or collapses it.</summary>
+    [RelayCommand]
+    private void ToggleSource()
+    {
+        if (IsSourceExpanded)
+        {
+            CollapseSource();
+            return;
+        }
+
+        EnsureSourceResolved();
+        if (_sourcePath is null || ScriptEditing.Current is not { } editing)
+            return;
+
+        var created = editing.CreateInline(_sourcePath);
+        if (created)
+        {
+            SourceError = null;
+            Inline = created.Value;
+        }
+        else
+        {
+            SourceError = created.Error;
+        }
+
+        IsSourceExpanded = true;
+    }
+
+    /// <summary>Pops the bound script's source out into the dockable script editor window.</summary>
+    [RelayCommand]
+    private void PopOut()
+    {
+        EnsureSourceResolved();
+        if (_sourcePath is { } path)
+            ScriptEditing.Current?.PopOut(path);
+    }
+
+    private void CollapseSource()
+    {
+        IsSourceExpanded = false;
+        var inline = Inline;
+        Inline = null;
+        inline?.Dispose();
+    }
+
+    private void EnsureSourceResolved()
+    {
+        if (_sourceLookupDone)
+            return;
+
+        _sourceLookupDone = true;
+        var name = _catalog?.ResolveName(_scriptId);
+        if (ScriptEditing.Current is { } editing && !string.IsNullOrEmpty(name))
+        {
+            var resolved = editing.ResolveSource(name);
+            _sourcePath = resolved ? resolved.Value : null;
+        }
+    }
+
+    private void OnCatalogUpdated() => Dispatch.To(DispatchContext.UI, () =>
+    {
+        Title = ResolveTitle();
+        // The catalog may have only just named the script (and so its source can now resolve); re-evaluate.
+        _sourceLookupDone = false;
+        OnPropertyChanged(nameof(HasSource));
+    });
 
     private string ResolveTitle()
     {

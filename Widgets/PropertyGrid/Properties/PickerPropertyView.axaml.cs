@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
-public partial class EntityPickerPropertyView : UserControl
+public partial class PickerPropertyView : UserControl
 {
-    public EntityPickerPropertyView()
+    public PickerPropertyView()
     {
         InitializeComponent();
     }

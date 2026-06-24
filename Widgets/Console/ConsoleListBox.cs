@@ -23,6 +23,9 @@ public class ConsoleListBox : ListBox
 
     private ScrollViewer? _scrollViewer;
 
+    // The exact collection we subscribed OnLinesChanged to, kept so detach removes that same instance.
+    private INotifyCollectionChanged? _subscribedItems;
+
     // While true, new output scrolls into view; the user scrolling up clears it, scrolling
     // back to the bottom restores it. Starts true so the console tails by default.
     private bool _stickToBottom = true;
@@ -49,10 +52,26 @@ public class ConsoleListBox : ListBox
         base.OnAttachedToVisualTree(e);
 
         // VisibleLines is a stable collection (cleared, never reassigned), so one subscription suffices.
+        // Detach any prior subscription first so a re-attach doesn't leave the old one dangling.
+        UnsubscribeItems();
         if (ItemsView is INotifyCollectionChanged lines)
         {
-            lines.CollectionChanged -= OnLinesChanged;
             lines.CollectionChanged += OnLinesChanged;
+            _subscribedItems = lines;
+        }
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+
+        // Drop both subscriptions so a detached (e.g. closed/undocked) console doesn't dangle on its
+        // items collection or its scroll viewer.
+        UnsubscribeItems();
+        if (_scrollViewer is { })
+        {
+            _scrollViewer.ScrollChanged -= OnScrollChanged;
+            _scrollViewer = null;
         }
     }
 
@@ -67,6 +86,15 @@ public class ConsoleListBox : ListBox
 
         if (_scrollViewer is { })
             _scrollViewer.ScrollChanged += OnScrollChanged;
+    }
+
+    private void UnsubscribeItems()
+    {
+        if (_subscribedItems is null)
+            return;
+
+        _subscribedItems.CollectionChanged -= OnLinesChanged;
+        _subscribedItems = null;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

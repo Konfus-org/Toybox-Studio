@@ -36,6 +36,17 @@ public sealed partial class ColorPropertyViewModel : PropertyViewModel
     /// <summary>The current colour, taken from the editor's single stop.</summary>
     private Color Color => Editor.Start;
 
+    // Track a running game's live colour in place rather than letting the base DeepEquals check fail and force
+    // a grid rebuild, which would tear down an open colour picker mid-edit. Re-read the channels from the fresh
+    // snapshot and push them into the editor; setting Start raises OnEditorChanged, whose write-back is
+    // suppressed during Sync (RaiseCommit no-ops), so the engine isn't re-sent its own value.
+    protected override bool SyncCore(PropertyNode node)
+    {
+        var (r, g, b, a) = ReadRgba(node.Value);
+        Editor.Start = Color.FromArgb(ToByte(a), ToByte(r), ToByte(g), ToByte(b));
+        return true;
+    }
+
     /// <summary>Hex readout (#RRGGBBAA) of the current colour, for the read-only display.</summary>
     public string Hex => $"#{Color.R:X2}{Color.G:X2}{Color.B:X2}{Color.A:X2}";
 

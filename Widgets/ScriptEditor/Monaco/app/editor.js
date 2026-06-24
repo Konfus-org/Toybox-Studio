@@ -35,7 +35,9 @@
       smoothScrolling: true,
       tabSize: 4,
       renderWhitespace: "selection",
-      fixedOverflowWidgets: true
+      fixedOverflowWidgets: true,
+      // Render clangd's semantic tokens (types/members/params colour like an IDE), not just the grammar.
+      "semanticHighlighting.enabled": true
     });
 
     function languageFor(path) {

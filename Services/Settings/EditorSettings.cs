@@ -27,6 +27,8 @@ public sealed class EditorSettings
 
     public ProjectEditorSettings Projects { get; set; } = new();
 
+    public ScriptingEditorSettings Scripting { get; set; } = new();
+
     public ThemeEditorSettings Theme { get; set; } = new();
 
     public AccessibilityEditorSettings Accessibility { get; set; } = new();
@@ -125,6 +127,28 @@ public sealed class ProjectEditorSettings
     public string LastOpened { get; set; } = "";
 
     public List<string> Recent { get; set; } = [];
+}
+
+/// <summary>
+/// The in-Studio C++ script editor (the inline Script-tab strip and the popped-out window). These apply to
+/// both surfaces so the two stay consistent.
+/// </summary>
+public sealed class ScriptingEditorSettings
+{
+    /// <summary>
+    /// Recompile the scripts on save so the running engine hot-reloads them (the editor's lightning-bolt
+    /// toggle). Off by default — a save then triggers an incremental project build.
+    /// </summary>
+    public bool HotReloadOnSave { get; set; }
+
+    /// <summary>Editor font size, in points.</summary>
+    public int FontSize { get; set; } = 13;
+
+    /// <summary>Soft-wrap long lines instead of scrolling horizontally.</summary>
+    public bool WordWrap { get; set; }
+
+    /// <summary>Show the minimap (the code overview strip) in the popped-out editor.</summary>
+    public bool ShowMinimap { get; set; } = true;
 }
 
 /// <summary>

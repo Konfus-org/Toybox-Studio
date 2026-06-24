@@ -1,13 +1,24 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:Toybox.Studio.Widgets.Ghost"
              x:Class="Toybox.Studio.Widgets.Ghost.GhostView"
              x:Name="Root">
     <!-- Reusable empty/loading state: a ghost, a message below, and the same message as a tooltip.
-         Fills whatever hosts it and centres its content. -->
+         Fills whatever hosts it and centres its content. The ghost is a themed vector (tracks the theme and
+         renders identically on every platform) rather than a font emoji. -->
     <Panel ToolTip.Tip="{Binding #Root.Message}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
-            <TextBlock Text="👻" FontSize="56" Opacity="0.35" HorizontalAlignment="Center"/>
+            <Viewbox Width="56" Height="56" Opacity="0.35" HorizontalAlignment="Center">
+                <Canvas Width="32" Height="32">
+                    <!-- Domed body with a scalloped hem. -->
+                    <Path Fill="{DynamicResource ThemeMutedTextBrush}"
+                          Data="M6,15 a10,10 0 0 1 20,0 L26,28 22,24 18,28 16,24 14,28 10,24 6,28 Z"/>
+                    <!-- Eyes punched out in the background colour so they read on any surface. -->
+                    <Ellipse Canvas.Left="11" Canvas.Top="12" Width="3.4" Height="4.4"
+                             Fill="{DynamicResource ThemeBackgroundBrush}"/>
+                    <Ellipse Canvas.Left="17.6" Canvas.Top="12" Width="3.4" Height="4.4"
+                             Fill="{DynamicResource ThemeBackgroundBrush}"/>
+                </Canvas>
+            </Viewbox>
             <TextBlock Text="{Binding #Root.Message}" Opacity="0.75" HorizontalAlignment="Center"
                        TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280"/>
         </StackPanel>

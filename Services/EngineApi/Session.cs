@@ -29,6 +29,13 @@ public sealed class Session : IAsyncDisposable
     private static readonly TimeSpan MinimumUptimeForRestart = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan AttachConnectTimeout = TimeSpan.FromSeconds(5);
 
+    // Auto-restart backoff: a reproducibly-crashing engine must not loop compile→launch→crash forever
+    // pinning the CPU. Each rapid failure (one that didn't stay connected past the minimum uptime) bumps
+    // a counter that both delays the next attempt (exponential, capped) and, past the cap, gives up.
+    private static readonly TimeSpan RestartBackoffBase = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan RestartBackoffCap = TimeSpan.FromSeconds(30);
+    private const int MaxRapidRestarts = 5;
+
     // Each watchdog ping is bounded so a frozen engine can't park the probe forever; if no ping
     // succeeds within this window the engine is treated as unresponsive (so the editor can offer to
     // force-restart it). A short retry pause keeps a failing probe from spinning.
@@ -58,7 +65,25 @@ public sealed class Session : IAsyncDisposable
     private CancellationTokenSource? _watchdogCts;
     private bool _isStopping;
     private int _connectionLossHandled;
-    private DateTime _lastLaunchTimeUtc = DateTime.MinValue;
+
+    // Uptime is measured from a successful CONNECTION, not launch start: a slow compile (which can exceed
+    // the minimum-uptime window) must not be mistaken for a healthy run that earns an auto-restart.
+    private DateTime _lastConnectedTimeUtc = DateTime.MinValue;
+
+    // Counts consecutive rapid restart failures (reset on a connection that lasts past the minimum uptime),
+    // driving the auto-restart backoff and give-up cap.
+    private int _consecutiveRapidFailures;
+
+    // Session-lifetime cancellation: cancelled by StopAsync/DisposeAsync so an in-flight compile/launch
+    // (including an auto-restart or relaunch) is torn down instead of orphaning CMake/Ninja.
+    private CancellationTokenSource _lifetimeCts = new();
+
+    // Serializes launch/attach/restart transitions so an auto-attach, a project-change restart, and a
+    // crash auto-restart can't interleave while State briefly sits at Disconnected between stop and launch.
+    private readonly SemaphoreSlim _transitionGate = new(1, 1);
+
+    // Coalesces rapid project changes: only the latest pending project switch is honoured.
+    private int _pendingProjectChange;
 
     // Watchdog state, shared between the watchdog loop and the UI (Snooze): the tick of the last
     // successful ping, and whether the engine is currently flagged unresponsive (0/1 for Interlocked).
@@ -161,9 +186,15 @@ public sealed class Session : IAsyncDisposable
             return;
 
         Kind = SessionKind.Owned;
-        _lastLaunchTimeUtc = DateTime.UtcNow;
         _log.Info($"=== Session: {project.Name} ===");
         Interlocked.Exchange(ref _connectionLossHandled, 0);
+
+        // Link the caller's token to the session lifetime so teardown (StopAsync/DisposeAsync) cancels an
+        // in-progress compile/connect even when the caller passed an uncancellable token. A fresh launch
+        // starts a fresh lifetime, so the previous (possibly cancelled) token must be renewed first.
+        var lifetimeToken = RenewLifetime();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetimeToken);
+        ct = linked.Token;
         try
         {
             if (!await CompileProjectAsync(ct).ContinueOnAnyContext())
@@ -384,12 +415,13 @@ public sealed class Session : IAsyncDisposable
             return;
 
         Kind = SessionKind.Attached;
-        _lastLaunchTimeUtc = DateTime.UtcNow;
         Interlocked.Exchange(ref _connectionLossHandled, 0);
+        // A fresh attach starts a fresh lifetime so teardown can cancel the connect handshake.
+        var lifetimeToken = RenewLifetime();
         try
         {
             _log.Info($"Attaching to running engine on :{port}...");
-            var connect = await _engine.ConnectAsync(port, AttachConnectTimeout, CancellationToken.None)
+            var connect = await _engine.ConnectAsync(port, AttachConnectTimeout, lifetimeToken)
                 .ContinueOnAnyContext();
             if (connect is not { Success: true, Value: { } hello })
             {
@@ -421,6 +453,10 @@ public sealed class Session : IAsyncDisposable
 
             _isStopping = true;
         }
+
+        // Abort any in-flight compile/connect tied to this lifetime so a teardown mid-launch doesn't leave
+        // CMake/Ninja running. A following relaunch renews the token, so this is safe across a restart.
+        CancelLifetime();
 
         try
         {
@@ -460,7 +496,14 @@ public sealed class Session : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _projects.ProjectChanged -= OnProjectChanged;
+        _engine.Disconnected -= OnEngineDisconnected;
         await StopAsync().ContinueOnAnyContext();
+        _transitionGate.Dispose();
+        lock (_sync)
+        {
+            _lifetimeCts.Dispose();
+        }
     }
 
     /// <summary>
@@ -550,9 +593,27 @@ public sealed class Session : IAsyncDisposable
         }
 
         if (wasOwned)
-            await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
+            await LaunchSerializedAsync().ContinueOnAnyContext();
         else
             _log.Info("Detached from the unresponsive engine; it was not owned, so it keeps running.");
+    }
+
+    /// <summary>
+    /// Launches under the transition gate and with the session-lifetime token, so a launch can't interleave
+    /// with a concurrent attach/restart and is cancelled by teardown. Used by every internal relaunch path.
+    /// </summary>
+    private async Task LaunchSerializedAsync()
+    {
+        await _transitionGate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            // LaunchAsync renews and links the session-lifetime token itself, so None here is correct.
+            await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
+        }
+        finally
+        {
+            _transitionGate.Release();
+        }
     }
 
     private static string? FindProjectLauncher(string buildDirectory, string configuration)
@@ -599,6 +660,8 @@ public sealed class Session : IAsyncDisposable
     private void CompleteConnection(Hello hello)
     {
         ConnectedAppName = hello.App;
+        // Uptime for the auto-restart guard is measured from here (a real connection), not launch start.
+        _lastConnectedTimeUtc = DateTime.UtcNow;
         SetState(ConnectionState.Connected);
         // From now on, studio log lines also flow into the engine's unified log, and the engine
         // console's colors track the editor theme.
@@ -722,20 +785,77 @@ public sealed class Session : IAsyncDisposable
     private async Task HandleConnectionLossAsync()
     {
         var wasOwned = Kind == SessionKind.Owned;
+
+        // Did the engine stay connected long enough to count as a healthy run? Measured from the successful
+        // connection, so a slow compile can never masquerade as uptime. A connection that never completed
+        // leaves _lastConnectedTimeUtc at MinValue, so this is correctly false.
+        var stayedHealthy = _lastConnectedTimeUtc != DateTime.MinValue
+            && DateTime.UtcNow - _lastConnectedTimeUtc > MinimumUptimeForRestart;
+
         await TearDownAsync(killProcess: wasOwned).ContinueOnAnyContext();
 
-        var shouldRestart = wasOwned
-            && _settings.Engine.RestartOnCrash
-            && DateTime.UtcNow - _lastLaunchTimeUtc > MinimumUptimeForRestart;
-        if (shouldRestart)
-        {
-            _log.Warning("Engine connection lost; restarting the engine...");
-            await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
-        }
-        else if (!wasOwned)
+        if (!wasOwned)
         {
             _log.Info("Connection to the attached engine was lost.");
+            return;
         }
+
+        if (!_settings.Engine.RestartOnCrash)
+            return;
+
+        // A run that lasted past the minimum uptime is treated as a clean crash: reset the rapid-failure
+        // streak so a long-lived engine that finally crashes restarts immediately. A run that died quickly
+        // bumps the streak, backing off (and eventually giving up) to avoid a CPU-pinning restart loop.
+        if (stayedHealthy)
+        {
+            _consecutiveRapidFailures = 0;
+        }
+        else if (++_consecutiveRapidFailures > MaxRapidRestarts)
+        {
+            _log.Error(
+                $"Engine crashed {MaxRapidRestarts} times in quick succession; auto-restart has given up. "
+                    + "Fix the project and relaunch manually.");
+            return;
+        }
+
+        var lifetimeToken = LifetimeToken;
+        if (lifetimeToken.IsCancellationRequested)
+            return;
+
+        var backoff = RestartBackoff(_consecutiveRapidFailures);
+        if (backoff > TimeSpan.Zero)
+        {
+            _log.Warning(
+                $"Engine connection lost; restarting in {backoff.TotalSeconds:F0}s "
+                    + $"(attempt {_consecutiveRapidFailures} of {MaxRapidRestarts})...");
+            try
+            {
+                await Task.Delay(backoff, lifetimeToken).ContinueOnAnyContext();
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+        else
+        {
+            _log.Warning("Engine connection lost; restarting the engine...");
+        }
+
+        await LaunchSerializedAsync().ContinueOnAnyContext();
+    }
+
+    /// <summary>
+    /// The exponential, capped backoff before the Nth consecutive rapid restart. The first failure restarts
+    /// immediately (zero delay) so a one-off crash recovers instantly; later failures back off.
+    /// </summary>
+    private static TimeSpan RestartBackoff(int rapidFailures)
+    {
+        if (rapidFailures <= 1)
+            return TimeSpan.Zero;
+
+        var seconds = RestartBackoffBase.TotalSeconds * Math.Pow(2, rapidFailures - 2);
+        return TimeSpan.FromSeconds(Math.Min(seconds, RestartBackoffCap.TotalSeconds));
     }
 
     private bool IsStopInProgress()
@@ -744,6 +864,51 @@ public sealed class Session : IAsyncDisposable
         {
             return _isStopping;
         }
+    }
+
+    /// <summary>A consistent snapshot of the current session-lifetime token (the field can be swapped).</summary>
+    private CancellationToken LifetimeToken
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _lifetimeCts.Token;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cancels any in-flight compile/launch tied to the current session lifetime (so a teardown stops an
+    /// in-progress CMake/Ninja build instead of orphaning it). The next launch renews the token.
+    /// </summary>
+    private void CancelLifetime()
+    {
+        CancellationTokenSource cts;
+        lock (_sync)
+        {
+            cts = _lifetimeCts;
+        }
+
+        cts.Cancel();
+    }
+
+    /// <summary>
+    /// Swaps in a fresh session-lifetime cancellation source for a new launch (disposing the spent one) and
+    /// returns its token. A new owned/attached session is a new lifetime, so a prior cancel must not stick.
+    /// </summary>
+    private CancellationToken RenewLifetime()
+    {
+        CancellationTokenSource fresh = new();
+        CancellationTokenSource old;
+        lock (_sync)
+        {
+            old = _lifetimeCts;
+            _lifetimeCts = fresh;
+        }
+
+        old.Dispose();
+        return fresh.Token;
     }
 
     private async Task TearDownAsync(bool killProcess)
@@ -844,13 +1009,38 @@ public sealed class Session : IAsyncDisposable
         if (project is null || State == ConnectionState.Disconnected)
             return;
 
-        RestartForProjectAsync().FireAndForget();
+        // Coalesce rapid project changes: if a restart is already pending/running, just flag that another
+        // change arrived so the in-flight restart re-runs once with the latest project, instead of queuing
+        // overlapping stop/launch sequences that fight over the session.
+        if (Interlocked.Exchange(ref _pendingProjectChange, 1) == 1)
+            return;
+
+        RestartForProjectLoopAsync().FireAndForget();
+    }
+
+    // Drains coalesced project changes: restarts once per "latch", re-running while another change landed
+    // during the restart so the engine always ends up on the most recently selected project.
+    private async Task RestartForProjectLoopAsync()
+    {
+        while (Interlocked.Exchange(ref _pendingProjectChange, 0) == 1)
+            await RestartForProjectAsync().ContinueOnAnyContext();
     }
 
     private async Task RestartForProjectAsync()
     {
-        await StopAsync().ContinueOnAnyContext();
-        await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
+        // Hold the transition gate across the whole stop→launch so a concurrent auto-attach or crash
+        // auto-restart can't slip a launch in while State momentarily sits at Disconnected between them.
+        await _transitionGate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            await StopAsync().ContinueOnAnyContext();
+            // LaunchAsync renews and links the session-lifetime token itself, so None here is correct.
+            await LaunchAsync(CancellationToken.None).ContinueOnAnyContext();
+        }
+        finally
+        {
+            _transitionGate.Release();
+        }
     }
 
     /// <summary>

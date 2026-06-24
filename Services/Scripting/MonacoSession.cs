@@ -41,6 +41,9 @@ public sealed class MonacoSession
     /// <summary>The cursor moved (1-based line, column) — drives the status bar.</summary>
     public event Action<int, int>? CursorMoved;
 
+    /// <summary>The page's language client reported a state ("ready" | "error") — drives the status bar.</summary>
+    public event Action<string>? LspStatusChanged;
+
     /// <summary>The user asked to save the given document (Ctrl+S) with its current text.</summary>
     public event Action<string, string>? SaveRequested;
 
@@ -62,6 +65,10 @@ public sealed class MonacoSession
     {
         _send = null;
         _ready = false;
+        // Detaching navigates the page away, so the freshly-loaded page on re-attach has no models. Any
+        // commands still queued (e.g. opens for documents closed while detached) would replay blindly against
+        // that blank page; drop them. Live surfaces re-issue their open/setActive on re-attach.
+        _pending.Clear();
     }
 
     /// <summary>Opens (or replaces the content of) a document and makes it the active editor model.</summary>
@@ -147,6 +154,10 @@ public sealed class MonacoSession
 
             case "cursor":
                 CursorMoved?.Invoke((int?)envelope["line"] ?? 1, (int?)envelope["column"] ?? 1);
+                break;
+
+            case "lspStatus":
+                LspStatusChanged?.Invoke((string?)envelope["state"] ?? "");
                 break;
         }
     }

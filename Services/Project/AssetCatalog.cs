@@ -23,6 +23,12 @@ public sealed class AssetCatalog : IListenable
     private readonly EngineRpc _engine;
     private Dictionary<long, Asset> _byId = [];
 
+    // Bumped on every connection-state change. A refresh captures it before its RPC and drops the result if
+    // the generation moved on (a disconnect or a newer refresh) so a slow reply can't publish over a newer
+    // (e.g. empty, post-disconnect) state. All catalog state is published on the UI thread, so the fields are
+    // only ever written there and reads from the UI stay consistent.
+    private int _generation;
+
     public AssetCatalog(Session session, EngineRpc engine)
     {
         _engine = engine;
@@ -74,23 +80,41 @@ public sealed class AssetCatalog : IListenable
     /// </summary>
     public async Task RefreshAsync(CancellationToken ct = default)
     {
+        // Capture the generation this refresh belongs to; if the connection changes (disconnect, or a newer
+        // refresh) before the reply lands, the stale result is dropped instead of clobbering newer state.
+        var generation = Volatile.Read(ref _generation);
+
         // A failure (not connected, disconnect mid-fetch, engine error) surfaces as an empty catalog; the
         // session's disconnect handling owns connection state.
         var result = await _engine
             .InvokeAsync<AssetCatalogReply>("editor.listAssets", null, ct).ContinueOnAnyContext();
-        Publish(result is { Success: true, Value: { } reply } ? reply : new AssetCatalogReply([], []));
+        var reply = result is { Success: true, Value: { } value } ? value : new AssetCatalogReply([], []);
+        PublishIfCurrent(reply, generation);
     }
 
     private void OnSessionStateChanged(ConnectionState state)
     {
-        if (state == ConnectionState.Connected)
-            RefreshAsync().FireAndForget();
-        else
-            Publish(new AssetCatalogReply([], []));
+        // Every state change invalidates any in-flight refresh and is the only thing that moves the
+        // generation, so the bump and the resulting publish both run on the UI thread for a consistent view.
+        Dispatch.To(DispatchContext.UI, () =>
+        {
+            var generation = ++_generation;
+            if (state == ConnectionState.Connected)
+                RefreshAsync().FireAndForget();
+            else
+                Publish(new AssetCatalogReply([], []), generation);
+        });
     }
 
-    private void Publish(AssetCatalogReply reply)
+    private void PublishIfCurrent(AssetCatalogReply reply, int generation) =>
+        Dispatch.To(DispatchContext.UI, () => Publish(reply, generation));
+
+    private void Publish(AssetCatalogReply reply, int generation)
     {
+        // Drop a result whose connection generation has been superseded (a disconnect or newer refresh).
+        if (generation != _generation)
+            return;
+
         Assets = reply.Assets;
         Scripts = reply.Scripts;
 

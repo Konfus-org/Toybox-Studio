@@ -5,8 +5,11 @@
              x:DataType="local:StatusViewModel">
 
     <UserControl.Styles>
+        <!-- Disconnected / idle (the default, un-classed state) is the LOUDEST: "engine down" must read at a
+             glance, so it uses the error colour rather than a warm neutral that vanishes into the warm status
+             band. Launching steps up to amber, connected to green. -->
         <Style Selector="Ellipse#StatusDot">
-            <Setter Property="Fill" Value="{DynamicResource ThemeSecondaryBrush}"/>
+            <Setter Property="Fill" Value="{DynamicResource ThemeErrorBrush}"/>
         </Style>
         <Style Selector="Ellipse#StatusDot.launching">
             <Setter Property="Fill" Value="{DynamicResource ThemeWarningBrush}"/>

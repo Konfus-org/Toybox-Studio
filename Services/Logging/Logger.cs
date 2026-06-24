@@ -16,7 +16,7 @@ namespace Toybox.Studio.Services.Logging;
 /// own category name via <see cref="External"/> (e.g. "CMake"); engine lines arrive already tagged by the
 /// engine's core logger (which prefixes the active app/plugin category) and are shown verbatim.
 /// </summary>
-public sealed class Logger
+public sealed class Logger : IDisposable
 {
     private const string StudioCategory = "Studio";
 
@@ -41,6 +41,13 @@ public sealed class Logger
     /// Raised for every log line, on the calling thread. Subscribers marshal as needed.
     /// </summary>
     public event Action<LogEntry>? Logged;
+
+    /// <summary>
+    /// Unsubscribes from the theme so this logger doesn't outlive its registration via the theme's event
+    /// list. A no-op for the app's singleton logger, but keeps the wiring symmetric and safe if the logger
+    /// ever becomes non-singleton.
+    /// </summary>
+    public void Dispose() => _theme.ThemeChanged -= PushLogColors;
 
     public void Info(string message, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
         Emit(LogLevel.Info, message, file, line);
@@ -147,15 +154,21 @@ public sealed class Logger
         if (sink is null)
             return;
 
-        // The engine console takes a single hex per level; collapse each (usually flat) semantic colour to
-        // its representative hex.
-        var colors = _theme.Active.Colors;
-        PushLogColorsSafelyAsync(
-                sink,
-                ColorJsonConverter.ToHex(colors.Info.Representative),
-                ColorJsonConverter.ToHex(colors.Warning.Representative),
-                ColorJsonConverter.ToHex(colors.Error.Representative))
-            .FireAndForget();
+        // The active theme is UI-thread state, but PushLogColors is also called off-thread (from the
+        // session's RPC connect via SetLogColorSink). Snapshot the colours on the UI thread, then fire the
+        // (already off-thread-safe) push so we never read a theme mid-swap from a background thread.
+        Dispatch.To(DispatchContext.UI, () =>
+        {
+            // The engine console takes a single hex per level; collapse each (usually flat) semantic colour
+            // to its representative hex.
+            var colors = _theme.Active.Colors;
+            PushLogColorsSafelyAsync(
+                    sink,
+                    ColorJsonConverter.ToHex(colors.Info.Representative),
+                    ColorJsonConverter.ToHex(colors.Warning.Representative),
+                    ColorJsonConverter.ToHex(colors.Error.Representative))
+                .FireAndForget();
+        });
     }
 
     private static async Task PushLogColorsSafelyAsync(

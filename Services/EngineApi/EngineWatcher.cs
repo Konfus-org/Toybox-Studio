@@ -12,8 +12,19 @@ namespace Toybox.Studio.Services.EngineApi;
 /// All inbound signals are marshalled to the UI thread, so every field is only ever touched there and
 /// every event is raised there — subscribers never need their own dispatch.
 /// </remarks>
-public sealed class EngineWatcher
+public sealed class EngineWatcher : IDisposable
 {
+    private readonly Session _session;
+    private readonly EngineRpc _engine;
+
+    // Stored handlers so the lambda subscriptions can be detached on dispose, matching the disposal
+    // discipline of ViewportStream/AssetCatalog (the session and engine outlive this watcher).
+    private readonly Action<ConnectionState> _onStateChanged;
+    private readonly Action<bool> _onCompilingChanged;
+    private readonly Action _onPlayStarting;
+    private readonly Action<bool> _onPlayingChanged;
+    private readonly Action<string> _onViewPresented;
+
     private ConnectionState _connection = ConnectionState.Disconnected;
     private bool _compiling;
     private bool _playing;
@@ -27,16 +38,34 @@ public sealed class EngineWatcher
 
     public EngineWatcher(Session session, EngineRpc engine)
     {
-        session.StateChanged += connection =>
+        _session = session;
+        _engine = engine;
+
+        _onStateChanged = connection =>
             Dispatch.To(DispatchContext.UI, () => OnConnectionChanged(connection));
-        session.CompilingChanged += compiling =>
+        _onCompilingChanged = compiling =>
             Dispatch.To(DispatchContext.UI, () => { _compiling = compiling; Recompute(); });
-        session.PlayStarting += () =>
+        _onPlayStarting = () =>
             Dispatch.To(DispatchContext.UI, () => { _playLoading = true; Recompute(); });
-        session.PlayingChanged += playing =>
+        _onPlayingChanged = playing =>
             Dispatch.To(DispatchContext.UI, () => OnPlayingChanged(playing));
-        engine.ViewPresented += _ =>
+        _onViewPresented = _ =>
             Dispatch.To(DispatchContext.UI, OnFramePresented);
+
+        session.StateChanged += _onStateChanged;
+        session.CompilingChanged += _onCompilingChanged;
+        session.PlayStarting += _onPlayStarting;
+        session.PlayingChanged += _onPlayingChanged;
+        engine.ViewPresented += _onViewPresented;
+    }
+
+    public void Dispose()
+    {
+        _session.StateChanged -= _onStateChanged;
+        _session.CompilingChanged -= _onCompilingChanged;
+        _session.PlayStarting -= _onPlayStarting;
+        _session.PlayingChanged -= _onPlayingChanged;
+        _engine.ViewPresented -= _onViewPresented;
     }
 
     /// <summary>Raised on the UI thread whenever <see cref="State"/> changes.</summary>

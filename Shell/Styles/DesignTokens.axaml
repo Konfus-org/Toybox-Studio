@@ -78,6 +78,15 @@
         <DropShadowEffect x:Key="ThemePanelShadowEffect" Color="#3A000000" BlurRadius="18" OffsetX="4" OffsetY="4"/>
         <FontFamily x:Key="ThemeFontFamily">Inter</FontFamily>
         <FontFamily x:Key="ThemeMonoFontFamily">Cascadia Mono, Consolas, monospace</FontFamily>
+        <!-- The font-size scale every widget keys off, so secondary/heading text agrees on one value rather than
+             scattering 11/12/13/16 literals. ThemeApplier overwrites ThemeFontSize live from theme.Font.Size;
+             Small (secondary/captions) and Large (section headings) are fixed relative steps off the base. -->
         <x:Double x:Key="ThemeFontSize">13</x:Double>
+        <x:Double x:Key="ThemeFontSizeSmall">12</x:Double>
+        <x:Double x:Key="ThemeFontSizeLarge">16</x:Double>
+
+        <!-- The standard gutter a panel/dialog root leaves around its content, so panels stop disagreeing
+             (4 vs 8 vs 20). -->
+        <Thickness x:Key="ThemePanelPadding">8</Thickness>
     </Styles.Resources>
 </Styles>

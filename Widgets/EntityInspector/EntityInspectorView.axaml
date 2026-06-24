@@ -12,7 +12,7 @@
              resolve against a null context (not a null SelectedEntity.* path) when nothing is selected. -->
         <Border DockPanel.Dock="Top" Background="{DynamicResource ThemeHeaderBrush}"
                 BorderBrush="{DynamicResource ThemeBorderBrush}"
-                BorderThickness="0,0,0,0.5" Padding="10,7" IsVisible="{Binding HasSelection}">
+                BorderThickness="0,0,0,1" Padding="10,7" IsVisible="{Binding HasSelection}">
             <DockPanel DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel">
                 <TextBlock DockPanel.Dock="Right" Text="{Binding Subtitle}" Opacity="0.55"
                            VerticalAlignment="Center" HorizontalAlignment="Right" Margin="8,0,0,0"/>
@@ -113,7 +113,8 @@
                           DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel">
                         <TextBox Grid.Row="0" Text="{Binding JsonDraft, Mode=TwoWay}"
                                  AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
-                                 FontFamily="{DynamicResource ThemeMonoFontFamily}" FontSize="12"
+                                 FontFamily="{DynamicResource ThemeMonoFontFamily}"
+                                 FontSize="{DynamicResource ThemeFontSizeSmall}"
                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"/>
                         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"

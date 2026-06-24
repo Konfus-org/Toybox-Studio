@@ -1,6 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:Toybox.Studio.Widgets.Ghost"
              x:Class="Toybox.Studio.Widgets.Ghost.LoadingGhostView"
              x:Name="Root">
     <!-- Reusable loading state: a ghost that pulses above an indeterminate bar and a message (shown below
@@ -11,7 +10,7 @@
              logs "Cannot find the appropriate transform" (the animator can't resolve the transform however
              RenderTransform is seeded), and animating RenderTransform itself throws (no registered animator).
              Opacity has a registered animator, so it's clean and runs reliably. -->
-        <Style Selector="TextBlock.ghostGlyph">
+        <Style Selector="Viewbox.ghostGlyph">
             <Style.Animations>
                 <Animation Duration="0:0:1.1" IterationCount="INFINITE"
                            PlaybackDirection="Alternate" Easing="SineEaseInOut">
@@ -28,8 +27,17 @@
 
     <Panel ToolTip.Tip="{Binding #Root.Message}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-            <TextBlock Classes="ghostGlyph" Text="👻" FontSize="56" Opacity="0.5"
-                       HorizontalAlignment="Center"/>
+            <!-- Themed vector ghost (matches GhostView), pulsing its opacity to signal activity. -->
+            <Viewbox Classes="ghostGlyph" Width="56" Height="56" Opacity="0.5" HorizontalAlignment="Center">
+                <Canvas Width="32" Height="32">
+                    <Path Fill="{DynamicResource ThemeMutedTextBrush}"
+                          Data="M6,15 a10,10 0 0 1 20,0 L26,28 22,24 18,28 16,24 14,28 10,24 6,28 Z"/>
+                    <Ellipse Canvas.Left="11" Canvas.Top="12" Width="3.4" Height="4.4"
+                             Fill="{DynamicResource ThemeBackgroundBrush}"/>
+                    <Ellipse Canvas.Left="17.6" Canvas.Top="12" Width="3.4" Height="4.4"
+                             Fill="{DynamicResource ThemeBackgroundBrush}"/>
+                </Canvas>
+            </Viewbox>
             <ProgressBar IsIndeterminate="True" Width="140" HorizontalAlignment="Center"/>
             <TextBlock Text="{Binding #Root.Message}" Opacity="0.85" HorizontalAlignment="Center"
                        TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280"/>

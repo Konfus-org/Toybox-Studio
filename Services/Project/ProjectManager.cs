@@ -31,6 +31,10 @@ public sealed class ProjectManager
 
     private readonly SettingsManager _settings;
 
+    // Serializes the deferred settings writes this service kicks off, so two quick opens can't race the
+    // shared EditorSettings serialization while the Recent list is being mutated ("collection modified").
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+
     public ProjectManager(SettingsManager settings)
     {
         _settings = settings;
@@ -159,8 +163,24 @@ public sealed class ProjectManager
         if (projects.Recent.Count > MaxRecentProjects)
             projects.Recent.RemoveRange(MaxRecentProjects, projects.Recent.Count - MaxRecentProjects);
 
-        // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
-        _settings.SaveAsync().FireAndForget();
+        // The Recent list is mutated above on the calling thread; gate the deferred write so a second open's
+        // mutation can't run while a prior save is still serializing the same list.
+        SaveSerializedAsync().FireAndForget();
+    }
+
+    // Runs settings saves one at a time so overlapping deferred writes don't serialize the shared mutable
+    // EditorSettings concurrently.
+    private async Task SaveSerializedAsync()
+    {
+        await _saveGate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            await _settings.SaveAsync().ContinueOnAnyContext();
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
     }
 
     private static string? ReadProjectName(string appSettingsPath)

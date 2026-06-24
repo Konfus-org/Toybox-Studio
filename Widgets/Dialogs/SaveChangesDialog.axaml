@@ -13,8 +13,12 @@
         <StackPanel Orientation="Horizontal" Spacing="14">
             <pg:IconView IconName="CircleHelp" IconColor="BLUE"
                          Width="30" Height="30" VerticalAlignment="Top"/>
-            <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
-                       VerticalAlignment="Center" MaxWidth="360"/>
+            <!-- A long message scrolls rather than growing the non-resizable window until the action buttons are
+                 pushed off-screen. -->
+            <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
+                           VerticalAlignment="Center" MaxWidth="360"/>
+            </ScrollViewer>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
             <Button Classes="toy" Content="Cancel" MinWidth="80" IsCancel="True"

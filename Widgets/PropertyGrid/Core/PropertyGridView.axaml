@@ -139,7 +139,7 @@
         <Style Selector="NumericUpDown.field">
             <Setter Property="MinWidth" Value="56"/>
             <Setter Property="MinHeight" Value="22"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="HorizontalAlignment" Value="Stretch"/>
             <Setter Property="Cursor" Value="SizeWestEast"/>
@@ -154,12 +154,12 @@
         </Style>
         <Style Selector="TextBox.field">
             <Setter Property="MinHeight" Value="22"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="ComboBox.field">
             <Setter Property="MinHeight" Value="22"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
         </Style>
         <Style Selector="GridSplitter">
@@ -242,7 +242,7 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style Selector="GridSplitter:pointerover">
-            <Setter Property="Background" Value="{DynamicResource SystemAccentColor}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
         </Style>
         <!-- Each property group is a raised toy "pillow": the surface gradient, rounded, lifted off the panel
              by the card shadow (a dark cast + a light highlight). Rows and the header sit transparent on top,
@@ -250,7 +250,7 @@
              card's own BoxShadow still renders outside the clip. -->
         <Style Selector="Border.toyCard">
             <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
-            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
             <Setter Property="Margin" Value="2,0,2,10"/>
             <Setter Property="ClipToBounds" Value="True"/>
             <Setter Property="BoxShadow" Value="{DynamicResource ThemeCardShadow}"/>
@@ -318,11 +318,10 @@
         <DataTemplate DataType="local:UnknownPropertyViewModel">
             <local:UnknownPropertyView/>
         </DataTemplate>
-        <DataTemplate DataType="local:HandlePickerPropertyViewModel">
-            <local:HandlePickerPropertyView/>
-        </DataTemplate>
-        <DataTemplate DataType="local:EntityPickerPropertyViewModel">
-            <local:EntityPickerPropertyView/>
+        <!-- Both reference pickers (asset/handle and entity) derive from PickerPropertyViewModel and share
+             this one view; the base-typed template matches either concrete subclass. -->
+        <DataTemplate DataType="local:PickerPropertyViewModel">
+            <local:PickerPropertyView/>
         </DataTemplate>
         <DataTemplate DataType="local:ScriptLinkPropertyViewModel">
             <local:ScriptLinkPropertyView/>
@@ -389,7 +388,8 @@
                                                       VerticalAlignment="Center"
                                                       Fill="{DynamicResource ThemeAccentSolidBrush}"
                                                       Data="M 0,0 L 8,4 L 0,8 Z"/>
-                                                <TextBlock Text="{Binding Name}" FontWeight="Medium" FontSize="12"
+                                                <TextBlock Text="{Binding Name}" FontWeight="Medium"
+                                                           FontSize="{DynamicResource ThemeFontSizeSmall}"
                                                            Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
                                             </DockPanel>
                                         </ToggleButton>

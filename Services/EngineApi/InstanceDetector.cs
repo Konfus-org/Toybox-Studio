@@ -18,6 +18,12 @@ public sealed class InstanceDetector : IDisposable
     private readonly Session _session;
     private CancellationTokenSource? _cts;
 
+    // Whether the current still-present instance has already been announced to listeners. Distinct from
+    // IsInstanceAvailable (raw reachability): it's cleared when the instance goes away AND whenever the
+    // session leaves Disconnected, so a failed auto-attach (which returns the session to Disconnected) gets
+    // the instance re-announced and retried instead of latching forever.
+    private bool _notified;
+
     public InstanceDetector(Session session)
     {
         _session = session;
@@ -56,20 +62,35 @@ public sealed class InstanceDetector : IDisposable
         while (!ct.IsCancellationRequested)
         {
             // Only probe while disconnected: a connected session either owns the port already
-            // or is attached to the instance we'd be probing.
+            // or is attached to the instance we'd be probing. A connection also clears the
+            // already-notified latch, so the instance is re-announced if it ever reappears.
             if (_session.State == ConnectionState.Disconnected)
             {
                 var available = await ProbeAsync(ct).ContinueOnAnyContext();
-                if (available && !IsInstanceAvailable)
+                if (available)
                 {
                     IsInstanceAvailable = true;
-                    InstanceDetected?.Invoke(DefaultEnginePort);
+                    // Edge-trigger on first sight, but also re-raise while the instance is still up and the
+                    // session never connected — a previous auto-attach that failed (transient error) must be
+                    // retried for the same still-running engine instead of wedging on the latch forever.
+                    if (!_notified)
+                    {
+                        _notified = true;
+                        InstanceDetected?.Invoke(DefaultEnginePort);
+                    }
                 }
-                else if (!available && IsInstanceAvailable)
+                else if (IsInstanceAvailable)
                 {
                     IsInstanceAvailable = false;
+                    _notified = false;
                     InstanceLost?.Invoke();
                 }
+            }
+            else
+            {
+                // Connected (or connecting): a later return to Disconnected with the instance still present
+                // should announce again, so clear the latch now.
+                _notified = false;
             }
 
             try

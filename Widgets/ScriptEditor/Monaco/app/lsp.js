@@ -16,6 +16,7 @@
   var pending = Object.create(null);   // request id -> {resolve, reject}
   var openDocs = Object.create(null);  // uri -> version
   var rootUri = null;
+  var semanticTokensEmitter = null;    // fired to make Monaco re-request tokens after clangd indexes
 
   function send(message) {
     message.jsonrpc = "2.0";
@@ -72,8 +73,12 @@
       // relative format, so it passes through). This is what makes types/members/params colour like an IDE.
       var provider = result && result.capabilities && result.capabilities.semanticTokensProvider;
       if (provider && provider.legend && monaco) registerSemanticTokens(provider.legend);
+      // Tell the host the language server is live (drives the status bar).
+      bridge.post({ kind: "editor", type: "lspStatus", state: "ready" });
       // Any models opened before initialize completes are flushed now.
       flushOpenDocs();
+    }, function () {
+      bridge.post({ kind: "editor", type: "lspStatus", state: "error" });
     });
   }
 
@@ -126,10 +131,28 @@
       return;
     }
 
+    // Server -> client request (has both id and method): must be answered or clangd waits.
+    if (message.id !== undefined && message.method) {
+      handleServerRequest(message);
+      return;
+    }
+
     if (message.method === "textDocument/publishDiagnostics")
       applyDiagnostics(message.params);
-    // Other server requests (e.g. workspace/configuration) are ignored; clangd tolerates the absence.
   });
+
+  function handleServerRequest(message) {
+    // clangd fires this once its index is ready (after the multi-second preamble build) to say "re-request
+    // semantic tokens, I have them now". Without re-fetching, the first (empty) request would stick and the
+    // editor would never colour by type. Firing the provider's onDidChange makes Monaco ask again.
+    if (message.method === "workspace/semanticTokens/refresh") {
+      if (semanticTokensEmitter) semanticTokensEmitter.fire();
+      send({ id: message.id, result: null });
+      return;
+    }
+    // Anything else we don't implement — answer so the server doesn't block on us.
+    send({ id: message.id, error: { code: -32601, message: "method not found" } });
+  }
 
   function applyDiagnostics(params) {
     if (!monaco) return;
@@ -249,7 +272,9 @@
   // 5-int encoding Monaco expects, so the data array passes straight through; the legend maps indices to the
   // type/modifier names the theme colours by.
   function registerSemanticTokens(legend) {
+    semanticTokensEmitter = new monaco.Emitter();
     monaco.languages.registerDocumentSemanticTokensProvider("cpp", {
+      onDidChange: semanticTokensEmitter.event,
       getLegend: function () {
         return { tokenTypes: legend.tokenTypes || [], tokenModifiers: legend.tokenModifiers || [] };
       },

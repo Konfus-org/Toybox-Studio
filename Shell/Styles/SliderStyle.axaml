@@ -8,7 +8,7 @@
          still carries the look). Used by the Accessibility animation-intensity dial and the theme editor's
          angle sliders. -->
     <Style Selector="Slider /template/ Border#TrackBackground">
-        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
         <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetSoftShadow}"/>
     </Style>
 </Styles>

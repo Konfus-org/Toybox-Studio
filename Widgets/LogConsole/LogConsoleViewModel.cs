@@ -7,14 +7,23 @@ namespace Toybox.Studio.Widgets.LogConsole;
 /// The log-specific console: listens to <see cref="Logger"/> and pushes each entry into a
 /// generic <see cref="ConsoleViewModel"/>, mapping log level/source to a console severity.
 /// </summary>
-public sealed class LogConsoleViewModel
+public sealed class LogConsoleViewModel : IDisposable
 {
+    private readonly Logger _logging;
+
     public LogConsoleViewModel(Logger logging)
     {
-        logging.Logged += OnLogged;
+        _logging = logging;
+        _logging.Logged += OnLogged;
     }
 
     public ConsoleViewModel Console { get; } = new();
+
+    /// <summary>
+    /// Unsubscribes from the logger. A no-op for the app's singleton view-model, but keeps the wiring
+    /// symmetric and safe if this ever becomes non-singleton (so it doesn't dangle on the logger's event).
+    /// </summary>
+    public void Dispose() => _logging.Logged -= OnLogged;
 
     private void OnLogged(LogEntry entry)
     {

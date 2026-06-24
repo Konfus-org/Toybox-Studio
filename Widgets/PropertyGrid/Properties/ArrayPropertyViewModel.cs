@@ -111,12 +111,17 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
         if (_array is null || _commit is null)
             return;
 
-        if (from == to || from < 0 || to < 0 || from >= _array.Count || to >= _array.Count)
+        // from/to are VISIBLE row positions; map them to backing tokens (a [[hidden]] element makes visible
+        // and backing indices diverge) so the live JSON moves the same element the user dragged.
+        var visible = VisibleElements().Select(pair => pair.Token).ToList();
+        if (from == to || from < 0 || to < 0 || from >= visible.Count || to >= visible.Count)
             return;
 
-        var token = _array[from];
+        var token = visible[from];
+        var target = visible[to];
         token.Remove();
-        _array.Insert(to, token);
+        // Insert relative to the target row's live position (recomputed after the removal).
+        _array.Insert(_array.IndexOf(target) + (to > from ? 1 : 0), token);
         Rebuild();
         RaiseCommit();
     }
@@ -145,13 +150,46 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
         if (_array is null || _commit is null || item is null)
             return;
 
-        var index = Items.IndexOf(item);
-        if (index < 0 || index >= _array.Count)
+        // Delete the row's actual backing token, not _array[visibleIndex]: a [[hidden]] element earlier in the
+        // array makes the visible position diverge from the backing index, so indexing by row position would
+        // delete the wrong element. The token is the row's stable key.
+        var token = TokenFor(item);
+        if (token is null)
             return;
 
-        _array[index].Remove();
+        token.Remove();
         Rebuild();
         RaiseCommit();
+    }
+
+    // The live backing token a visible row was built from (its stable key in _rowsByToken), or null if the row
+    // is no longer mapped. Used so structural edits target the correct element regardless of hidden elements.
+    private JToken? TokenFor(PropertyViewModel item)
+    {
+        foreach (var (token, row) in _rowsByToken)
+        {
+            if (ReferenceEquals(row, item))
+                return token;
+        }
+
+        return null;
+    }
+
+    // Pairs each non-hidden array element with its live backing token, preserving the true source index (a
+    // [[hidden]] element is skipped but does not shift the remaining tokens). Mirrors ParseArrayElements'
+    // hidden filter while keeping the token each visible node came from.
+    private IEnumerable<(JToken Token, PropertyNode Node)> VisibleElements()
+    {
+        if (_array is null)
+            yield break;
+
+        for (var index = 0; index < _array.Count; index++)
+        {
+            var token = _array[index];
+            var node = JsonParser.ParseValueNode($"[{index}]", token);
+            if (!node.Hidden)
+                yield return (token, node);
+        }
     }
 
     // Rebuilds the child view-models from the (possibly mutated) backing array, reusing each unchanged row in
@@ -167,13 +205,12 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
 
         if (_array is not null)
         {
-            // ParseArrayElements preserves array order one-to-one (array elements are never hidden — the same
-            // assumption Remove() makes), so element i pairs with the live token _array[i].
-            var elements = JsonParser.ParseArrayElements(_array);
-            for (var index = 0; index < elements.Count; index++)
+            // A [[hidden]] element is dropped from the visible rows, so a row's position is NOT its backing
+            // index: pair each visible node with the actual live token it came from (VisibleElements carries
+            // the source index) instead of assuming positional parity.
+            foreach (var (token, parsed) in VisibleElements())
             {
-                var token = _array[index];
-                var node = Headered(elements[index]);
+                var node = Headered(parsed);
                 // Reuse the row built for this token when it's still in shape (Sync refreshes its value in
                 // place); otherwise build a fresh one and wire its parts.
                 if (!_rowsByToken.TryGetValue(token, out var element) || !element.Sync(node))
@@ -237,7 +274,9 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
         var handleChild = element.Children.FirstOrDefault(child => child.Type == "handle");
         if (handleChild?.Value is { } handleValue && PropertyViewRegistry.Assets is { } assets)
         {
-            var resolved = assets.ResolveName(handleValue.Value<long>());
+            // Handle ids are UNSIGNED 64-bit: read as ulong (so a high-bit id doesn't overflow), then
+            // reinterpret the full bits to the catalog's signed long key.
+            var resolved = assets.ResolveName(unchecked((long)handleValue.Value<ulong>()));
             if (!string.IsNullOrWhiteSpace(resolved))
                 return resolved;
         }

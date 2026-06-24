@@ -15,8 +15,14 @@ public sealed class ViewportStream : IDisposable
     private readonly Session _session;
     private readonly EngineRpc _engine;
     private readonly ViewKind _kind;
+
+    // Serializes start/stop so overlapping StartViewAsync calls (e.g. a reconnect racing the mid-session
+    // open) can't both run StartView and leak an engine view, and so _viewName/_cts are never written
+    // concurrently. A start always stops the previous view (and awaits its view.stop) before switching.
+    private readonly SemaphoreSlim _gate = new(1, 1);
     private CancellationTokenSource? _cts;
-    private string? _viewName;
+    private volatile string? _viewName;
+    private bool _disposed;
 
     public ViewportStream(Session session, EngineRpc engine, ViewKind kind = ViewKind.Editor)
     {
@@ -56,7 +62,8 @@ public sealed class ViewportStream : IDisposable
         _session.StateChanged -= OnSessionStateChanged;
         _engine.SurfaceReceived -= OnSurfaceReceived;
         _engine.MouseLockModeChanged -= OnMouseLockModeChanged;
-        StopView();
+        _disposed = true;
+        StopViewAsync().FireAndForget();
     }
 
     /// <summary>
@@ -99,7 +106,7 @@ public sealed class ViewportStream : IDisposable
         if (state == ConnectionState.Connected)
             StartViewAsync().FireAndForget();
         else
-            StopView();
+            StopViewAsync().FireAndForget();
     }
 
     private void OnSurfaceReceived(ViewSurface surface)
@@ -111,30 +118,64 @@ public sealed class ViewportStream : IDisposable
 
     private async Task StartViewAsync()
     {
-        // The engine may have no rendering service or have gone away; the viewport just stays empty.
-        var result = await _engine.StartViewAsync(_kind, CancellationToken.None).ContinueOnAnyContext();
-        if (result is not { Success: true, Value: { } view })
-            return;
+        await _gate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            if (_disposed)
+                return;
 
-        StopView();
-        _viewName = view.Name;
-        _cts = new CancellationTokenSource();
-        // The shared texture follows as a view.surface notification (created on the render lane).
+            // Stop (and await) any previous view first, so a re-entrant start can't leak the old engine
+            // view/camera before this stream switches to the new one.
+            await StopViewLockedAsync().ContinueOnAnyContext();
+
+            // The engine may have no rendering service or have gone away; the viewport just stays empty.
+            var result = await _engine.StartViewAsync(_kind, CancellationToken.None).ContinueOnAnyContext();
+            if (_disposed || result is not { Success: true, Value: { } view })
+            {
+                // Disposed (or torn down) while the call was in flight: don't keep an orphaned engine view.
+                if (result is { Success: true, Value: { } orphan } && _engine.IsConnected)
+                    await _engine.StopViewAsync(orphan.Name, CancellationToken.None).ContinueOnAnyContext();
+                return;
+            }
+
+            _viewName = view.Name;
+            _cts = new CancellationTokenSource();
+            // The shared texture follows as a view.surface notification (created on the render lane).
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
-    private void StopView()
+    private async Task StopViewAsync()
+    {
+        await _gate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            await StopViewLockedAsync().ContinueOnAnyContext();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // Tears the current view down; the caller must hold _gate.
+    private async Task StopViewLockedAsync()
     {
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
 
-        // Free the engine-side view (camera + shared texture) for this stream. Best-effort: if the
-        // connection is already gone the engine tore its views down on disconnect anyway.
+        // Free the engine-side view (camera + shared texture) for this stream. Awaited (not fire-and-forget)
+        // so the old view.stop is actually sent before a following StartView, preventing a leaked view.
+        // Best-effort: if the connection is already gone the engine tore its views down on disconnect anyway.
         if (_viewName is { } name)
         {
             _viewName = null;
             if (_engine.IsConnected)
-                _engine.StopViewAsync(name, CancellationToken.None).FireAndForget();
+                await _engine.StopViewAsync(name, CancellationToken.None).ContinueOnAnyContext();
         }
 
         SurfaceLost?.Invoke();

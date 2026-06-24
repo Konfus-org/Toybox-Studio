@@ -93,7 +93,7 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
 
     /// <summary>Whether the inline source editor is expanded under this binding's fields.</summary>
     [ObservableProperty]
-    public partial bool IsSourceExpanded { get; private set; }
+    public partial bool IsSourceExpanded { get; set; }
 
     /// <summary>The inline editor, created lazily when the Source section is first expanded.</summary>
     [ObservableProperty]
@@ -153,19 +153,36 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
             _catalog?.Activate(_scriptId);
     }
 
-    /// <summary>Expands the inline source editor (creating it on first open) or collapses it.</summary>
+    /// <summary>Pops the bound script's source out into the dockable script editor window.</summary>
     [RelayCommand]
-    private void ToggleSource()
+    private void PopOut()
     {
-        if (IsSourceExpanded)
-        {
+        EnsureSourceResolved();
+        if (_sourcePath is { } path)
+            ScriptEditing.Current?.PopOut(path);
+    }
+
+    // Driven by the section header toggle: expanding builds the inline editor (the container shows it in its
+    // fill region), collapsing tears it down.
+    partial void OnIsSourceExpandedChanged(bool value)
+    {
+        if (value)
+            ExpandSource();
+        else
             CollapseSource();
+    }
+
+    private void ExpandSource()
+    {
+        if (Inline is not null)
             return;
-        }
 
         EnsureSourceResolved();
         if (_sourcePath is null || ScriptEditing.Current is not { } editing)
+        {
+            SourceError = "Script source not found.";
             return;
+        }
 
         var created = editing.CreateInline(_sourcePath);
         if (created)
@@ -177,25 +194,14 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
         {
             SourceError = created.Error;
         }
-
-        IsSourceExpanded = true;
-    }
-
-    /// <summary>Pops the bound script's source out into the dockable script editor window.</summary>
-    [RelayCommand]
-    private void PopOut()
-    {
-        EnsureSourceResolved();
-        if (_sourcePath is { } path)
-            ScriptEditing.Current?.PopOut(path);
     }
 
     private void CollapseSource()
     {
-        IsSourceExpanded = false;
         var inline = Inline;
         Inline = null;
         inline?.Dispose();
+        SourceError = null;
     }
 
     private void EnsureSourceResolved()

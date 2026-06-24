@@ -9,6 +9,7 @@ using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Widgets.PropertyGrid;
+using Toybox.Studio.Widgets.ScriptEditor;
 
 namespace Toybox.Studio.Widgets.Ecs;
 
@@ -19,7 +20,7 @@ namespace Toybox.Studio.Widgets.Ecs;
 /// <c>scripts</c> array — the same single-property round-trip a normal component edit uses — so the engine
 /// reapplies the binding.
 /// </summary>
-public sealed class ScriptContainerViewModel : ObservableObject
+public sealed partial class ScriptContainerViewModel : ObservableObject
 {
     private const string ScriptsProperty = "scripts";
 
@@ -29,6 +30,9 @@ public sealed class ScriptContainerViewModel : ObservableObject
     private readonly Action _onEdited;
 
     private string? _filter;
+
+    // Guards the cross-binding reconcile from re-entering when it collapses the other bindings.
+    private bool _settlingExpansion;
 
     public ScriptContainerViewModel(
         Component component, ComponentDescription snapshot, Func<Task> resync, Action onEdited)
@@ -43,13 +47,44 @@ public sealed class ScriptContainerViewModel : ObservableObject
         if (scripts is not null)
         {
             foreach (var binding in scripts.Children)
-                Bindings.Add(new ScriptBindingViewModel(binding, CommitScripts, PropertyViewRegistry.Assets));
+            {
+                var card = new ScriptBindingViewModel(binding, CommitScripts, PropertyViewRegistry.Assets);
+                card.PropertyChanged += OnBindingChanged;
+                Bindings.Add(card);
+            }
         }
     }
 
     public ObservableCollection<ScriptBindingViewModel> Bindings { get; }
 
     public bool HasBindings => Bindings.Count > 0;
+
+    /// <summary>
+    /// The inline editor of whichever binding's Source section is expanded, shown in the container's fill
+    /// region so it can take all the remaining height (a per-card editor inside the scroll couldn't). Only one
+    /// expands at a time.
+    /// </summary>
+    [ObservableProperty]
+    public partial InlineScriptEditorViewModel? ActiveInline { get; private set; }
+
+    // Keeps a single source section open at a time and surfaces its editor for the fill region: when one
+    // binding expands, the others collapse; the active editor is whichever binding stays expanded.
+    private void OnBindingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ScriptBindingViewModel.IsSourceExpanded) || _settlingExpansion)
+            return;
+
+        _settlingExpansion = true;
+        if (sender is ScriptBindingViewModel expanded && expanded.IsSourceExpanded)
+        {
+            foreach (var other in Bindings)
+                if (!ReferenceEquals(other, expanded))
+                    other.IsSourceExpanded = false;
+        }
+
+        ActiveInline = Bindings.FirstOrDefault(binding => binding.IsSourceExpanded)?.Inline;
+        _settlingExpansion = false;
+    }
 
     /// <summary>The inspector search, fanned out to each binding card.</summary>
     public string? Filter

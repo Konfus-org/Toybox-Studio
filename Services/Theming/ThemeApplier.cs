@@ -49,7 +49,13 @@ public sealed class ThemeApplier
         // reads as secondary without becoming illegible.
         var background = colors.Background.Representative;
         var text = Contrast.Ensure(colors.Text.Start, background, 8.5);
-        var onPrimary = Contrast.Ensure(colors.Primary.Representative, colors.Primary.Representative, 8.5);
+        // ON-PRIMARY ink must be legible on the PRIMARY fill, so contrast it AGAINST the primary — not against
+        // itself (passing the same colour as base and background yields Ratio==1, which never adjusts). Seed the
+        // ink from the primary's luminance — near-black on a light primary, white on a dark one — so even a
+        // mid-luminance primary (e.g. a muted teal) starts on the legible side and Ensure only has to refine it.
+        var primaryFill = colors.Primary.Representative;
+        var onPrimarySeed = Contrast.RelativeLuminance(primaryFill) > 0.5 ? Color.FromRgb(0x14, 0x14, 0x14) : Colors.White;
+        var onPrimary = Contrast.Ensure(onPrimarySeed, primaryFill, 4.5);
         var muted = Contrast.Ensure(text.Blend(background, 0.40f), background, 4.5);
 
         // The compact set of COLOURS that AppStyles derives its translucent neutral brushes from (border,

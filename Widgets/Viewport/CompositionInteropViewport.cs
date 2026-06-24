@@ -41,6 +41,14 @@ public sealed class CompositionInteropViewport : Control
     private Task? _lastPresent;
     private bool _initialized;
     private bool _running;
+    // Serializes ImportCurrentSurfaceAsync so two SurfaceProperty changes can't race _imported/_lastPresent
+    // (double-dispose or leak). While an import runs, a newer request just sets _importPending; the running
+    // import re-loops when it finishes so the latest Surface always wins. UI-thread-only, so no lock needed.
+    private bool _importing;
+    private bool _importPending;
+    // Bumped on every TearDown. The import driver captures it and, after each await, bails if it no longer
+    // matches — so a driver left suspended across a detach/re-attach never touches the new generation's state.
+    private int _generation;
 
     public CompositionInteropViewport()
     {
@@ -99,7 +107,16 @@ public sealed class CompositionInteropViewport : Control
         ElementComposition.SetElementChildVisual(this, _visual);
         UpdateVisualLayout();
 
-        _interop = await _compositor.TryGetCompositionGpuInterop().ContinueOnSameContext();
+        var compositor = _compositor;
+        var interop = await compositor.TryGetCompositionGpuInterop().ContinueOnSameContext();
+
+        // A detach (TearDown nulls _compositor) may have raced this await. If we were torn down, drop the
+        // interop we just obtained and bail — otherwise we'd light up a half-built viewport that the
+        // matching detach already cleaned up, leaving it permanently black.
+        if (_compositor is null || !ReferenceEquals(_compositor, compositor))
+            return;
+
+        _interop = interop;
         if (_interop is null
             || !_interop.SupportedImageHandleTypes.Contains(
                 KnownPlatformGraphicsExternalImageHandleTypes.D3D11TextureGlobalSharedHandle))
@@ -114,6 +131,12 @@ public sealed class CompositionInteropViewport : Control
         _update ??= UpdateFrame;
         // Resume on the UI thread: StartLoop and the composition objects it drives are UI-thread-affine.
         await ImportCurrentSurfaceAsync().ContinueOnSameContext();
+
+        // Re-check after the import await: a detach during it tears everything down, and starting the
+        // compositor loop afterwards would resurrect a dead viewport.
+        if (_compositor is null || _interop is null)
+            return;
+
         StartLoop();
     }
 
@@ -143,6 +166,39 @@ public sealed class CompositionInteropViewport : Control
     }
 
     private async Task ImportCurrentSurfaceAsync()
+    {
+        // Only one import may run at a time. A request arriving mid-import is coalesced into a single
+        // pending re-run that picks up whatever the latest Surface is, so the newest surface wins without
+        // overlapping imports racing _imported/_lastPresent.
+        if (_importing)
+        {
+            _importPending = true;
+            return;
+        }
+
+        var generation = _generation;
+        _importing = true;
+        try
+        {
+            do
+            {
+                _importPending = false;
+                await ImportSurfaceCoreAsync().ContinueOnSameContext();
+                // A detach during the import bumps _generation; this driver is now stale, so stop before it
+                // can clear the live generation's _importing guard below.
+                if (generation != _generation)
+                    return;
+            }
+            while (_importPending && _interop is not null);
+        }
+        finally
+        {
+            if (generation == _generation)
+                _importing = false;
+        }
+    }
+
+    private async Task ImportSurfaceCoreAsync()
     {
         // Drop the previous import only once any in-flight present that referenced it has finished.
         var old = _imported;
@@ -212,6 +268,12 @@ public sealed class CompositionInteropViewport : Control
     {
         _running = false;
         _initialized = false;
+        // Bump the generation and clear the import guard so a re-attach's fresh import isn't blocked by a
+        // guard left set by an import that was in flight when we tore down (a stale driver checks the
+        // generation and won't touch the new one's state; its core body also bails on the nulled _interop).
+        _generation++;
+        _importing = false;
+        _importPending = false;
 
         var imported = _imported;
         _imported = null;

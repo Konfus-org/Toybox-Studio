@@ -12,6 +12,10 @@ public sealed class Locator
 {
     private readonly SettingsManager _settings;
 
+    // Serializes the deferred settings writes this service kicks off, so two quick SetEngine calls can't
+    // race the shared EditorSettings serialization (a torn write / "collection modified" on the Recent list).
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+
     public Locator(SettingsManager settings)
     {
         _settings = settings;
@@ -67,11 +71,25 @@ public sealed class Locator
         if (persist && path is not null)
         {
             _settings.Settings.Engine.SourcePath = path;
-            // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
-            _settings.SaveAsync().FireAndForget();
+            SaveSerializedAsync().FireAndForget();
         }
 
         EngineChanged?.Invoke(path);
+    }
+
+    // Runs settings saves one at a time so overlapping deferred writes don't serialize the shared mutable
+    // EditorSettings concurrently.
+    private async Task SaveSerializedAsync()
+    {
+        await _saveGate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            await _settings.SaveAsync().ContinueOnAnyContext();
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
     }
 
     /// <summary>

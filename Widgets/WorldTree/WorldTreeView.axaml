@@ -6,6 +6,7 @@
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:util="using:Toybox.Studio.Widgets.Behaviors" xmlns:anim="using:Toybox.Studio.Widgets.Behaviors.Animations"
              xmlns:wt="using:Toybox.Studio.Widgets.WorldTree"
+             xmlns:conv="using:Avalonia.Data.Converters"
              x:Class="Toybox.Studio.Widgets.WorldTree.WorldTreeView"
              x:DataType="ecs:WorldViewModel">
 
@@ -36,7 +37,7 @@
         <Style Selector="TextBox.renameBox">
             <Setter Property="MinHeight" Value="0"/>
             <Setter Property="Padding" Value="2,0"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSize}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
 
@@ -181,7 +182,7 @@
         </TreeDataTemplate>
     </UserControl.Resources>
 
-    <DockPanel Margin="4">
+    <DockPanel Margin="{DynamicResource ThemePanelPadding}">
         <!-- Search, with the refresh button aligned to its right. -->
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" IsVisible="{Binding HasWorld}">
             <Button DockPanel.Dock="Right" Classes="Basic" Margin="4,0,0,0" VerticalAlignment="Center"
@@ -219,9 +220,11 @@
                                     </Button>
                                     <TextBlock DockPanel.Dock="Right"
                                                Text="{Binding Globals.Count, StringFormat='{}{0} items'}"
-                                               FontSize="12" Foreground="{DynamicResource ThemeMutedTextBrush}"
+                                               FontSize="{DynamicResource ThemeFontSizeSmall}"
+                                               Foreground="{DynamicResource ThemeMutedTextBrush}"
                                                VerticalAlignment="Center" Margin="8,0"/>
-                                    <TextBlock Text="Globals" FontWeight="Medium" FontSize="12"
+                                    <TextBlock Text="Globals" FontWeight="Medium"
+                                               FontSize="{DynamicResource ThemeFontSizeSmall}"
                                                Foreground="{DynamicResource ThemeAccentSolidBrush}"
                                                VerticalAlignment="Center"/>
                                 </DockPanel>
@@ -233,7 +236,8 @@
                                           ItemTemplate="{StaticResource EntityRow}"
                                           wt:EntityTreeDragDrop.Enabled="True"/>
                                 <TextBlock Text="Drag entities here to make them global."
-                                           FontSize="11" Opacity="0.45" Margin="2,2,0,0" TextWrapping="Wrap"
+                                           FontSize="{DynamicResource ThemeFontSizeSmall}" Opacity="0.45"
+                                           Margin="2,2,0,0" TextWrapping="Wrap"
                                            IsVisible="{Binding !HasGlobals}"/>
                             </StackPanel>
                         </StackPanel>
@@ -255,19 +259,36 @@
                                 </Button>
                                 <TextBlock DockPanel.Dock="Right"
                                            Text="{Binding RootEntities.Count, StringFormat='{}{0} items'}"
-                                           FontSize="12" Foreground="{DynamicResource ThemeMutedTextBrush}"
+                                           FontSize="{DynamicResource ThemeFontSizeSmall}"
+                                           Foreground="{DynamicResource ThemeMutedTextBrush}"
                                            VerticalAlignment="Center" Margin="8,0"/>
-                                <TextBlock Text="Streamed" FontWeight="Medium" FontSize="12"
+                                <TextBlock Text="Streamed" FontWeight="Medium"
+                                           FontSize="{DynamicResource ThemeFontSizeSmall}"
                                            Foreground="{DynamicResource ThemeAccentSolidBrush}"
                                            VerticalAlignment="Center"/>
                             </DockPanel>
                         </ToggleButton>
 
-                        <TreeView Classes="entities" ItemsSource="{Binding RootEntities}"
-                                  IsVisible="{Binding #StreamedToggle.IsChecked}"
-                                  wt:WorldTreeSelection.Selection="{Binding Selection}"
-                                  ItemTemplate="{StaticResource EntityRow}"
-                                  wt:EntityTreeDragDrop.Enabled="True"/>
+                        <StackPanel IsVisible="{Binding #StreamedToggle.IsChecked}">
+                            <TreeView x:Name="StreamedTree" Classes="entities" ItemsSource="{Binding RootEntities}"
+                                      wt:WorldTreeSelection.Selection="{Binding Selection}"
+                                      ItemTemplate="{StaticResource EntityRow}"
+                                      wt:EntityTreeDragDrop.Enabled="True"/>
+                            <!-- Empty-state: a world can stream in with no root entities (everything global, or a
+                                 fresh world), so the streamed section shows a hint instead of a blank gap. -->
+                            <TextBlock Text="No streamed entities. Click + to add one, or drag a global here."
+                                       FontSize="{DynamicResource ThemeFontSizeSmall}" Opacity="0.45"
+                                       Margin="2,2,0,0" TextWrapping="Wrap">
+                                <TextBlock.IsVisible>
+                                    <Binding Path="#StreamedTree.ItemCount"
+                                             Converter="{x:Static conv:ObjectConverters.Equal}">
+                                        <Binding.ConverterParameter>
+                                            <x:Int32>0</x:Int32>
+                                        </Binding.ConverterParameter>
+                                    </Binding>
+                                </TextBlock.IsVisible>
+                            </TextBlock>
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

@@ -85,7 +85,7 @@
         <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1.5"/>
-        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}"/>
         <Setter Property="Padding" Value="12,5"/>
     </Style>

@@ -27,7 +27,7 @@
     </Style>
     <!-- ComboBox dropdown items: same rounded, inset hover so it stays within the rounded popup. -->
     <Style Selector="ComboBoxItem">
-        <Setter Property="CornerRadius" Value="7"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
         <Setter Property="Margin" Value="3,1"/>
     </Style>
 

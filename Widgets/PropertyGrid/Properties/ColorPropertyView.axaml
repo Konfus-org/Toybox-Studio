@@ -15,13 +15,17 @@
             </Border>
             <!-- Read-only: a static swatch + hex readout. -->
             <Border Background="{DynamicResource ThemeWellBrush}"
-                    BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0.5" CornerRadius="2"
+                    BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"
+                    CornerRadius="{DynamicResource ControlCornerRadius}"
                     Height="20" Padding="6,0" HorizontalAlignment="Left"
                     IsVisible="{Binding IsReadOnly}">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Swatch}"
+                    <!-- The 12px chip keeps a small fixed rounding: the full theme radius would round it to a
+                         circle. -->
+                    <Border Width="12" Height="12" CornerRadius="3" Background="{Binding Swatch}"
                             BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"/>
-                    <TextBlock Text="{Binding Hex}" VerticalAlignment="Center" FontSize="12"
+                    <TextBlock Text="{Binding Hex}" VerticalAlignment="Center"
+                               FontSize="{DynamicResource ThemeFontSizeSmall}"
                                FontFamily="{DynamicResource ThemeMonoFontFamily}"/>
                 </StackPanel>
             </Border>

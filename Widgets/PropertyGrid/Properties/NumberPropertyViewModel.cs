@@ -16,24 +16,29 @@ public sealed partial class NumberPropertyViewModel : PropertyViewModel
     private readonly JsonValueSlot _slot;
     private readonly bool _integer;
 
+    // uuid/entity-id fields are UNSIGNED 64-bit: ids above long.MaxValue (roughly half the id space) must
+    // round-trip through the full ulong range, so they read/write as ulong rather than long. Plain signed
+    // integer fields keep their signed behaviour (negative values stay negative). decimal holds either.
+    private readonly bool _unsigned;
+
     [ObservableProperty]
     private decimal? _value;
 
     public NumberPropertyViewModel(PropertyNode node, bool integer) : base(node)
     {
         _integer = integer;
+        _unsigned = node.Type == "uuid";
         _slot = new JsonValueSlot(node.Value);
         _value = PropertyConvert.TryDecimal(node.Value);
     }
 
-    /// <summary>NumericUpDown format string: no decimals for integers, up to six for floats.</summary>
-    public string FormatString => _integer ? "0" : "0.######";
+    /// <summary>NumericUpDown format string: no decimals for integers, full precision for floats.</summary>
+    public string FormatString => _integer ? "0" : "0.#################";
 
     /// <summary>Spinner / drag-scrub step: whole numbers for integers, tenths for floats.</summary>
     public decimal Increment => _integer ? 1m : 0.1m;
 
-    public override JToken? CurrentValue =>
-        _integer ? new JValue((long)(Value ?? 0m)) : new JValue((double)(Value ?? 0m));
+    public override JToken? CurrentValue => MakeToken(Value ?? 0m);
 
     public override void ApplyValue(JToken token) => Value = PropertyConvert.TryDecimal(token);
 
@@ -48,8 +53,17 @@ public sealed partial class NumberPropertyViewModel : PropertyViewModel
         if (value is null)
             return;
 
-        var token = _integer ? new JValue((long)value.Value) : new JValue((double)value.Value);
-        if (_slot.Set(token))
+        if (_slot.Set(MakeToken(value.Value)))
             RaiseCommit();
+    }
+
+    // An unsigned id casts to ulong (so high-bit ids survive); a signed integer to long; a float keeps full
+    // double precision (no decimal/string round-trip that would truncate).
+    private JValue MakeToken(decimal value)
+    {
+        if (!_integer)
+            return new JValue((double)value);
+
+        return _unsigned ? new JValue((ulong)value) : new JValue((long)value);
     }
 }

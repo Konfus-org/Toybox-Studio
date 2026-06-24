@@ -26,7 +26,7 @@
             </StackPanel>
         </DockPanel>
 
-        <Border BorderBrush="#22FFFFFF" BorderThickness="0.5">
+        <Border BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1">
             <Panel>
                 <ListBox SelectionMode="Single"
                          ItemsSource="{Binding FilteredOptions}"
@@ -36,7 +36,7 @@
                         <DataTemplate x:DataType="project:Asset">
                             <StackPanel Margin="2,3">
                                 <TextBlock Text="{Binding Name}"/>
-                                <TextBlock Text="{Binding Type}" Opacity="0.55" FontSize="11"/>
+                                <TextBlock Text="{Binding Type}" Opacity="0.55" FontSize="{DynamicResource ThemeFontSizeSmall}"/>
                             </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

@@ -1,78 +1,53 @@
 using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Utils;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using Newtonsoft.Json.Linq;
-using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Services.Project;
 
 namespace Toybox.Studio.Widgets.PropertyGrid;
 
 /// <summary>
-/// An entity-reference field (a <c>tbx::Entity</c> used as a component/script field, carried as the
-/// "entity" type token whose value is the referenced id). Renders the referenced entity's name plus a
-/// picker button that opens a chooser over the world's entities, committing the chosen entity's id back to
-/// the backing token. Routed purely from the type token — no [[editor::view]] tag needed.
+/// An entity-reference field (a <c>tbx::Entity</c> used as a component/script field, carried as the "entity"
+/// type token whose value is the referenced id). Renders the referenced entity's name plus a picker button
+/// that opens a chooser over the world's entities, committing the chosen entity's id back to the backing
+/// token. Routed purely from the type token — no [[editor::view]] tag needed. Shares its view and behaviour
+/// with <see cref="HandlePickerPropertyViewModel"/> via <see cref="PickerPropertyViewModel"/>; entities have
+/// no file location, so clicking a set reference simply re-opens the chooser.
 /// </summary>
-public sealed partial class EntityPickerPropertyViewModel : PropertyViewModel
+public sealed class EntityPickerPropertyViewModel : PickerPropertyViewModel
 {
     private readonly WorldManager? _world;
-    private readonly JsonValueSlot _slot;
 
-    [ObservableProperty]
-    private string _displayName;
-
-    public EntityPickerPropertyViewModel(PropertyNode node, Action? commit, WorldManager? world) : base(node)
+    public EntityPickerPropertyViewModel(PropertyNode node, Action? commit, WorldManager? world)
+        : base(node, commit)
     {
         _world = world;
-        _slot = new JsonValueSlot(node.Value);
-        CommitChanges = commit;
-        _displayName = ResolveDisplayName();
-
         if (world is not null)
             world.WorldChanged += OnWorldChanged;
+        RefreshDisplay();
     }
 
-    public long CurrentId => _slot.Read<long?>() ?? 0;
+    public override string IconName => "Search";
 
-    public bool HasReference => CurrentId != 0;
+    public override string PickTooltip => "Pick an entity";
 
     private void OnWorldChanged(WorldDescription _) => Dispatch.To(DispatchContext.UI, RefreshDisplay);
 
-    private void RefreshDisplay()
-    {
-        DisplayName = ResolveDisplayName();
-        OnPropertyChanged(nameof(HasReference));
-    }
-
-    private string ResolveDisplayName()
+    protected override string ResolveDisplayName()
     {
         var id = CurrentId;
         if (id == 0)
             return "None";
 
-        return FindName((ulong)id) ?? $"#{id}";
+        return FindName(id) ?? $"#{id}";
     }
 
-    /// <summary>Opens the modal entity chooser over the world's entities, then commits the pick.</summary>
-    [RelayCommand]
-    private async Task PickAsync()
+    protected override (string Title, IReadOnlyList<Asset> Options) BuildChoices()
     {
         // Reuse the asset chooser by presenting each entity as an entry (its id, name, and "Entity" kind).
         var options = Flatten()
             .Select(entity => new Asset(unchecked((long)entity.Id), entity.Name, "Entity", ""))
             .ToList();
-
-        var pick = await AssetPicker.ShowAsync("Select entity", options, CurrentId).ContinueOnSameContext();
-        if (!pick.Confirmed)
-            return;
-
-        if (_slot.Set(new JValue(pick.Id)))
-        {
-            RefreshDisplay();
-            RaiseCommit();
-        }
+        return ("Select entity", options);
     }
 
     private string? FindName(ulong id) =>

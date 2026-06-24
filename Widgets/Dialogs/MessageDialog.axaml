@@ -13,8 +13,12 @@
         <StackPanel Orientation="Horizontal" Spacing="14">
             <pg:IconView IconName="{Binding IconName}" IconColor="{Binding IconColor}"
                          Width="30" Height="30" VerticalAlignment="Top"/>
-            <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
-                       VerticalAlignment="Center" MaxWidth="340"/>
+            <!-- A long message scrolls rather than growing the non-resizable window until the OK button is
+                 pushed off-screen. -->
+            <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
+                           VerticalAlignment="Center" MaxWidth="340"/>
+            </ScrollViewer>
         </StackPanel>
         <Button Classes="action" Content="{Binding OkText}" HorizontalAlignment="Right"
                 MinWidth="80" IsDefault="True" Command="{Binding OkCommand}"/>

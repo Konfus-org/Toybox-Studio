@@ -6,7 +6,7 @@
         x:Class="Toybox.Studio.Widgets.Theming.ThemeCreatorWindow"
         x:DataType="shell:ThemeCreatorViewModel"
         Icon="/Assets/Icons/Toybox.png"
-        Width="620" SizeToContent="Height" CanResize="False"
+        Width="620" SizeToContent="Height" CanResize="True"
         WindowStartupLocation="CenterOwner"
         Title="Theme Creator">
 
@@ -27,11 +27,12 @@
         </Border>
 
         <ScrollViewer MaxHeight="620" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="20" Spacing="10">
+        <StackPanel Margin="16" Spacing="10">
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <pg:IconView IconName="Palette" Width="22" Height="22" VerticalAlignment="Center"
                              Foreground="{DynamicResource ThemePrimaryBrush}"/>
-                <TextBlock Text="Create a new theme" FontWeight="SemiBold" FontSize="16"
+                <TextBlock Text="Create a new theme" FontWeight="SemiBold"
+                           FontSize="{DynamicResource ThemeFontSizeLarge}"
                            VerticalAlignment="Center"/>
             </StackPanel>
             <TextBlock Text="Built-in themes can't be edited. This saves a new theme and applies it."
@@ -55,8 +56,9 @@
                             IsEnabled="{Binding ShadowsEnabled}">
                     <Slider Width="200" Minimum="0" Maximum="360" Value="{Binding ShadowAngle}"
                             VerticalAlignment="Center"/>
+                    <!-- Min width (not fixed) so "360°" reads in full instead of clipping. -->
                     <TextBlock Text="{Binding ShadowAngle, StringFormat='{}{0:0}°'}" VerticalAlignment="Center"
-                               Width="36"/>
+                               MinWidth="44" TextAlignment="Right"/>
                 </StackPanel>
             </Grid>
 

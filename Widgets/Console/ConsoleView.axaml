@@ -10,7 +10,7 @@
     <UserControl.Styles>
         <Style Selector="TextBlock.consoleLine">
             <Setter Property="FontFamily" Value="{DynamicResource ThemeMonoFontFamily}"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
         <Style Selector="TextBlock.consoleLine.warning">
@@ -35,7 +35,7 @@
         </Style>
     </UserControl.Styles>
 
-    <DockPanel Margin="4">
+    <DockPanel Margin="{DynamicResource ThemePanelPadding}">
         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6"
                    IsVisible="{Binding #Root.ShowToolbar}">
             <Button DockPanel.Dock="Right" Classes="toy" Content="Clear" VerticalAlignment="Center"

@@ -13,20 +13,24 @@ namespace Toybox.Studio.Widgets.ScriptEditor;
 /// there are two) switches the visible one — the implementation is active by default. Trimmed for the inline
 /// context (no minimap, smaller font) and saved with Ctrl+S like the full editor.
 ///
-/// Unlike the dockable editor it deliberately does not subscribe to <see cref="ScriptDocument.Reloaded"/>:
-/// the inspector recreates binding cards (and this VM) on every refresh with no disposal hook, so a handler
-/// left on the long-lived shared document would pin a dead VM. The trade-off is that an external disk reload
-/// won't live-update an open inline strip until it's reopened — the popped-out window covers that case.
+/// It deliberately does not subscribe to <see cref="ScriptDocument.Reloaded"/> (a disk reload won't
+/// live-update an open inline strip — the popped-out window covers that), but it DOES subscribe to
+/// <see cref="ScriptDocument.ExternalEdit"/> so typing in the popped-out window keeps this strip's Monaco
+/// model in sync (and vice-versa). That subscription is released in <see cref="Dispose"/>, which the owning
+/// binding card calls when the source section collapses, so it never pins a dead VM onto the shared document.
 /// </summary>
 public sealed partial class InlineScriptEditorViewModel : ObservableObject, IDisposable
 {
     private readonly ScriptDocumentService _documents;
     private readonly ScriptHotReload _hotReload;
     private readonly Dictionary<string, ScriptDocument> _byPath;
+    private readonly Dictionary<string, Action<object?>> _externalEditHandlers =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public InlineScriptEditorViewModel(
         Uri pageUri, IReadOnlyList<ScriptDocument> documents,
-        ScriptDocumentService documentService, ScriptHotReload hotReload)
+        ScriptDocumentService documentService, ScriptHotReload hotReload, bool dark,
+        int fontSize, bool wordWrap)
     {
         _documents = documentService;
         _hotReload = hotReload;
@@ -38,10 +42,20 @@ public sealed partial class InlineScriptEditorViewModel : ObservableObject, IDis
         Session.ContentChanged += OnContentChanged;
         Session.CursorMoved += OnCursorMoved;
         Session.SaveRequested += OnSaveRequested;
-        Session.SetTheme(dark: true);
-        Session.SetOptions(minimap: false, fontSize: 12, lineNumbers: "on");
+        Session.SetTheme(dark);
+        Session.SetOptions(
+            minimap: false, fontSize: fontSize, lineNumbers: "on", wordWrap: wordWrap ? "on" : "off");
         foreach (var document in documents)
+        {
             Session.OpenDocument(document.Path, document.Text, document.Language);
+            // Re-sync this strip when the popped-out window edits the same shared buffer (skipping our own
+            // edits via the origin token), re-pushing only the document that changed so a background tab's
+            // undo/scroll isn't clobbered. Released in Dispose so it never outlives this live surface.
+            var captured = document;
+            void Handler(object? origin) => OnExternalEdit(captured, origin);
+            document.ExternalEdit += Handler;
+            _externalEditHandlers[document.Path] = Handler;
+        }
 
         // The pair is ordered header-then-implementation, so the .cpp is last — make it the active one.
         ActiveDocument = documents.Count > 0 ? documents[^1] : null;
@@ -77,7 +91,19 @@ public sealed partial class InlineScriptEditorViewModel : ObservableObject, IDis
     private void OnContentChanged(string path, string text, int version)
     {
         if (_byPath.TryGetValue(path, out var document))
-            document.SetFromEditor(text);
+            document.SetFromEditor(text, origin: this);
+    }
+
+    // The popped-out window (or another surface) edited a buffer this strip shows: re-push that document's
+    // authoritative text so the two don't diverge. Skips our own edits so we never reset our cursor.
+    // OpenDocument is safely queued by the session even before the page is ready.
+    private void OnExternalEdit(ScriptDocument document, object? origin)
+    {
+        if (ReferenceEquals(origin, this))
+            return;
+
+        Dispatch.To(DispatchContext.UI,
+            () => Session.OpenDocument(document.Path, document.Text, document.Language));
     }
 
     private void OnCursorMoved(int line, int column) =>
@@ -88,8 +114,11 @@ public sealed partial class InlineScriptEditorViewModel : ObservableObject, IDis
         if (!_byPath.TryGetValue(path, out var document))
             return;
 
-        document.SetFromEditor(text);
-        var saved = await _documents.SaveAsync(document, CancellationToken.None).ContinueOnSameContext();
+        document.SetFromEditor(text, origin: this);
+        // Serialise saves to this file across both surfaces so two quick Ctrl+S don't race the same path.
+        var saved = await document
+            .RunSaveAsync(() => _documents.SaveAsync(document, CancellationToken.None))
+            .ContinueOnSameContext();
         if (!saved)
         {
             await Toybox.Studio.Services.Dialogs.Popups
@@ -106,5 +135,10 @@ public sealed partial class InlineScriptEditorViewModel : ObservableObject, IDis
         Session.ContentChanged -= OnContentChanged;
         Session.CursorMoved -= OnCursorMoved;
         Session.SaveRequested -= OnSaveRequested;
+
+        foreach (var document in Documents)
+            if (_externalEditHandlers.TryGetValue(document.Path, out var handler))
+                document.ExternalEdit -= handler;
+        _externalEditHandlers.Clear();
     }
 }

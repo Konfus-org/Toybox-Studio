@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
+             x:Class="Toybox.Studio.Widgets.PropertyGrid.PickerPropertyView"
+             x:DataType="local:PickerPropertyViewModel">
+    <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                       Depth="{Binding Depth}" IsReadOnly="{Binding IsReadOnly}">
+        <Border Classes="fieldHost">
+            <DockPanel>
+                <!-- Picker button: opens the chooser. Docked RIGHT so the target/picker icon sits at the row's
+                     trailing edge, identical for both pickers; the name link fills the rest and begins at the
+                     host's left edge, aligned with every other value row. The IconView needs an explicit
+                     foreground — a glyph with no colour stays unpainted. -->
+                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding PickCommand}"
+                        VerticalAlignment="Stretch" Margin="3,0,0,0" ToolTip.Tip="{Binding PickTooltip}">
+                    <local:IconView Width="14" Height="14" IconName="{Binding IconName}"
+                                    Foreground="{DynamicResource ThemeTextBrush}"/>
+                </Button>
+                <!-- Current reference as a link: a set reference activates (an asset reveals itself in the OS
+                     file explorer); a "None" reference opens the chooser so the user can pick one. -->
+                <Button Command="{Binding ActivateCommand}" Cursor="Hand"
+                        HorizontalAlignment="Left" HorizontalContentAlignment="Left"
+                        Padding="0" Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                        ToolTip.Tip="{Binding PickTooltip}">
+                    <TextBlock Text="{Binding DisplayName}" FontSize="{DynamicResource ThemeFontSizeSmall}"
+                               Foreground="{DynamicResource ThemeAccentSolidBrush}" TextDecorations="Underline"/>
+                </Button>
+            </DockPanel>
+        </Border>
+    </local:PropertyRow>
+</UserControl>

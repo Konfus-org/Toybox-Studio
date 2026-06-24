@@ -79,17 +79,27 @@ public sealed class ToolCommandRunner
         // Play / Stop / Pause are editor-coordinated transitions (snapshot/restore, pause clearing, the
         // loading phase), not raw engine calls — route them through the session, which owns that and its
         // own logging.
+        // Session's transport methods return a bare Task and log their own failure, so the only way to know
+        // whether the transition actually happened is to inspect the session state afterwards. Surface a
+        // failed transition as Result.Fail so the command stops instead of running later steps blindly.
         switch (call.Method)
         {
             case "editor.play":
                 await _session.StartPlayAsync().ContinueOnAnyContext();
-                return Result.Ok();
+                return _session.IsPlaying
+                    ? Result.Ok()
+                    : Result.Fail("Entering play mode failed.");
             case "editor.stop":
                 await _session.StopPlayAsync().ContinueOnAnyContext();
-                return Result.Ok();
+                return _session.IsPlaying
+                    ? Result.Fail("Exiting play mode failed.")
+                    : Result.Ok();
             case "editor.togglePause":
-                await _session.SetPausedAsync(!_session.IsPaused).ContinueOnAnyContext();
-                return Result.Ok();
+                var requestedPause = !_session.IsPaused;
+                await _session.SetPausedAsync(requestedPause).ContinueOnAnyContext();
+                return _session.IsPaused == requestedPause
+                    ? Result.Ok()
+                    : Result.Fail("Toggling pause failed.");
         }
 
         var result = await _engine.RunAsync(call, ct).ContinueOnAnyContext();

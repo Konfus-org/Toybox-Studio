@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Toybox.Studio.Services.Settings;
 using Toybox.Studio.Services.Project;
 namespace Toybox.Studio.Services.Logging;
@@ -20,12 +21,24 @@ public sealed class LogFile : IDisposable
     private const string Extension = ".log";
     private const int MaxHistory = 10;
 
+    // How often the background consumer flushes buffered lines to disk. Short enough that a crash loses at
+    // most this much tail, long enough that a log flood doesn't thrash the disk.
+    private static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(250);
+
     private readonly object _sync = new();
+    private readonly BlockingCollection<string> _queue = new();
+    private readonly Thread _consumer;
     private StreamWriter? _writer;
 
     public LogFile()
     {
         OpenFreshLog();
+        _consumer = new Thread(ConsumeLoop)
+        {
+            IsBackground = true,
+            Name = "TbxStudio.LogFile",
+        };
+        _consumer.Start();
     }
 
     /// <summary>
@@ -34,26 +47,74 @@ public sealed class LogFile : IDisposable
     public string? CurrentFilePath { get; private set; }
 
     /// <summary>
-    /// Appends one entry to the current log file.
+    /// Queues one entry for the current log file. The timestamp is captured here (on the producer/calling
+    /// thread) so the file reflects when the line was logged and stays correctly ordered, but the actual
+    /// disk write happens on a background consumer so the caller — often the UI thread — never blocks on disk.
     /// </summary>
     public void Write(LogEntry entry)
     {
-        lock (_sync)
+        var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+        var line = $"[{timestamp}] [{entry.Level.ToWire()}] {entry.Message}";
+        // CompleteAdding (in Dispose) can race a concurrent producer; after shutdown the line is simply dropped.
+        try
         {
-            if (_writer is null)
-                return;
-
-            var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
-            _writer.WriteLine($"[{timestamp}] [{entry.Level.ToWire()}] {entry.Message}");
+            _queue.Add(line);
+        }
+        catch (InvalidOperationException)
+        {
+            // The queue was marked complete during shutdown; nothing more will be written.
         }
     }
 
     public void Dispose()
     {
+        // Stop accepting new lines, let the consumer drain what's queued and flush, then close the file.
+        _queue.CompleteAdding();
+        if (_consumer.IsAlive)
+            _consumer.Join(TimeSpan.FromSeconds(5));
+
         lock (_sync)
         {
             CloseWriter();
             CurrentFilePath = null;
+        }
+
+        _queue.Dispose();
+    }
+
+    // Single-consumer drain: writes queued lines in order and flushes on a short interval (and once more
+    // when the queue completes), so a crash loses at most one flush interval of tail and shutdown loses none.
+    private void ConsumeLoop()
+    {
+        var lastFlush = DateTime.UtcNow;
+        try
+        {
+            foreach (var line in _queue.GetConsumingEnumerable())
+            {
+                lock (_sync)
+                {
+                    _writer?.WriteLine(line);
+                }
+
+                if (DateTime.UtcNow - lastFlush >= FlushInterval)
+                {
+                    FlushWriter();
+                    lastFlush = DateTime.UtcNow;
+                }
+            }
+        }
+        finally
+        {
+            // Drain complete (or the loop faulted): flush whatever is buffered so nothing is lost on shutdown.
+            FlushWriter();
+        }
+    }
+
+    private void FlushWriter()
+    {
+        lock (_sync)
+        {
+            _writer?.Flush();
         }
     }
 
@@ -67,7 +128,9 @@ public sealed class LogFile : IDisposable
             CloseWriter();
             var path = Rotate(LogsDirectory, BaseName, Extension, MaxHistory);
             CurrentFilePath = path;
-            _writer = new StreamWriter(path, append: false) { AutoFlush = true };
+            // AutoFlush is off: the background consumer flushes on a short interval and on shutdown, so the
+            // producer never pays a synchronous per-line disk flush.
+            _writer = new StreamWriter(path, append: false) { AutoFlush = false };
         }
     }
 

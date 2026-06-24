@@ -244,8 +244,11 @@ public sealed partial class ComponentViewModel : ObservableObject
     // component's own properties. Kept in step with the constructor so SyncFrom zips against the same rows.
     private static IReadOnlyList<PropertyNode> EffectiveNodes(ComponentDescription snapshot)
     {
+        // Match the constructor's flatten rule EXACTLY: a single STRUCT child is flattened to its members, but
+        // a single ARRAY keeps its own list row. If these disagreed (e.g. a lone-array component), SyncFrom
+        // would zip against the wrong row set and force a full inspector rebuild every tick.
         var single = snapshot.Properties.Count == 1 ? snapshot.Properties[0] : null;
-        return single is { HasChildren: true } ? single.Children : snapshot.Properties;
+        return single is { HasChildren: true, Type: not "array" } ? single.Children : snapshot.Properties;
     }
 
     private async Task RefreshModifiedAsync(string property, PropertyViewModel viewModel, CancellationToken ct)

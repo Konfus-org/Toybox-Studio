@@ -12,6 +12,10 @@ public sealed partial class VectorComponentViewModel : ObservableObject
     private readonly int _index;
     private readonly Action _commit;
 
+    // True when this component started as an integer (an integer vector, vec*i): writes must stay integral so
+    // the first edit doesn't silently coerce the whole vector to floating point.
+    private readonly bool _integer;
+
     [ObservableProperty]
     private decimal? _value;
 
@@ -21,6 +25,7 @@ public sealed partial class VectorComponentViewModel : ObservableObject
         _array = array;
         _index = index;
         _commit = commit;
+        _integer = array[index].Type == JTokenType.Integer;
         _value = PropertyConvert.TryDecimal(array[index]);
     }
 
@@ -31,7 +36,9 @@ public sealed partial class VectorComponentViewModel : ObservableObject
         if (value is null)
             return;
 
-        _array[_index].Replace(new JValue((double)value.Value));
+        // Preserve the element's numeric type: an integer vector stays integral, a float vector stays double.
+        var token = _integer ? new JValue((long)value.Value) : new JValue((double)value.Value);
+        _array[_index].Replace(token);
         _commit();
     }
 }

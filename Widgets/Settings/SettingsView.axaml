@@ -17,7 +17,7 @@
         </DataTemplate>
     </UserControl.DataTemplates>
 
-    <DockPanel Margin="8">
+    <DockPanel Margin="{DynamicResource ThemePanelPadding}">
         <!-- One search for the settings panel: filters both the Editor and Project grids by header or value. -->
         <search:SearchBox DockPanel.Dock="Top" Margin="0,0,0,10"
                           Text="{Binding Search, Mode=TwoWay}" Watermark="Search settings…"/>

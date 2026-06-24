@@ -4,7 +4,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Settings;
+using Toybox.Studio.Services.Theming;
 using Toybox.Studio.Widgets.ScriptEditor;
 
 namespace Toybox.Studio.Services.Scripting;
@@ -21,29 +25,46 @@ namespace Toybox.Studio.Services.Scripting;
 /// — like <see cref="Toybox.Studio.Widgets.PropertyGrid.PropertyViewRegistry"/> — a single
 /// <see cref="Current"/> instance is wired once at startup and read statically by those cards.
 /// </summary>
-public sealed class ScriptEditing
+public sealed class ScriptEditing : IDisposable
 {
     private readonly ProjectManager _projects;
     private readonly MonacoAssetServer _server;
     private readonly ScriptDocumentService _documents;
     private readonly ScriptEditorLauncher _launcher;
+    private readonly Locator _locator;
+    private readonly ThemeManager _theme;
+    private readonly SettingsManager _settings;
+    private readonly Logger _log;
 
     private readonly Dictionary<string, Result<string>> _sourceByName =
         new(StringComparer.OrdinalIgnoreCase);
     private string? _cacheRoot;
+
+    // The inline strip gets its own clangd (the dockable's serves a different WebView). Only one inline editor
+    // is open at a time, so we keep at most one and own its lifetime here — disposed when the next inline opens
+    // and on shutdown — so an inline clangd never outlives the editor or orphans the process.
+    private ClangdSession? _inlineClangd;
 
     public ScriptEditing(
         ProjectManager projects,
         MonacoAssetServer server,
         ScriptDocumentService documents,
         ScriptEditorLauncher launcher,
-        ScriptHotReload hotReload)
+        ScriptHotReload hotReload,
+        Locator locator,
+        ThemeManager theme,
+        SettingsManager settings,
+        Logger log)
     {
         _projects = projects;
         _server = server;
         _documents = documents;
         _launcher = launcher;
         HotReload = hotReload;
+        _locator = locator;
+        _theme = theme;
+        _settings = settings;
+        _log = log;
     }
 
     /// <summary>The instance the inspector's binding cards read; set once after the app's services are built.</summary>
@@ -131,13 +152,39 @@ public sealed class ScriptEditing
             return Result<InlineScriptEditorViewModel>.Fail(lastError ?? $"Couldn't open '{sourcePath}'.");
 
         var page = new Uri(started.Value!, "index.html");
-        return Result<InlineScriptEditorViewModel>.Ok(
-            new InlineScriptEditorViewModel(page, documents, _documents, HotReload));
+        var scripting = _settings.Settings.Scripting;
+        var inline = new InlineScriptEditorViewModel(
+            page, documents, _documents, HotReload, EditorTheme.IsDark(_theme),
+            scripting.FontSize, scripting.WordWrap);
+
+        // Give the inline editor clangd too (so types/members colour like the popped-out window). Replace any
+        // previous inline clangd — only one inline strip is open at a time.
+        _inlineClangd?.Dispose();
+        _inlineClangd = null;
+        if (_projects.CurrentProject is { } project)
+        {
+            var clangd = ClangdSession.Start(inline.Session, project.RootDirectory, _locator.EngineSourcePath, _log);
+            if (clangd)
+            {
+                _inlineClangd = clangd.Value;
+                inline.Session.EnableLsp(new Uri(project.RootDirectory).AbsoluteUri);
+            }
+            else
+            {
+                _log.Info($"Inline editor: {clangd.Error}");
+            }
+        }
+
+        return Result<InlineScriptEditorViewModel>.Ok(inline);
     }
+
+    public void Dispose() => _inlineClangd?.Dispose();
 
     private static Result<string> Search(string root, string scriptName)
     {
-        var stem = ToSnakeCase(scriptName);
+        // The resolved name may be the class name (PlayerController) or a file name with an extension
+        // (player_controller.h) depending on how the asset is registered — normalise both to the stem.
+        var stem = ToSnakeCase(Path.GetFileNameWithoutExtension(scriptName));
         // The script lives under the project's source tree; searching Source (not the whole root) keeps the
         // generated/build outputs out and the walk small.
         var searchRoot = Path.Combine(root, "Source");

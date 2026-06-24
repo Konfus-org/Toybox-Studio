@@ -18,11 +18,11 @@
         <ProgressBar IsIndeterminate="True" Width="320"/>
 
         <TextBlock Text="{Binding Status}" HorizontalAlignment="Center"
-                   Foreground="{DynamicResource ThemeMutedTextBrush}" FontSize="13"/>
+                   Foreground="{DynamicResource ThemeMutedTextBrush}" FontSize="{DynamicResource ThemeFontSize}"/>
 
         <!-- The real console (line list only — no search/clear toolbar), so splash lines share the
              main window's console and TbxStudio.log. -->
-        <Border Width="320" Height="120" CornerRadius="6" Padding="2"
+        <Border Width="320" Height="120" CornerRadius="{DynamicResource ControlCornerRadius}" Padding="2"
                 Background="{DynamicResource ThemeSurfaceBrush}"
                 BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1">
             <console:ConsoleView DataContext="{Binding Console.Console}" ShowToolbar="False"/>

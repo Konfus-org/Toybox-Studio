@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Services.EngineApi;
@@ -20,6 +21,10 @@ public sealed partial class ToolbarItemViewModel : ObservableObject, IDisposable
     private readonly ToolCommandRunner _runner;
     private readonly ToolbarState _state;
     private readonly EngineWatcher _watcher;
+
+    // Guards against overlapping runs from rapid clicks (e.g. double-clicking Play): while a run is in
+    // flight, further clicks are ignored. UI-thread-only, so a plain bool suffices.
+    private bool _isRunning;
 
     public ToolbarItemViewModel(
         ToolbarItem item, ToolCommandRunner runner, ToolbarState state, EngineWatcher watcher)
@@ -73,7 +78,29 @@ public sealed partial class ToolbarItemViewModel : ObservableObject, IDisposable
     private void OnEngineStateChanged(EngineState state) => OnPropertyChanged(nameof(IsVisible));
 
     [RelayCommand]
-    private void Run() => _runner.RunAsync(_item.Command, CancellationToken.None).FireAndForget();
+    private void Run()
+    {
+        // Debounce rapid clicks: ignore a click while the previous run is still in flight so a
+        // double-click on Play (or a gizmo button) can't launch overlapping command runs.
+        if (_isRunning)
+            return;
+
+        _isRunning = true;
+        RunGuardedAsync().FireAndForget();
+    }
+
+    private async Task RunGuardedAsync()
+    {
+        try
+        {
+            await _runner.RunAsync(_item.Command, CancellationToken.None).ContinueOnAnyContext();
+        }
+        finally
+        {
+            // Reset the guard on the UI thread: it's read by Run() on the UI thread.
+            Dispatch.To(DispatchContext.UI, () => _isRunning = false);
+        }
+    }
 
     private void OnGroupChanged(string group)
     {

@@ -6,11 +6,14 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Toybox.Studio.Utils.Extensions;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Settings;
+using Toybox.Studio.Services.Theming;
 
 namespace Toybox.Studio.Widgets.ScriptEditor;
 
@@ -28,21 +31,28 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
     private readonly ProjectManager _projects;
     private readonly Locator _locator;
     private readonly ScriptHotReload _hotReload;
+    private readonly ThemeManager _theme;
+    private readonly SettingsManager _settings;
     private readonly Logger _log;
     private readonly Dictionary<string, ScriptTabViewModel> _byPath = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Action> _reloadHandlers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Action<object?>> _externalEditHandlers =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private ClangdSession? _clangd;
     private bool _clangdAttempted;
+    private IDisposable? _settingsSubscription;
 
     public ScriptEditorViewModel(
         MonacoAssetServer server, ScriptDocumentService documents, ProjectManager projects,
-        Locator locator, ScriptHotReload hotReload, Logger log)
+        Locator locator, ScriptHotReload hotReload, ThemeManager theme, SettingsManager settings, Logger log)
     {
         _documents = documents;
         _projects = projects;
         _locator = locator;
         _hotReload = hotReload;
+        _theme = theme;
+        _settings = settings;
         _log = log;
 
         var started = server.EnsureStarted();
@@ -57,13 +67,78 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         Session.ContentChanged += OnContentChanged;
         Session.CursorMoved += OnCursorMoved;
         Session.SaveRequested += OnSaveRequested;
+        Session.LspStatusChanged += OnLspStatusChanged;
         // Buffered until the page reports ready, so it's safe to set these before the view is even shown.
-        Session.SetTheme(dark: true);
-        Session.SetOptions(minimap: true, fontSize: 13);
+        Session.SetTheme(EditorTheme.IsDark(_theme));
+        // Apply the Scripting editor settings now and on every change (font size, word wrap, minimap).
+        _settingsSubscription = _settings.Listen(ApplyEditorOptions);
+        // Follow live theme switches (this is a long-lived singleton, so the subscription is released in Dispose).
+        _theme.ThemeChanged += OnThemeChanged;
+    }
+
+    private void OnThemeChanged() => Session?.SetTheme(EditorTheme.IsDark(_theme));
+
+    private void ApplyEditorOptions()
+    {
+        var scripting = _settings.Settings.Scripting;
+        Session?.SetOptions(
+            minimap: scripting.ShowMinimap,
+            fontSize: scripting.FontSize,
+            wordWrap: scripting.WordWrap ? "on" : "off");
     }
 
     /// <summary>The bridge to this window's WebView; null when the asset server couldn't start.</summary>
     public MonacoSession? Session { get; }
+
+    /// <summary>The shared hot-reload toggle the lightning-bolt control binds to.</summary>
+    public ScriptHotReload HotReload => _hotReload;
+
+    /// <summary>ASCII ghost shown in the center of the editor when nothing is open.</summary>
+    public string EmptyGhost => GhostArt;
+
+    // Raw literal at column 0 so the art's leading spaces (its shape) are preserved verbatim.
+    private const string GhostArt =
+"""
+                                                                    
+                          ..:::::.........                          
+                      .:::::::................                      
+                   :::::::::.....................                   
+                 :::::::::.........................                 
+               :::::::::::...........................               
+              ::::::::::::............................              
+            .::::::::::++:::...........................             
+           .:::::::::::$$$$$:..........+$$$XXX..........            
+           :::::::::::::::$$XX.......::$$$XXX$...........           
+          :::::::::::::$$$$$::.......::X$$$$$$............          
+          :::::::::::::xx:::::........::;+x;..............          
+         .::::::::::::::::::::............................          
+         ::::::::::::::::::::::............................         
+         :::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$.............         
+ ........:::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$..................... 
+::::::::::::::::::::::;$$$$$$$$$$$$$$$$$$$$$$+......................
+ ::::::::::::::::::::::X$$XXXXXXXXXXXXXXXX$$$...................... 
+   :::::::::::::::::::::xXXXXXXXXXXXXXXXx+xX.....................   
+    .:::::::::::::::::::;;XXXXXXXXXXXXXX++;....................     
+      .:::::::::::::::::;;XXXXXXXXXXXXx+++....................      
+       .::::::::::::::::;;;XXXXXXXXXxx+xx...................        
+       :::::::::::::::::;;;;XXXXXXXXXXXX:....................       
+       :::::::::::::::::::;;;;;XXXXXX::::....................       
+       :::::::::::::::::::::::::::::::::.....................       
+       ::::::::::::::::::::::::::::::::......................       
+      .::::::::::::::::::::::::::::::::...::.................       
+      ::::::::::::::::::::::::::::::::::::::::................      
+      :::::::::::::::::::::::::::::::::::::::::...............      
+      ::::::::::::::::::::::::::::::::::::::::::..............      
+      :::::::::::::::::::::::::::::::::::::::::::.............      
+     .::::::::::::::::::::::::::::::::::::::::::::............      
+     ::::::::::::::::::::::::::::::::::::::::::::::............     
+     ::::::::::::::::::::::::::::::::::::::::::::::::..........     
+     :::::::::::::;;;;;;;;;;;::::::::::::::;;;;;;::::::........     
+     ::::::::::::;;;;::;;;;;;;;:::::::::::;;:::;;;;::::::::....     
+     :;::::::::;:          ;;;;;:::::::::          ;;;::::::::.     
+      .;;;;;;;.              .;;;;::::.              :;;:::::       
+                                                                    
+""";
 
     public ObservableCollection<ScriptTabViewModel> Tabs { get; } = [];
 
@@ -77,6 +152,18 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
     [ObservableProperty]
     public partial string CursorText { get; set; } = "Ln 1, Col 1";
+
+    /// <summary>Language/clangd state shown at the left of the status bar.</summary>
+    [ObservableProperty]
+    public partial string LanguageStatus { get; set; } = "C++";
+
+    private void OnLspStatusChanged(string state) => Dispatch.To(DispatchContext.UI, () =>
+        LanguageStatus = state switch
+        {
+            "ready" => "C++ · clangd ready",
+            "error" => "C++ · clangd error",
+            _ => "C++",
+        });
 
     public bool HasTabs => Tabs.Count > 0;
 
@@ -117,10 +204,24 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
         Session.OpenDocument(document.Path, document.Text, document.Language);
 
-        // If the buffer is replaced from disk (or by the other surface), re-push the authoritative text.
+        // A genuine disk reload (ReplaceFromDisk) replaces every tab's content wholesale — undo/scroll loss is
+        // unavoidable and correct there. We DON'T re-push on cosmetic Reloaded; only on a real reload.
         void OnReloaded() => Session.OpenDocument(document.Path, document.Text, document.Language);
         document.Reloaded += OnReloaded;
         _reloadHandlers[full] = OnReloaded;
+
+        // When the OTHER live surface (the inline strip, or another tab of this same window can't happen) edits
+        // the shared buffer, re-sync this window's model so the two don't diverge — but only when the edit
+        // originated elsewhere, so we never echo our own typing back and reset the cursor.
+        void OnExternalEdit(object? origin)
+        {
+            if (ReferenceEquals(origin, this))
+                return;
+            Dispatch.To(DispatchContext.UI, () => Session.OpenDocument(document.Path, document.Text, document.Language));
+        }
+
+        document.ExternalEdit += OnExternalEdit;
+        _externalEditHandlers[full] = OnExternalEdit;
 
         ActiveTab = tab;
     }
@@ -139,11 +240,13 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         var started = ClangdSession.Start(Session, project.RootDirectory, _locator.EngineSourcePath, _log);
         if (!started)
         {
+            LanguageStatus = "C++ · no clangd";
             _log.Info($"Script editor: {started.Error}");
             return;
         }
 
         _clangd = started.Value;
+        LanguageStatus = "C++ · clangd starting…";
         Session.EnableLsp(new Uri(project.RootDirectory).AbsoluteUri);
         _log.Info("Script editor: clangd attached (engine + sibling-script IntelliSense).");
     }
@@ -173,6 +276,8 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         tab.Detach();
         if (_reloadHandlers.Remove(tab.Path, out var handler))
             tab.Document.Reloaded -= handler;
+        if (_externalEditHandlers.Remove(tab.Path, out var externalHandler))
+            tab.Document.ExternalEdit -= externalHandler;
 
         var index = Tabs.IndexOf(tab);
         Tabs.Remove(tab);
@@ -186,7 +291,7 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
     private void OnContentChanged(string path, string text, int version)
     {
         if (_byPath.TryGetValue(path, out var tab))
-            tab.Document.SetFromEditor(text);
+            tab.Document.SetFromEditor(text, origin: this);
     }
 
     private void OnCursorMoved(int line, int column) =>
@@ -197,8 +302,12 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         if (!_byPath.TryGetValue(path, out var tab))
             return;
 
-        tab.Document.SetFromEditor(text);
-        var saved = await _documents.SaveAsync(tab.Document, CancellationToken.None).ContinueOnSameContext();
+        var document = tab.Document;
+        document.SetFromEditor(text, origin: this);
+        // Serialise saves to this file across both surfaces so two quick Ctrl+S don't race the same path.
+        var saved = await document
+            .RunSaveAsync(() => _documents.SaveAsync(document, CancellationToken.None))
+            .ContinueOnSameContext();
         if (!saved)
         {
             _log.Error(saved.Error ?? $"Couldn't save '{path}'.");
@@ -207,24 +316,30 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         }
 
         _log.Info($"Saved {tab.Title}");
-        _hotReload.NotifySaved(tab.Document.Path);
+        _hotReload.NotifySaved(document.Path);
     }
 
     public void Dispose()
     {
+        _theme.ThemeChanged -= OnThemeChanged;
+        _settingsSubscription?.Dispose();
         foreach (var tab in Tabs)
         {
             if (_reloadHandlers.TryGetValue(tab.Path, out var handler))
                 tab.Document.Reloaded -= handler;
+            if (_externalEditHandlers.TryGetValue(tab.Path, out var externalHandler))
+                tab.Document.ExternalEdit -= externalHandler;
             tab.Detach();
         }
 
         _reloadHandlers.Clear();
+        _externalEditHandlers.Clear();
         if (Session is not null)
         {
             Session.ContentChanged -= OnContentChanged;
             Session.CursorMoved -= OnCursorMoved;
             Session.SaveRequested -= OnSaveRequested;
+            Session.LspStatusChanged -= OnLspStatusChanged;
         }
 
         _clangd?.Dispose();

@@ -23,13 +23,15 @@ public sealed class SettingsManager : IListenable
     /// </summary>
     public async Task SaveAsync()
     {
-        await Settings.SaveAsync().ConfigureAwait(false);
+        await Settings.SaveAsync().ContinueOnAnyContext();
         NotifyChanged();
     }
 
     /// <summary>
     /// Broadcasts that the settings changed without writing to disk — for re-applying the already-saved values
-    /// after an in-place edit or a cancelled buffer revert.
+    /// after an in-place edit or a cancelled buffer revert. Always raises <see cref="Changed"/> on the UI thread
+    /// (marshalling if called from a background thread, e.g. after a disk save), since listeners mutate Avalonia
+    /// resources and view-model state directly.
     /// </summary>
-    public void NotifyChanged() => Changed?.Invoke();
+    public void NotifyChanged() => Dispatch.To(DispatchContext.UI, () => Changed?.Invoke());
 }

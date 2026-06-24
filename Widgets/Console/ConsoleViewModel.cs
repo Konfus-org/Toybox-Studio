@@ -104,12 +104,11 @@ public sealed partial class ConsoleViewModel : ObservableObject
             _isFlushScheduled = false;
         }
 
-        if (batch.Count >= MaxLines)
-        {
-            Lines.Clear();
-            VisibleLines.Clear();
+        // A single flooded flush can carry up to MaxLines pending lines, which would by itself fill the
+        // entire scrollback. Trim the batch to the most recent MaxLines so AddLine's rolling-cap trim does
+        // the rest — never blank existing history just because the batch is large.
+        if (batch.Count > MaxLines)
             batch.RemoveRange(0, batch.Count - MaxLines);
-        }
 
         foreach (var line in batch)
             AddLine(line);

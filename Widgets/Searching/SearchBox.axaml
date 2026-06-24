@@ -16,7 +16,7 @@
         </Style>
         <!-- No shadow on the search field (shadows live on panels/bars/flyouts only); just light the ring on focus. -->
         <Style Selector="Border.searchPill:focus-within">
-            <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
         </Style>
     </UserControl.Styles>
 

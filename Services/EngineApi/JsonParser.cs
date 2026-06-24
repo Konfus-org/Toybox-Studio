@@ -40,6 +40,7 @@ public sealed class JsonParser
     private const string IconKey = "icon";
     private const string IconColorKey = "iconColor";
     private const string IsDefaultKey = "is_default";
+    private const string DefaultKey = "default";
     private const string OrderKey = "order";
     private const string ElementTemplateKey = "element_template";
     private const string VariantToken = "variant";
@@ -349,6 +350,7 @@ public sealed class JsonParser
             Icon = wrapper.Icon,
             IconColor = wrapper.IconColor,
             IsDefault = wrapper.IsDefault,
+            Default = wrapper.Default,
             ElementTemplate = wrapper.ElementTemplate,
             Choices = children is null ? wrapper.Choices : null,
             Children = children ?? [],
@@ -395,12 +397,15 @@ public sealed class JsonParser
                 // is_default sits next to attributes/value on the node itself (describe-only), not inside
                 // the attributes object.
                 obj.Value<bool?>(IsDefaultKey) ?? false,
+                // default likewise rides on the node itself, present only where the describe inlines one
+                // (a script binding's override fields).
+                obj[DefaultKey],
                 metadata[ElementTemplateKey]);
         }
 
         return new Wrapper(
             UnknownToken, null, member ?? JValue.CreateNull(), null, null, null, null, false, false, 0,
-            null, null, null, false, null);
+            null, null, null, false, null, null);
     }
 
     private static IReadOnlyList<string>? ReadChoices(JToken? token) =>
@@ -440,6 +445,9 @@ public sealed class JsonParser
         string? IconColor,
         IReadOnlyList<string>? Choices,
         bool IsDefault,
+        // The describe-only inline default value, present only where the describe carries one (a script
+        // binding's override fields). Null elsewhere.
+        JToken? Default,
         // The describe-only "element_template" for a resizable list: the JSON of one default element,
         // which the list widget clones to append. Null for everything else.
         JToken? ElementTemplate);

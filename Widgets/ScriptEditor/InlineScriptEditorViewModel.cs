@@ -47,7 +47,7 @@ public sealed partial class InlineScriptEditorViewModel : ObservableObject, IDis
             minimap: false, fontSize: fontSize, lineNumbers: "on", wordWrap: wordWrap ? "on" : "off");
         foreach (var document in documents)
         {
-            Session.OpenDocument(document.Path, document.Text, document.Language);
+            Session.OpenDocument(document.Path, document.Text, document.Language.Id);
             // Re-sync this strip when the popped-out window edits the same shared buffer (skipping our own
             // edits via the origin token), re-pushing only the document that changed so a background tab's
             // undo/scroll isn't clobbered. Released in Dispose so it never outlives this live surface.
@@ -103,7 +103,7 @@ public sealed partial class InlineScriptEditorViewModel : ObservableObject, IDis
             return;
 
         Dispatch.To(DispatchContext.UI,
-            () => Session.OpenDocument(document.Path, document.Text, document.Language));
+            () => Session.OpenDocument(document.Path, document.Text, document.Language.Id));
     }
 
     private void OnCursorMoved(int line, int column) =>

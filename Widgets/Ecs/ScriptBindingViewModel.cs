@@ -15,11 +15,11 @@ namespace Toybox.Studio.Widgets.Ecs;
 
 /// <summary>
 /// One script binding inside a <see cref="ScriptContainerViewModel"/>, presented like its own component: a
-/// header naming the bound script (resolved through the <see cref="AssetCatalog"/>) with an enable toggle, and
-/// a body of that script's property <see cref="Overrides"/> rendered as ordinary grid fields. An override is,
-/// by definition, a value the user set away from the script's default, so every override row shows the "set"
-/// (non-default) indicator. Editing an override — or toggling <see cref="Enabled"/> — mutates the live backing
-/// JSON and re-commits the whole container through the supplied commit action.
+/// header naming the bound script (resolved through the <see cref="AssetCatalog"/>) with an enable toggle and a
+/// remove "✕", and a body of that script's <see cref="Overrides"/> — its full property set rendered as ordinary
+/// grid fields, each showing whether it's set away from the script default. Editing a field — or toggling
+/// <see cref="Enabled"/> — mutates the live backing JSON and re-commits the whole container through the supplied
+/// commit action; the "✕" detaches the binding through the supplied remove action.
 /// </summary>
 public sealed partial class ScriptBindingViewModel : ObservableObject
 {
@@ -29,6 +29,7 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
 
     private readonly JValue? _enabled;
     private readonly Action _commit;
+    private readonly Action _remove;
     private readonly AssetCatalog? _catalog;
     private readonly long _scriptId;
 
@@ -41,9 +42,11 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
     private bool _sourceLookupDone;
     private string? _sourcePath;
 
-    public ScriptBindingViewModel(PropertyNode binding, Action commit, AssetCatalog? catalog)
+    public ScriptBindingViewModel(
+        PropertyNode binding, Action commit, Action remove, AssetCatalog? catalog)
     {
         _commit = commit;
+        _remove = remove;
         _catalog = catalog;
 
         var scriptNode = Find(binding.Children, ScriptField);
@@ -60,10 +63,15 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
         {
             foreach (var node in overridesNode.Children)
             {
-                var field = PropertyViewModelFactory.Create(node, commit);
-                // An override exists precisely because its value was set away from the script default, so it
-                // is always "set" — the engine carries no per-override default flag to derive this from.
-                field.IsModified = true;
+                // The describe carries the whole script field set (every property, not just the ones already
+                // overridden), each with its current value, an is_default flag, and the script default. The
+                // base view-model seeds its set/default indicator from is_default; editing or resetting a
+                // field re-derives that locally (scripts have no per-field reflect.isDefault) and re-commits.
+                var def = node.Default;
+                PropertyViewModel field = null!;
+                field = PropertyViewModelFactory.Create(node, () => OnFieldCommitted(field, def));
+                if (def is not null && !node.ReadOnly)
+                    field.ResetToDefault = () => field.ApplyValue(def.DeepClone());
                 Overrides.Add(field);
             }
         }
@@ -71,6 +79,21 @@ public sealed partial class ScriptBindingViewModel : ObservableObject
         if (catalog is not null)
             catalog.Changed += OnCatalogUpdated;
     }
+
+    // A field edit — or a reset, which goes through the same ApplyValue path — routes here: re-derive this
+    // field's set/default indicator from its current value against the script default (scripts have no
+    // per-field reflect.isDefault), then re-commit the container. The container makes the persisted blob lean,
+    // dropping any field back at its default.
+    private void OnFieldCommitted(PropertyViewModel field, JToken? def)
+    {
+        if (def is not null)
+            field.IsModified = field.CurrentValue is { } current && !JToken.DeepEquals(current, def);
+        _commit();
+    }
+
+    /// <summary>Detaches this script binding from the entity (the card header's "✕").</summary>
+    [RelayCommand]
+    private void Remove() => _remove();
 
     /// <summary>The bound script's display name (or its raw id until the asset catalog loads).</summary>
     [ObservableProperty]

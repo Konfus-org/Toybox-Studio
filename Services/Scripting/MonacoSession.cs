@@ -95,10 +95,12 @@ public sealed class MonacoSession
 
     /// <summary>
     /// Turns the page's LSP client on once clangd is running, handing it the workspace root URI for the
-    /// <c>initialize</c> handshake. Until this is sent the client stays dormant (so surfaces without a clangd
-    /// behind them — the inline strip — don't try to start a language session).
+    /// <c>initialize</c> handshake and the Monaco language ids the server serves (so the page registers
+    /// completion/hover/etc. providers for exactly those languages). Until this is sent the client stays dormant
+    /// (so surfaces without a clangd behind them — the inline strip — don't try to start a language session).
     /// </summary>
-    public void EnableLsp(string rootUri) => Post(new { kind = "lspEnable", rootUri });
+    public void EnableLsp(string rootUri, IReadOnlyList<string> languages) =>
+        Post(new { kind = "lspEnable", rootUri, languages });
 
     /// <summary>Handles one inbound JSON envelope from the page (called on the UI thread by the control).</summary>
     public void Receive(string body)

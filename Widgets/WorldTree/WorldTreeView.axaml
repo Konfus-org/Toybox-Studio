@@ -51,8 +51,10 @@
             <Setter Property="MinWidth" Value="0"/>
             <Setter Property="MinHeight" Value="0"/>
             <!-- Tight left padding so the twisty hugs the gutter's left edge (matching the property grid),
-                 nudging every name a touch left while still reserving the gutter on leaf rows. -->
-            <Setter Property="Padding" Value="0,0,2,0"/>
+                 nudging every name a touch left while still reserving the gutter on leaf rows. The right
+                 padding is the gap between the arrow and the name — every row reserves the same gutter, so
+                 names stay aligned at each level. -->
+            <Setter Property="Padding" Value="0,0,6,0"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>

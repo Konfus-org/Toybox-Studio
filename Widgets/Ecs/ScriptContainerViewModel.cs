@@ -9,7 +9,6 @@ using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Widgets.PropertyGrid;
-using Toybox.Studio.Widgets.ScriptEditor;
 
 namespace Toybox.Studio.Widgets.Ecs;
 
@@ -48,7 +47,9 @@ public sealed partial class ScriptContainerViewModel : ObservableObject
         {
             foreach (var binding in scripts.Children)
             {
-                var card = new ScriptBindingViewModel(binding, CommitScripts, PropertyViewRegistry.Assets);
+                ScriptBindingViewModel card = null!;
+                card = new ScriptBindingViewModel(
+                    binding, CommitScripts, () => RemoveBinding(card), PropertyViewRegistry.Assets);
                 card.PropertyChanged += OnBindingChanged;
                 Bindings.Add(card);
             }
@@ -59,16 +60,8 @@ public sealed partial class ScriptContainerViewModel : ObservableObject
 
     public bool HasBindings => Bindings.Count > 0;
 
-    /// <summary>
-    /// The inline editor of whichever binding's Source section is expanded, shown in the container's fill
-    /// region so it can take all the remaining height (a per-card editor inside the scroll couldn't). Only one
-    /// expands at a time.
-    /// </summary>
-    [ObservableProperty]
-    public partial InlineScriptEditorViewModel? ActiveInline { get; private set; }
-
-    // Keeps a single source section open at a time and surfaces its editor for the fill region: when one
-    // binding expands, the others collapse; the active editor is whichever binding stays expanded.
+    // Keeps a single source section open at a time: when one binding expands its Source editor (rendered in
+    // its own card), the others collapse so only one inline editor is ever open.
     private void OnBindingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(ScriptBindingViewModel.IsSourceExpanded) || _settlingExpansion)
@@ -82,9 +75,44 @@ public sealed partial class ScriptContainerViewModel : ObservableObject
                     other.IsSourceExpanded = false;
         }
 
-        ActiveInline = Bindings.FirstOrDefault(binding => binding.IsSourceExpanded)?.Inline;
         _settlingExpansion = false;
     }
+
+    // Detaches one script binding (its card's "✕"): drop it from the live scripts array and re-commit the
+    // now-shorter array. Removing the LAST binding instead deletes the whole — now empty — script_container
+    // component, so the Scripts tab returns to its empty state and nothing empty persists.
+    private async void RemoveBinding(ScriptBindingViewModel card)
+    {
+        var index = Bindings.IndexOf(card);
+        if (index < 0)
+            return;
+
+        card.PropertyChanged -= OnBindingChanged;
+        Bindings.RemoveAt(index);
+        OnPropertyChanged(nameof(HasBindings));
+
+        if (Bindings.Count == 0)
+        {
+            var result = await _component.RemoveAsync(CancellationToken.None).ContinueOnSameContext();
+            if (result.Success)
+                _onEdited();
+            else
+                await Popups.ShowErrorAsync("Couldn't remove script", result.Error!).ContinueOnSameContext();
+            await _resync().ContinueOnSameContext();
+            return;
+        }
+
+        // Drop the binding from the live array so the re-sent (lean) array no longer carries it.
+        if (ScriptsArray() is { } array && index < array.Count)
+            array[index].Remove();
+        CommitScripts();
+    }
+
+    // The live scripts array inside the raw component ({ scripts: { value: [ … ] } }), or null if absent.
+    private JArray? ScriptsArray() =>
+        _raw[ScriptsProperty] is JObject typed && typed["value"] is JArray value
+            ? value
+            : _raw[ScriptsProperty] as JArray;
 
     /// <summary>The inspector search, fanned out to each binding card.</summary>
     public string? Filter
@@ -111,12 +139,11 @@ public sealed partial class ScriptContainerViewModel : ObservableObject
         if (bare is null)
             return;
 
-        // The engine folds each bound script's asset-type filter into the override wrappers as a
-        // describe-only "choices" key, so override handle pickers can filter. That enrichment must not
-        // round-trip: the overrides field is persisted verbatim as an opaque blob, so a committed
-        // "choices" would be saved into the world. Send a sanitized clone; the live tree keeps "choices"
-        // for the picker's display.
-        var payload = StripOverrideChoices(bare.DeepClone());
+        // The describe path expands each binding's overrides into the script's full field set (every
+        // property, with describe-only type/choices/is_default/default metadata) so the inspector can show
+        // and edit them all. Only the fields actually set away from the script default may persist, as bare
+        // { type, value } pairs — so send a lean clone; the live tree keeps the full set for editing.
+        var payload = LeanScripts(bare.DeepClone());
 
         var result = await _component
             .SetPropertyAsync(ScriptsProperty, payload, CancellationToken.None)
@@ -134,23 +161,40 @@ public sealed partial class ScriptContainerViewModel : ObservableObject
         await _resync().ContinueOnSameContext();
     }
 
-    // Drops the describe-only "choices" the engine injects into each override wrapper, leaving the lean
-    // { type, value } overrides the engine stores. Mutates and returns the given (already-cloned) tree.
-    private static JToken StripOverrideChoices(JToken scripts)
+    // Rewrites each binding's override blob to the lean form the world persists: only the fields whose value
+    // differs from the script default survive, as bare { type, value } pairs (the describe-only choices /
+    // is_default / default keys are dropped). A freshly attached script — or one reset to all defaults —
+    // therefore persists an empty override blob, exactly as a hand-authored lean world would. Mutates and
+    // returns the given (already-cloned) tree.
+    private static JToken LeanScripts(JToken scripts)
     {
         if (scripts is not JArray bindings)
             return scripts;
 
         foreach (var binding in bindings.OfType<JObject>())
         {
-            // overrides is { …, value: { field: { type, value, choices? } } } in describe form (or its
-            // lean { type, value } equivalent); reach the blob's per-field wrappers either way.
+            // overrides is { …, value: { field: { type, value, choices?, is_default, default } } } in
+            // describe form; reach the blob's per-field wrappers.
             if (Inner(binding["overrides"]) is not JObject blob)
                 continue;
 
+            var lean = new JObject();
             foreach (var field in blob.Properties())
-                if (field.Value is JObject wrapper)
-                    wrapper.Remove("choices");
+            {
+                if (field.Value is not JObject wrapper || wrapper["value"] is not { } value)
+                    continue;
+
+                // Persist only a value the user actually set away from the script default.
+                if (wrapper["default"] is { } def && JToken.DeepEquals(value, def))
+                    continue;
+
+                var clean = new JObject { ["value"] = value.DeepClone() };
+                if (wrapper["type"] is { } type)
+                    clean["type"] = type.DeepClone();
+                lean[field.Name] = clean;
+            }
+
+            SetInner(binding["overrides"], lean);
         }
 
         return scripts;
@@ -159,4 +203,12 @@ public sealed partial class ScriptContainerViewModel : ObservableObject
     // The value inside a typed field wrapper ({ …, value: … }), or the token itself when already bare.
     private static JToken? Inner(JToken? token) =>
         token is JObject obj && obj.TryGetValue("value", out var value) ? value : token;
+
+    // Replaces an override-blob wrapper's inner value map in place ({ …, value: <map> }); a no-op for a
+    // malformed wrapper with no value slot (describe always emits one).
+    private static void SetInner(JToken? wrapper, JToken value)
+    {
+        if (wrapper is JObject obj && obj["value"] is not null)
+            obj["value"] = value;
+    }
 }

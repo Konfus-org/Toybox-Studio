@@ -35,6 +35,13 @@ public sealed class Component
             new { EntityId, Component = Name, Value = value },
             ct);
 
+    /// <summary>Removes this component from its entity.</summary>
+    public Task<Result> RemoveAsync(CancellationToken ct) =>
+        _engine.InvokeAsync(
+            "entity.removeComponent",
+            new { EntityId, Component = Name },
+            ct);
+
     /// <summary>Reads one property as a self-describing <c>{ type, value }</c> node.</summary>
     public Task<Result<JObject>> GetPropertyAsync(string property, CancellationToken ct) =>
         _engine.InvokeAsync<JObject>(

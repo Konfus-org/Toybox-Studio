@@ -82,6 +82,14 @@ public sealed class PropertyNode
     public bool IsDefault { get; init; }
 
     /// <summary>
+    /// The field's default value as a bare token, from the describe response's <c>default</c> key. Present
+    /// only where the describe carries an inline default the editor must own locally — notably a script
+    /// binding's override fields, which have no per-field reflect.reset, so the editor compares against and
+    /// resets to this. Null elsewhere (component fields reset through the engine instead).
+    /// </summary>
+    public JToken? Default { get; init; }
+
+    /// <summary>
     /// For a resizable list (a <c>std::vector</c>), the JSON of one default-constructed element, from the
     /// describe response's <c>element_template</c> attribute. The list widget clones it to append a new
     /// entry — so an empty vector can still be grown. Null for fixed lists and non-list nodes; its presence

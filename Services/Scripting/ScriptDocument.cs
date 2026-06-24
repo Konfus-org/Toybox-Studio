@@ -26,7 +26,7 @@ public sealed partial class ScriptDocument : ObservableObject
     public ScriptDocument(string path, string text)
     {
         Path = path;
-        Language = LanguageFor(path);
+        Language = ScriptLanguages.ForPath(path);
         Text = text;
         _savedText = text;
     }
@@ -36,8 +36,8 @@ public sealed partial class ScriptDocument : ObservableObject
 
     public string FileName => System.IO.Path.GetFileName(Path);
 
-    /// <summary>Monaco language id (always <c>cpp</c> for engine scripts and their headers; json for data).</summary>
-    public string Language { get; }
+    /// <summary>The language this file is shown as, resolved from its extension (see <see cref="ScriptLanguages"/>).</summary>
+    public ScriptLanguage Language { get; }
 
     /// <summary>The live (possibly unsaved) buffer text.</summary>
     [ObservableProperty]
@@ -110,10 +110,4 @@ public sealed partial class ScriptDocument : ObservableObject
         IsDirty = false;
         Reloaded?.Invoke();
     }
-
-    private static string LanguageFor(string path) => System.IO.Path.GetExtension(path).ToLowerInvariant() switch
-    {
-        ".json" => "json",
-        _ => "cpp",
-    };
 }

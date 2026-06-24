@@ -43,6 +43,54 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
     private bool _clangdAttempted;
     private IDisposable? _settingsSubscription;
 
+    // Raw literal at column 0 so the art's leading spaces (its shape) are preserved verbatim.
+    private const string GhostArt =
+"""
+
+                          ..:::::.........
+                      .:::::::................
+                   :::::::::.....................
+                 :::::::::.........................
+               :::::::::::...........................
+              ::::::::::::............................
+            .::::::::::++:::...........................
+           .:::::::::::$$$$$:..........+$$$XXX..........
+           :::::::::::::::$$XX.......::$$$XXX$...........
+          :::::::::::::$$$$$::.......::X$$$$$$............
+          :::::::::::::xx:::::........::;+x;..............
+         .::::::::::::::::::::............................
+         ::::::::::::::::::::::............................
+         :::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$.............
+ ........:::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$.....................
+::::::::::::::::::::::;$$$$$$$$$$$$$$$$$$$$$$+......................
+ ::::::::::::::::::::::X$$XXXXXXXXXXXXXXXX$$$......................
+   :::::::::::::::::::::xXXXXXXXXXXXXXXXx+xX.....................
+    .:::::::::::::::::::;;XXXXXXXXXXXXXX++;....................
+      .:::::::::::::::::;;XXXXXXXXXXXXx+++....................
+       .::::::::::::::::;;;XXXXXXXXXxx+xx...................
+       :::::::::::::::::;;;;XXXXXXXXXXXX:....................
+       :::::::::::::::::::;;;;;XXXXXX::::....................
+       :::::::::::::::::::::::::::::::::.....................
+       ::::::::::::::::::::::::::::::::......................
+      .::::::::::::::::::::::::::::::::...::.................
+      ::::::::::::::::::::::::::::::::::::::::................
+      :::::::::::::::::::::::::::::::::::::::::...............
+      ::::::::::::::::::::::::::::::::::::::::::..............
+      :::::::::::::::::::::::::::::::::::::::::::.............
+     .::::::::::::::::::::::::::::::::::::::::::::............
+     ::::::::::::::::::::::::::::::::::::::::::::::............
+     ::::::::::::::::::::::::::::::::::::::::::::::::..........
+     :::::::::::::;;;;;;;;;;;::::::::::::::;;;;;;::::::........
+     ::::::::::::;;;;::;;;;;;;;:::::::::::;;:::;;;;::::::::....
+     :;::::::::;:          ;;;;;:::::::::          ;;;::::::::.
+      .;;;;;;;.              .;;;;::::.              :;;:::::
+
+""";
+
+    // The page's language client last reported this state ("starting" | "ready" | "error" | "unavailable").
+    // Folded with the active tab's language into LanguageStatus, so the bar tracks whichever file is showing.
+    private string _lspState = "";
+
     public ScriptEditorViewModel(
         MonacoAssetServer server, ScriptDocumentService documents, ProjectManager projects,
         Locator locator, ScriptHotReload hotReload, ThemeManager theme, SettingsManager settings, Logger log)
@@ -76,17 +124,6 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         _theme.ThemeChanged += OnThemeChanged;
     }
 
-    private void OnThemeChanged() => Session?.SetTheme(EditorTheme.IsDark(_theme));
-
-    private void ApplyEditorOptions()
-    {
-        var scripting = _settings.Settings.Scripting;
-        Session?.SetOptions(
-            minimap: scripting.ShowMinimap,
-            fontSize: scripting.FontSize,
-            wordWrap: scripting.WordWrap ? "on" : "off");
-    }
-
     /// <summary>The bridge to this window's WebView; null when the asset server couldn't start.</summary>
     public MonacoSession? Session { get; }
 
@@ -95,50 +132,6 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
     /// <summary>ASCII ghost shown in the center of the editor when nothing is open.</summary>
     public string EmptyGhost => GhostArt;
-
-    // Raw literal at column 0 so the art's leading spaces (its shape) are preserved verbatim.
-    private const string GhostArt =
-"""
-                                                                    
-                          ..:::::.........                          
-                      .:::::::................                      
-                   :::::::::.....................                   
-                 :::::::::.........................                 
-               :::::::::::...........................               
-              ::::::::::::............................              
-            .::::::::::++:::...........................             
-           .:::::::::::$$$$$:..........+$$$XXX..........            
-           :::::::::::::::$$XX.......::$$$XXX$...........           
-          :::::::::::::$$$$$::.......::X$$$$$$............          
-          :::::::::::::xx:::::........::;+x;..............          
-         .::::::::::::::::::::............................          
-         ::::::::::::::::::::::............................         
-         :::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$.............         
- ........:::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$..................... 
-::::::::::::::::::::::;$$$$$$$$$$$$$$$$$$$$$$+......................
- ::::::::::::::::::::::X$$XXXXXXXXXXXXXXXX$$$...................... 
-   :::::::::::::::::::::xXXXXXXXXXXXXXXXx+xX.....................   
-    .:::::::::::::::::::;;XXXXXXXXXXXXXX++;....................     
-      .:::::::::::::::::;;XXXXXXXXXXXXx+++....................      
-       .::::::::::::::::;;;XXXXXXXXXxx+xx...................        
-       :::::::::::::::::;;;;XXXXXXXXXXXX:....................       
-       :::::::::::::::::::;;;;;XXXXXX::::....................       
-       :::::::::::::::::::::::::::::::::.....................       
-       ::::::::::::::::::::::::::::::::......................       
-      .::::::::::::::::::::::::::::::::...::.................       
-      ::::::::::::::::::::::::::::::::::::::::................      
-      :::::::::::::::::::::::::::::::::::::::::...............      
-      ::::::::::::::::::::::::::::::::::::::::::..............      
-      :::::::::::::::::::::::::::::::::::::::::::.............      
-     .::::::::::::::::::::::::::::::::::::::::::::............      
-     ::::::::::::::::::::::::::::::::::::::::::::::............     
-     ::::::::::::::::::::::::::::::::::::::::::::::::..........     
-     :::::::::::::;;;;;;;;;;;::::::::::::::;;;;;;::::::........     
-     ::::::::::::;;;;::;;;;;;;;:::::::::::;;:::;;;;::::::::....     
-     :;::::::::;:          ;;;;;:::::::::          ;;;::::::::.     
-      .;;;;;;;.              .;;;;::::.              :;;:::::       
-                                                                    
-""";
 
     public ObservableCollection<ScriptTabViewModel> Tabs { get; } = [];
 
@@ -153,17 +146,9 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
     [ObservableProperty]
     public partial string CursorText { get; set; } = "Ln 1, Col 1";
 
-    /// <summary>Language/clangd state shown at the left of the status bar.</summary>
+    /// <summary>Language (and, when one backs it, language-server) state shown at the left of the status bar.</summary>
     [ObservableProperty]
-    public partial string LanguageStatus { get; set; } = "C++";
-
-    private void OnLspStatusChanged(string state) => Dispatch.To(DispatchContext.UI, () =>
-        LanguageStatus = state switch
-        {
-            "ready" => "C++ · clangd ready",
-            "error" => "C++ · clangd error",
-            _ => "C++",
-        });
+    public partial string LanguageStatus { get; set; } = "";
 
     public bool HasTabs => Tabs.Count > 0;
 
@@ -202,11 +187,11 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         Tabs.Add(tab);
         NotifyState();
 
-        Session.OpenDocument(document.Path, document.Text, document.Language);
+        Session.OpenDocument(document.Path, document.Text, document.Language.Id);
 
         // A genuine disk reload (ReplaceFromDisk) replaces every tab's content wholesale — undo/scroll loss is
         // unavoidable and correct there. We DON'T re-push on cosmetic Reloaded; only on a real reload.
-        void OnReloaded() => Session.OpenDocument(document.Path, document.Text, document.Language);
+        void OnReloaded() => Session.OpenDocument(document.Path, document.Text, document.Language.Id);
         document.Reloaded += OnReloaded;
         _reloadHandlers[full] = OnReloaded;
 
@@ -217,7 +202,7 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         {
             if (ReferenceEquals(origin, this))
                 return;
-            Dispatch.To(DispatchContext.UI, () => Session.OpenDocument(document.Path, document.Text, document.Language));
+            Dispatch.To(DispatchContext.UI, () => Session.OpenDocument(document.Path, document.Text, document.Language.Id));
         }
 
         document.ExternalEdit += OnExternalEdit;
@@ -225,6 +210,77 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
         ActiveTab = tab;
     }
+
+    public void Dispose()
+    {
+        _theme.ThemeChanged -= OnThemeChanged;
+        _settingsSubscription?.Dispose();
+        foreach (var tab in Tabs)
+        {
+            if (_reloadHandlers.TryGetValue(tab.Path, out var handler))
+                tab.Document.Reloaded -= handler;
+            if (_externalEditHandlers.TryGetValue(tab.Path, out var externalHandler))
+                tab.Document.ExternalEdit -= externalHandler;
+            tab.Detach();
+        }
+
+        _reloadHandlers.Clear();
+        _externalEditHandlers.Clear();
+        if (Session is not null)
+        {
+            Session.ContentChanged -= OnContentChanged;
+            Session.CursorMoved -= OnCursorMoved;
+            Session.SaveRequested -= OnSaveRequested;
+            Session.LspStatusChanged -= OnLspStatusChanged;
+        }
+
+        _clangd?.Dispose();
+    }
+
+    private void OnThemeChanged() => Session?.SetTheme(EditorTheme.IsDark(_theme));
+
+    private void ApplyEditorOptions()
+    {
+        var scripting = _settings.Settings.Scripting;
+        Session?.SetOptions(
+            minimap: scripting.ShowMinimap,
+            fontSize: scripting.FontSize,
+            wordWrap: scripting.WordWrap ? "on" : "off");
+    }
+
+    private void OnLspStatusChanged(string state)
+    {
+        _lspState = state;
+        RefreshLanguageStatus();
+    }
+
+    // Recomputes the status text from the active tab's language and the current LSP state. Highlight-only
+    // languages (GLSL, JSON) just show their name; a language with a server appends its state once known.
+    private void RefreshLanguageStatus() => Dispatch.To(DispatchContext.UI, () =>
+    {
+        var language = ActiveTab?.Document.Language;
+        if (language is null)
+        {
+            LanguageStatus = "";
+            return;
+        }
+
+        if (!language.UsesLanguageServer)
+        {
+            LanguageStatus = language.DisplayName;
+            return;
+        }
+
+        var server = language.LanguageServer;
+        LanguageStatus = _lspState switch
+        {
+            "starting" => $"{language.DisplayName} · {server} starting…",
+            "ready" => $"{language.DisplayName} · {server} ready",
+            "error" => $"{language.DisplayName} · {server} error",
+            "unavailable" => $"{language.DisplayName} · no {server}",
+            _ => language.DisplayName,
+        };
+    });
 
     // Starts clangd once, the first time a script is opened (a project is certainly open by then). On failure
     // the editor keeps working with syntax highlighting only; the reason is logged, not surfaced as an error.
@@ -240,14 +296,14 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         var started = ClangdSession.Start(Session, project.RootDirectory, _locator.EngineSourcePath, _log);
         if (!started)
         {
-            LanguageStatus = "C++ · no clangd";
+            OnLspStatusChanged("unavailable");
             _log.Info($"Script editor: {started.Error}");
             return;
         }
 
         _clangd = started.Value;
-        LanguageStatus = "C++ · clangd starting…";
-        Session.EnableLsp(new Uri(project.RootDirectory).AbsoluteUri);
+        OnLspStatusChanged("starting");
+        Session.EnableLsp(new Uri(project.RootDirectory).AbsoluteUri, ScriptLanguages.LanguageServerIds);
         _log.Info("Script editor: clangd attached (engine + sibling-script IntelliSense).");
     }
 
@@ -268,6 +324,8 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
         newValue.IsActive = true;
         Session?.SetActive(newValue.Path);
+        // The status bar tracks the active tab's language, so refresh it whenever the visible tab changes.
+        RefreshLanguageStatus();
     }
 
     private void Close(ScriptTabViewModel tab)
@@ -317,31 +375,5 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
         _log.Info($"Saved {tab.Title}");
         _hotReload.NotifySaved(document.Path);
-    }
-
-    public void Dispose()
-    {
-        _theme.ThemeChanged -= OnThemeChanged;
-        _settingsSubscription?.Dispose();
-        foreach (var tab in Tabs)
-        {
-            if (_reloadHandlers.TryGetValue(tab.Path, out var handler))
-                tab.Document.Reloaded -= handler;
-            if (_externalEditHandlers.TryGetValue(tab.Path, out var externalHandler))
-                tab.Document.ExternalEdit -= externalHandler;
-            tab.Detach();
-        }
-
-        _reloadHandlers.Clear();
-        _externalEditHandlers.Clear();
-        if (Session is not null)
-        {
-            Session.ContentChanged -= OnContentChanged;
-            Session.CursorMoved -= OnCursorMoved;
-            Session.SaveRequested -= OnSaveRequested;
-            Session.LspStatusChanged -= OnLspStatusChanged;
-        }
-
-        _clangd?.Dispose();
     }
 }

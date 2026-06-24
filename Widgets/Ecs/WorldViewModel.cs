@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Widgets.Behaviors;
+using Toybox.Studio.Widgets.PropertyGrid;
 
 namespace Toybox.Studio.Widgets.Ecs;
 
@@ -24,6 +25,8 @@ public sealed partial class WorldViewModel : ObservableObject
 
     private readonly WorldManager _world;
     private readonly WorldSelection _selection;
+    private readonly ComponentCatalog _components;
+    private readonly ScriptCatalog _scripts;
     private readonly Dictionary<ulong, EntityViewModel> _entities = [];
 
     // Guards against overlapping pulls when a request outlives the refresh cadence.
@@ -36,10 +39,13 @@ public sealed partial class WorldViewModel : ObservableObject
     // tree and selected — set by the add commands, consumed (once) by ResolveSelection.
     private ulong? _pendingRenameId;
 
-    public WorldViewModel(WorldManager world, WorldSelection selection)
+    public WorldViewModel(
+        WorldManager world, WorldSelection selection, ComponentCatalog components, ScriptCatalog scripts)
     {
         _world = world;
         _selection = selection;
+        _components = components;
+        _scripts = scripts;
         world.WorldChanged += snapshot => Dispatch.To(DispatchContext.UI, () => Reconcile(snapshot.Roots));
         selection.SelectionChanged +=
             () => Dispatch.To(DispatchContext.UI, () => ResolveSelection(_selection.SelectedId, reveal: true));
@@ -284,6 +290,84 @@ public sealed partial class WorldViewModel : ObservableObject
         if (!result.Success)
         {
             await Popups.ShowErrorAsync("Couldn't delete entity", result.Error!).ContinueOnSameContext();
+            return;
+        }
+
+        _world.MarkDirty();
+        await _world.RefreshAsync().ContinueOnSameContext();
+    }
+
+    /// <summary>
+    /// Adds a component to the selected entity: opens the component-type picker (every registered type the
+    /// entity doesn't already carry, minus the script container — scripts have their own flow), then attaches
+    /// the chosen type at its defaults and re-syncs. A no-op when nothing is selected or the picker is cancelled.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddComponentAsync()
+    {
+        var entity = SelectedEntity;
+        if (entity is null)
+            return;
+
+        var present = new HashSet<string>(
+            entity.Components.Select(component => component.Name), StringComparer.Ordinal)
+        {
+            // The script container is offered through "Add Script", never the component picker.
+            "script_container",
+        };
+        var options = _components.Components
+            .Where(type => !present.Contains(type.Name))
+            .Select(type => new CatalogItem(
+                type.Name, NameHumanizer.Humanize(type.Name), type.Name, type.Icon, type.IconColor))
+            .OrderBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var pick = await CatalogPicker
+            .ShowAsync("Add Component", "This entity already has every component.", options)
+            .ContinueOnSameContext();
+        if (pick is null)
+            return;
+
+        var result = await _world.Entity(entity.Id).AddComponentAsync(pick.Key, CancellationToken.None)
+            .ContinueOnSameContext();
+        if (!result.Success)
+        {
+            await Popups.ShowErrorAsync("Couldn't add component", result.Error!).ContinueOnSameContext();
+            return;
+        }
+
+        _world.MarkDirty();
+        await _world.RefreshAsync().ContinueOnSameContext();
+    }
+
+    /// <summary>
+    /// Adds a script to the selected entity: opens the script picker (every script asset in the project),
+    /// then attaches the chosen script — creating the entity's script container if needed — and re-syncs. A
+    /// no-op when nothing is selected or the picker is cancelled.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddScriptAsync()
+    {
+        var entity = SelectedEntity;
+        if (entity is null)
+            return;
+
+        var options = _scripts.Scripts
+            .Select(asset => new CatalogItem(asset.Id.ToString(), asset.Name, "Script", "ScrollText", "GREEN"))
+            .OrderBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var pick = await CatalogPicker
+            .ShowAsync("Add Script", "No scripts found in this project.", options)
+            .ContinueOnSameContext();
+        if (pick is null || !long.TryParse(pick.Key, out var scriptId))
+            return;
+
+        var result = await _world.Entity(entity.Id).AddScriptAsync(scriptId, CancellationToken.None)
+            .ContinueOnSameContext();
+        if (!result.Success)
+        {
+            await Popups.ShowErrorAsync("Couldn't add script", result.Error!).ContinueOnSameContext();
             return;
         }
 

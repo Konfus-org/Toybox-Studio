@@ -118,6 +118,12 @@ public partial class App : Application
                 catalog,
                 _host.Services.GetRequiredService<WorldManager>());
 
+            // Eagerly build the component/script catalogs so they subscribe to the session (and the asset
+            // catalog) and are populated by the time the inspector's "Add" pickers open, even if the
+            // inspector dockable is opened after the first connect.
+            _host.Services.GetRequiredService<ComponentCatalog>();
+            _host.Services.GetRequiredService<ScriptCatalog>();
+
             // Give the inspector's script cards their inline editor / pop-out / source-resolution service.
             ScriptEditing.Current = _host.Services.GetRequiredService<ScriptEditing>();
 
@@ -303,6 +309,8 @@ public partial class App : Application
         services.AddSingleton<InstanceDetector>();
         services.AddSingleton<WorldManager>();
         services.AddSingleton<AssetCatalog>();
+        services.AddSingleton<ComponentCatalog>();
+        services.AddSingleton<ScriptCatalog>();
         services.AddSingleton<Locator>();
         services.AddSingleton<ThemeCreator>();
         services.AddSingleton<StatusViewModel>();

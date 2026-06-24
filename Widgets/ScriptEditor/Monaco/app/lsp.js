@@ -16,6 +16,7 @@
   var pending = Object.create(null);   // request id -> {resolve, reject}
   var openDocs = Object.create(null);  // uri -> version
   var rootUri = null;
+  var serverLanguages = ["cpp"];        // Monaco language ids the host's server serves; set by lspEnable.
   var semanticTokensEmitter = null;    // fired to make Monaco re-request tokens after clangd indexes
 
   function send(message) {
@@ -182,8 +183,14 @@
   }
 
   // ---- Monaco language providers (client -> server requests) ----
+  // Registered for every language the host's server serves (passed in the lspEnable envelope), so the client
+  // isn't hard-wired to a single language id.
   function registerProviders() {
-    monaco.languages.registerCompletionItemProvider("cpp", {
+    serverLanguages.forEach(registerProvidersFor);
+  }
+
+  function registerProvidersFor(languageId) {
+    monaco.languages.registerCompletionItemProvider(languageId, {
       triggerCharacters: [".", ">", ":", "<", "\"", "/"],
       provideCompletionItems: function (model, position) {
         return request("textDocument/completion", {
@@ -212,7 +219,7 @@
       }
     });
 
-    monaco.languages.registerHoverProvider("cpp", {
+    monaco.languages.registerHoverProvider(languageId, {
       provideHover: function (model, position) {
         return request("textDocument/hover", {
           textDocument: { uri: model.uri.toString() }, position: toLspPos(position)
@@ -226,7 +233,7 @@
       }
     });
 
-    monaco.languages.registerDefinitionProvider("cpp", {
+    monaco.languages.registerDefinitionProvider(languageId, {
       provideDefinition: function (model, position) {
         return request("textDocument/definition", {
           textDocument: { uri: model.uri.toString() }, position: toLspPos(position)
@@ -240,7 +247,7 @@
       }
     });
 
-    monaco.languages.registerSignatureHelpProvider("cpp", {
+    monaco.languages.registerSignatureHelpProvider(languageId, {
       signatureHelpTriggerCharacters: ["(", ","],
       provideSignatureHelp: function (model, position) {
         return request("textDocument/signatureHelp", {
@@ -273,7 +280,7 @@
   // type/modifier names the theme colours by.
   function registerSemanticTokens(legend) {
     semanticTokensEmitter = new monaco.Emitter();
-    monaco.languages.registerDocumentSemanticTokensProvider("cpp", {
+    var provider = {
       onDidChange: semanticTokensEmitter.event,
       getLegend: function () {
         return { tokenTypes: legend.tokenTypes || [], tokenModifiers: legend.tokenModifiers || [] };
@@ -286,6 +293,9 @@
           }, function () { return null; });
       },
       releaseDocumentSemanticTokens: function () {}
+    };
+    serverLanguages.forEach(function (languageId) {
+      monaco.languages.registerDocumentSemanticTokensProvider(languageId, provider);
     });
   }
 
@@ -330,6 +340,7 @@
   bridge.on("lspEnable", function (m) {
     if (enabled) return;
     enabled = true;
+    if (m.languages && m.languages.length) serverLanguages = m.languages;
     if (monaco) registerProviders();
     start(m.rootUri);
   });

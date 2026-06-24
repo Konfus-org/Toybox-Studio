@@ -2,6 +2,7 @@ using Toybox.Studio.Utils;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
@@ -178,6 +179,25 @@ public sealed partial class ComponentViewModel : ObservableObject
     {
         foreach (var (property, viewModel) in _resettable)
             await RefreshModifiedAsync(property, viewModel, ct).ContinueOnSameContext();
+    }
+
+    /// <summary>
+    /// Removes this whole component from the entity (the header's "✕"), then re-syncs so the inspector drops
+    /// its section. Surfaces the engine's message on failure.
+    /// </summary>
+    [RelayCommand]
+    private async Task RemoveComponentAsync()
+    {
+        var result = await _component.RemoveAsync(CancellationToken.None).ContinueOnSameContext();
+        if (result.Success)
+        {
+            _onEdited();
+            await _resync().ContinueOnSameContext();
+        }
+        else
+        {
+            await Popups.ShowErrorAsync("Couldn't remove component", result.Error!).ContinueOnSameContext();
+        }
     }
 
     // Builds the material-instance editor: a "Base" material picker plus a base-aware override editor that

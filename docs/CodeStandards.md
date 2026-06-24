@@ -29,8 +29,9 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
 ## File & Type Layout
 
 - **One public class per `.cs` file**; one widget (View) per `.axaml` file. Small private helper types tightly owned by the file may share it, but prefer their own file.
+- **No `partial` types.** A type is declared once, in one file. `partial` is permitted *only* where a source generator requires it — chiefly the `CommunityToolkit.Mvvm` generators (a view model with `[ObservableProperty]`/`[RelayCommand]` must be a `partial class`, and an `[ObservableProperty]` auto-property must itself be `partial`) and equivalent codegen. Never reach for `partial` to organize hand-written code or to split a type across files: a type too big to sit in one file is a signal to split *responsibilities* into separate types (see **No god classes**), not to spread one type across declarations.
 - **Document the "why".** Use `///` XML-doc summaries on public classes, records, and non-obvious public members. Comments explain assumptions, constraints, and non-obvious decisions — not what self-explanatory code already says.
-- **Member layout within a type.** Order members by category, in this fixed sequence:
+- **Member layout within a type.** Order members by category, in this fixed sequence. The numbered list below only *names* the order — it is **not** something to reproduce in the file:
 
   1. Constants & Fields
   2. Constructors (static constructor / finalizer alongside)
@@ -39,15 +40,7 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
   5. Methods (including operators)
   6. Nested Types
 
-  When a type has members in **two or more** of these categories, mark each present category with a banner comment so the sections are scannable:
-
-  ```csharp
-  // ==========================================
-  // 1. Constants & Fields
-  // ==========================================
-  ```
-
-  Keep each member's attributes, XML-doc, and leading comments attached when it moves, and preserve the existing relative order *within* a category (never reorder fields among themselves — initializer order can be load-bearing). Skip the banners for trivial single-section types — enums, interfaces, delegates, marker attributes, simple DTO `record`s, and framework code-behind (`*.axaml.cs`): the ordering still applies, but banners on a five-line type are noise. See `Widgets/Settings/EditorSettingsViewModel.cs` for a worked example.
+  **Do not add section banners or separator comments** (`// ====`, `// --- Properties ---`, `// 2. Constructors`, and the like) to mark these categories. The ordering itself makes a type scannable; dividers are visual noise, drift out of date, and aren't part of the layout. Keep each member's attributes, XML-doc, and leading comments attached when it moves, and preserve the existing relative order *within* a category (never reorder fields among themselves — initializer order can be load-bearing).
 
 - **Order methods by accessibility**, most accessible first: `public` → `internal` → `protected` (and `protected internal` / `private protected`) → `private`. The public surface of a type reads top-down before its implementation detail. Within a single accessibility tier preserve the existing order (keep related/overload groups together; don't sort alphabetically). This ordering applies *within* the Methods section only — it does not reshuffle the category sequence above. (Fields stay in their load-bearing order; the public-first rule is for methods.)
 

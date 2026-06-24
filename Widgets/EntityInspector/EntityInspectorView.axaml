@@ -40,6 +40,12 @@
                 <TabControl Classes="inspectorTabs" Margin="4,10,4,4">
                 <!-- Components: every non-script component, stacked under its own collapsible header. -->
                 <TabItem Header="Components">
+                  <!-- Outer DockPanel keeps the WorldViewModel context so the Add button can reach its
+                       command; the inner Panel scopes to SelectedEntity for the component grids. -->
+                  <DockPanel>
+                    <Button DockPanel.Dock="Bottom" Classes="action" Content="Add Component"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Margin="0,8,0,0" Command="{Binding AddComponentCommand}"/>
                     <!-- Scoped to SelectedEntity so the inner bindings are single-step (HasComponents/
                          Components) and resolve against a null context — not a null SelectedEntity.* path —
                          when nothing is selected. -->
@@ -61,9 +67,20 @@
                                                       VerticalAlignment="Center"
                                                       Fill="{DynamicResource ThemeAccentSolidBrush}"
                                                       Data="M 0,0 L 8,4 L 0,8 Z"/>
-                                                <!-- Enable toggle (far right): a toy switch like every other
-                                                     bool. As an interactive child it swallows its own click, so
-                                                     flipping it never collapses the section. -->
+                                                <!-- Remove (far right): detaches the whole component. As an
+                                                     interactive child it swallows its own click, so it never
+                                                     collapses the section. -->
+                                                <Button DockPanel.Dock="Right" Padding="3" Margin="2,0,2,0"
+                                                        Background="Transparent" BorderThickness="0"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding RemoveComponentCommand}"
+                                                        ToolTip.Tip="Remove this component">
+                                                    <pg:IconView Width="13" Height="13" IconName="X"
+                                                                 Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                                                </Button>
+                                                <!-- Enable toggle: a toy switch like every other bool. As an
+                                                     interactive child it swallows its own click, so flipping it
+                                                     never collapses the section. -->
                                                 <ToggleSwitch DockPanel.Dock="Right" Margin="6,0,4,0"
                                                               VerticalAlignment="Center"
                                                               IsChecked="{Binding IsEnabled}"
@@ -90,10 +107,17 @@
                     <ghost:GhostView Message="No components on this entity."
                                      IsVisible="{Binding !HasComponents}"/>
                     </Panel>
+                  </DockPanel>
                 </TabItem>
 
                 <!-- Scripts: the script container, one card per bound script (its overrides as fields). -->
                 <TabItem Header="Scripts">
+                  <!-- Outer DockPanel keeps the WorldViewModel context for the Add button; the inner Panel
+                       scopes to SelectedEntity for the script cards. -->
+                  <DockPanel>
+                    <Button DockPanel.Dock="Bottom" Classes="action" Content="Add Script"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Margin="0,8,0,0" Command="{Binding AddScriptCommand}"/>
                     <!-- Scoped to SelectedEntity so the inner bindings are single-step (HasScripts/Scripts)
                          and resolve against a null context when nothing is selected. -->
                     <Panel DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel">
@@ -105,6 +129,7 @@
                         <ghost:GhostView Message="No scripts on this entity."
                                          IsVisible="{Binding !HasScripts}"/>
                     </Panel>
+                  </DockPanel>
                 </TabItem>
 
                 <!-- Json (debug only): the raw component JSON, editable, applied per-component. -->

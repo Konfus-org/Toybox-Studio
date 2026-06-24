@@ -22,6 +22,19 @@ public sealed class AnyTrueConverter : IMultiValueConverter
 }
 
 /// <summary>
+/// Several bools → true only when every one is true (a logical AND over the bound inputs). Lets a control
+/// require multiple independent conditions — e.g. the empty-state ghost shown only when the grid is empty
+/// <em>and</em> it isn't an embedded grid (whose host card already supplies the context).
+/// </summary>
+public sealed class AllTrueConverter : IMultiValueConverter
+{
+    public static readonly AllTrueConverter Instance = new();
+
+    public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture) =>
+        values.All(value => value is true);
+}
+
+/// <summary>
 /// Nesting depth (int) → a soft, warm overlay brush, so each level reads a faint notch deeper than its
 /// parent without darkening the clay into a heavy grey band. Depth 0 is transparent. Mirrors the
 /// inspector's per-level shading.

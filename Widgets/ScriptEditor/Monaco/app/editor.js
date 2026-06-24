@@ -20,14 +20,22 @@
     var boot = document.getElementById("boot");
     if (boot) boot.remove();
 
+    // Register custom languages (e.g. GLSL) not in the vendored basic-languages bundle, before any model is
+    // created, so a model opened as one of them already has its grammar.
+    if (window.__tbxLanguages) window.__tbxLanguages.register(monaco);
+
+    // Register the editor's colour themes (the editable type-colouring palette), before the editor is created
+    // so the initial theme is ours.
+    if (window.__tbxThemes) window.__tbxThemes.register(monaco);
+
     var models = Object.create(null);   // path -> { model, viewState }
     var activePath = null;
     var suppressChange = false;         // true while we apply host edits, so we don't echo them back
 
     var editor = monaco.editor.create(document.getElementById("root"), {
       value: "",
-      language: "cpp",
-      theme: "vs-dark",
+      language: "plaintext",
+      theme: window.__tbxThemes ? window.__tbxThemes.dark : "vs-dark",
       automaticLayout: true,
       fontSize: 13,
       minimap: { enabled: true },
@@ -40,11 +48,13 @@
       "semanticHighlighting.enabled": true
     });
 
+    // Fallback only: the C# host normally passes an explicit language id (resolved from ScriptLanguages) in the
+    // open envelope, so this just covers a missing one. Keep the extensions in step with that table.
     function languageFor(path) {
-      if (/\.(h|hpp|hxx|hh|inl)$/i.test(path)) return "cpp";
-      if (/\.(c|cc|cpp|cxx)$/i.test(path)) return "cpp";
+      if (/\.(h|hpp|hxx|hh|inl|c|cc|cpp|cxx)$/i.test(path)) return "cpp";
+      if (/\.(glsl|frag|vert|comp|geo)$/i.test(path)) return "glsl";
       if (/\.json$/i.test(path)) return "json";
-      return "cpp";
+      return "plaintext";
     }
 
     function rememberViewState() {
@@ -116,7 +126,11 @@
     });
 
     bridge.on("theme", function (m) {
-      monaco.editor.setTheme(m.base === "light" ? "vs" : "vs-dark");
+      var themes = window.__tbxThemes;
+      if (m.base === "light")
+        monaco.editor.setTheme(themes ? themes.light : "vs");
+      else
+        monaco.editor.setTheme(themes ? themes.dark : "vs-dark");
     });
 
     editor.onDidChangeCursorPosition(function (e) {

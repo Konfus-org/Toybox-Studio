@@ -405,6 +405,16 @@
             </StackPanel>
         </ScrollViewer>
 
-        <ghost:GhostView Message="Nothing to show here yet." IsVisible="{Binding #Root.IsEmpty}"/>
+        <!-- The empty-state ghost is for the top-level inspector/settings grid only; an embedded grid sits
+             inside a host card (a component or script binding) that already names it, so it shows just its
+             own "No overrides."/empty text rather than this full ghost. -->
+        <ghost:GhostView Message="Nothing to show here yet.">
+            <ghost:GhostView.IsVisible>
+                <MultiBinding Converter="{x:Static local:AllTrueConverter.Instance}">
+                    <Binding Path="#Root.IsEmpty"/>
+                    <Binding Path="!#Root.Embedded"/>
+                </MultiBinding>
+            </ghost:GhostView.IsVisible>
+        </ghost:GhostView>
     </Panel>
 </UserControl>

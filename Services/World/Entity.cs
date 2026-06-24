@@ -29,6 +29,16 @@ public sealed class Entity
     /// <summary>A handle to one of this entity's components, by type name.</summary>
     public Component Component(string name) => new(_engine, Id, name);
 
+    /// <summary>Adds the named component to this entity at its default values; fails if it is unknown or
+    /// already present.</summary>
+    public Task<Result> AddComponentAsync(string component, CancellationToken ct) =>
+        _engine.InvokeAsync("entity.addComponent", new { EntityId = Id, Component = component }, ct);
+
+    /// <summary>Attaches the given script asset to this entity (creating its script container if needed),
+    /// appending a binding that runs the script at its source defaults.</summary>
+    public Task<Result> AddScriptAsync(long script, CancellationToken ct) =>
+        _engine.InvokeAsync("entity.addScript", new { EntityId = Id, Script = script }, ct);
+
     /// <summary>Renames the entity in place.</summary>
     public Task<Result> RenameAsync(string name, CancellationToken ct) =>
         _engine.InvokeAsync("entity.setName", new { EntityId = Id, Name = name }, ct);

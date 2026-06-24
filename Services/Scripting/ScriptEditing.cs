@@ -167,7 +167,7 @@ public sealed class ScriptEditing : IDisposable
             if (clangd)
             {
                 _inlineClangd = clangd.Value;
-                inline.Session.EnableLsp(new Uri(project.RootDirectory).AbsoluteUri);
+                inline.Session.EnableLsp(new Uri(project.RootDirectory).AbsoluteUri, ScriptLanguages.LanguageServerIds);
             }
             else
             {

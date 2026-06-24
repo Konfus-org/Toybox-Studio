@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:Toybox.Studio.Widgets.Dialogs"
+        xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors"
+        xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+        xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
+        xmlns:dialogs="using:Toybox.Studio.Services.Dialogs"
+        x:Class="Toybox.Studio.Widgets.Dialogs.CatalogPickerDialog"
+        x:DataType="local:CatalogPickerViewModel"
+        Icon="/Assets/Icons/Toybox.png"
+        Width="420" Height="480" CanResize="True"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Title="{Binding Title}">
+
+    <DockPanel Margin="14">
+        <TextBox DockPanel.Dock="Top" Margin="0,0,0,8" Text="{Binding SearchText}"
+                 PlaceholderText="Search…"/>
+
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Classes="toy" Content="Cancel" MinWidth="72" IsCancel="True"
+                        Command="{Binding CancelCommand}"/>
+                <Button Classes="action" Content="Add" MinWidth="72" IsDefault="True"
+                        Command="{Binding SelectCommand}"/>
+            </StackPanel>
+        </DockPanel>
+
+        <Border BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1">
+            <Panel>
+                <ListBox SelectionMode="Single"
+                         ItemsSource="{Binding FilteredOptions}"
+                         SelectedItem="{Binding SelectedItem}"
+                         behaviors:DoubleTapCommand.Command="{Binding SelectCommand}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="dialogs:CatalogItem">
+                            <DockPanel Margin="2,3">
+                                <pg:IconView DockPanel.Dock="Left" Width="16" Height="16"
+                                             Margin="0,0,8,0" VerticalAlignment="Center"
+                                             IconName="{Binding Icon}" IconColor="{Binding IconColor}"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}"/>
+                                    <TextBlock Text="{Binding Subtitle}" Opacity="0.55"
+                                               FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <ghost:GhostView IsHitTestVisible="False"
+                                 IsVisible="{Binding IsGhostVisible}"
+                                 Message="{Binding GhostMessage}"/>
+            </Panel>
+        </Border>
+    </DockPanel>
+</Window>

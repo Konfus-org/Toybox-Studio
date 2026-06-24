@@ -1,3 +1,4 @@
+using System.IO;
 using Toybox.Studio.Services;
 using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,9 +8,11 @@ using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Shell.Panels;
 using Toybox.Studio.Shell.Workspace;
+using Toybox.Studio.Widgets.AssetViewer;
 using Toybox.Studio.Widgets.Ecs;
 
 namespace Toybox.Studio.Shell;
@@ -27,6 +30,9 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly FilePicker _filePicker;
     private readonly CommandRunner _commandRunner;
     private readonly WorldManager _world;
+    private readonly AssetCatalog _assets;
+    private readonly ScriptEditorLauncher _scriptEditor;
+    private readonly AssetViewerLauncher _assetViewer;
 
     public ShellViewModel(
         StatusViewModel status,
@@ -36,7 +42,10 @@ public sealed partial class ShellViewModel : ObservableObject
         ProjectManager projects,
         FilePicker filePicker,
         CommandRunner commandRunner,
-        WorldManager world)
+        WorldManager world,
+        AssetCatalog assets,
+        ScriptEditorLauncher scriptEditor,
+        AssetViewerLauncher assetViewer)
     {
         Status = status;
         Workspace = workspace;
@@ -47,6 +56,9 @@ public sealed partial class ShellViewModel : ObservableObject
         _filePicker = filePicker;
         _commandRunner = commandRunner;
         _world = world;
+        _assets = assets;
+        _scriptEditor = scriptEditor;
+        _assetViewer = assetViewer;
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshTitle);
         // A project rename (its AppSettings "name" edited in Settings) updates the title without a relaunch.
@@ -145,6 +157,66 @@ public sealed partial class ShellViewModel : ObservableObject
 
         if (!_projects.TryOpen(path, out var error))
             _log.Error(error ?? "Failed to open the project.");
+    }
+
+    /// <summary>
+    /// Opens an asset chosen from the in-app picker, routing by type: scripts and shaders open in the
+    /// Monaco script editor; worlds/chunks switch the active editing world; textures, models and
+    /// materials open in a new Asset Viewer (an isolated orbit preview).
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenAssetAsync()
+    {
+        // Resume on the UI thread after the dialog: the routing below opens dockables (script editor /
+        // asset viewer), which touch the DockControl and must run on the UI thread.
+        var pick = await AssetPicker.ShowAsync("Open Asset", _assets.Assets, 0).ContinueOnSameContext();
+        if (!pick.Confirmed || pick.Id == 0)
+            return;
+
+        if (_assets.Resolve(pick.Id) is not { } asset)
+        {
+            _log.Error("The chosen asset could not be resolved.");
+            return;
+        }
+
+        if (asset.IsScript || IsShader(asset.Type))
+        {
+            if (_projects.CurrentProject is { } project)
+                _scriptEditor.Open(ResolveAssetPath(project, asset.Path));
+            else
+                _log.Error("Open a project before opening a script.");
+            return;
+        }
+
+        if (asset.Type is "world" or "chunk")
+        {
+            await _world.OpenWorldAsync(asset.Id).ContinueOnAnyContext();
+            return;
+        }
+
+        _assetViewer.Open(asset);
+    }
+
+    // Shader source extensions open in the text editor alongside scripts.
+    private static bool IsShader(string type) =>
+        type is "glsl" or "hlsl" or "vert" or "frag" or "vertex" or "fragment" or "geometry"
+            or "compute" or "comp";
+
+    // Resolves a project-relative asset path to an absolute one (under the project root, else its
+    // Assets folder) so the script editor can open the file. Mirrors App.ResolveAssetPath.
+    private static string ResolveAssetPath(ProjectInfo project, string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath))
+            return project.AssetsDirectory;
+        if (Path.IsPathRooted(relativePath))
+            return relativePath;
+
+        var underRoot = Path.Combine(project.RootDirectory, relativePath);
+        if (File.Exists(underRoot))
+            return underRoot;
+
+        var underAssets = Path.Combine(project.AssetsDirectory, relativePath);
+        return File.Exists(underAssets) ? underAssets : underRoot;
     }
 
     [RelayCommand]

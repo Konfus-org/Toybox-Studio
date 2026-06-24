@@ -235,8 +235,7 @@
                             <StackPanel IsVisible="{Binding #GlobalsToggle.IsChecked}">
                                 <TreeView Classes="entities" ItemsSource="{Binding Globals}"
                                           wt:WorldTreeSelection.Selection="{Binding Selection}"
-                                          ItemTemplate="{StaticResource EntityRow}"
-                                          wt:EntityTreeDragDrop.Enabled="True"/>
+                                          ItemTemplate="{StaticResource EntityRow}"/>
                                 <TextBlock Text="Drag entities here to make them global."
                                            FontSize="{DynamicResource ThemeFontSizeSmall}" Opacity="0.45"
                                            Margin="2,2,0,0" TextWrapping="Wrap"
@@ -274,8 +273,7 @@
                         <StackPanel IsVisible="{Binding #StreamedToggle.IsChecked}">
                             <TreeView x:Name="StreamedTree" Classes="entities" ItemsSource="{Binding RootEntities}"
                                       wt:WorldTreeSelection.Selection="{Binding Selection}"
-                                      ItemTemplate="{StaticResource EntityRow}"
-                                      wt:EntityTreeDragDrop.Enabled="True"/>
+                                      ItemTemplate="{StaticResource EntityRow}"/>
                             <!-- Empty-state: a world can stream in with no root entities (everything global, or a
                                  fresh world), so the streamed section shows a hint instead of a blank gap. -->
                             <TextBlock Text="No streamed entities. Click + to add one, or drag a global here."

@@ -7,9 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Templates are a real on-disk project the editor copies + builds, not an embedded UI resource. -->
-    <AvaloniaResource Include="Assets\**" Exclude="Assets\Templates\**" />
+    <!-- Templates are a real on-disk project the editor copies + builds, not an embedded UI resource.
+         AssetViewer is the asset-preview's bundled sky + base world; it's handed to the engine as a
+         real asset directory at launch, so it must live on disk (copied) rather than embedded. -->
+    <AvaloniaResource Include="Assets\**" Exclude="Assets\Templates\**;Assets\AssetViewer\**" />
     <None Include="Assets\Templates\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\AssetViewer\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,142 @@
+[
+    {
+        "id": {
+            "type": "uuid",
+            "value": 3001000001
+        },
+        "name": {
+            "type": "string",
+            "value": "Sun"
+        },
+        "tag": {
+            "type": "string",
+            "value": "lighting"
+        },
+        "layer": {
+            "type": "string",
+            "value": ""
+        },
+        "parent": {
+            "type": "uuid",
+            "value": 0
+        },
+        "components": {
+            "directional_light": {
+                "color": {
+                    "type": "color",
+                    "value": {
+                        "r": 1,
+                        "g": 1,
+                        "b": 1,
+                        "a": 1
+                    }
+                },
+                "intensity": {
+                    "type": "float",
+                    "value": 1.5
+                },
+                "cast_shadows": {
+                    "type": "bool",
+                    "value": false
+                },
+                "ambient": {
+                    "type": "float",
+                    "value": 0.35
+                }
+            },
+            "transform": {
+                "position": {
+                    "type": "vec3",
+                    "value": [
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "rotation": {
+                    "type": "quat",
+                    "value": [
+                        -0.353553,
+                        0.353553,
+                        -0.146447,
+                        0.853553
+                    ]
+                },
+                "scale": {
+                    "type": "vec3",
+                    "value": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "id": {
+            "type": "uuid",
+            "value": 3001000002
+        },
+        "name": {
+            "type": "string",
+            "value": "Sky"
+        },
+        "tag": {
+            "type": "string",
+            "value": "environment"
+        },
+        "layer": {
+            "type": "string",
+            "value": ""
+        },
+        "parent": {
+            "type": "uuid",
+            "value": 0
+        },
+        "components": {
+            "sky": {
+                "material": {
+                    "type": "material_instance",
+                    "value": {
+                        "material": {
+                            "type": "handle",
+                            "value": 3000000002
+                        }
+                    }
+                },
+                "type": {
+                    "type": "object",
+                    "value": 1
+                }
+            },
+            "transform": {
+                "position": {
+                    "type": "vec3",
+                    "value": [
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "rotation": {
+                    "type": "quat",
+                    "value": [
+                        0,
+                        1,
+                        0,
+                        0
+                    ]
+                },
+                "scale": {
+                    "type": "vec3",
+                    "value": [
+                        1,
+                        1,
+                        1
+                    ]
+                }
+            }
+        }
+    }
+]

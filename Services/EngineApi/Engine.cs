@@ -37,7 +37,8 @@ public sealed class Engine : IDisposable
         string appModuleName,
         string appSettingsPath,
         bool hidden,
-        int rpcPort)
+        int rpcPort,
+        string? extraAssetDirectory = null)
     {
         if (!File.Exists(launcherPath))
             throw new InvalidOperationException($"Engine launcher not found at '{launcherPath}'.");
@@ -49,13 +50,17 @@ public sealed class Engine : IDisposable
             CreateNoWindow = true,
         };
         startInfo.Environment["TBX_STUDIO_RPC_PORT"] = rpcPort.ToString(CultureInfo.InvariantCulture);
+
+        startInfo.ArgumentList.Add($"--app={appModuleName}");
+        startInfo.ArgumentList.Add($"--settings={appSettingsPath}");
+
         if (hidden)
             startInfo.ArgumentList.Add("--hidden");
 
         // Inject the studio bridge plugin (added on top of the project's own plugins). It owns all
         // editor behavior — the RPC server, viewport rendering, and play-mode — so the engine itself
         // stays a clean game runtime. Standalone launches omit this and never load any editor code.
-        startInfo.ArgumentList.Add("--load-plugins=StudioBridge");
+        startInfo.ArgumentList.Add("--inject-plugins=StudioBridge");
 
         // Tie the engine's lifetime to ours: if the studio dies (even by a hard crash, where no
         // managed teardown runs), the engine sees our process exit and shuts itself down instead
@@ -64,8 +69,10 @@ public sealed class Engine : IDisposable
         startInfo.ArgumentList.Add(
             $"--live-together-die-together={Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}");
 
-        startInfo.ArgumentList.Add($"--app={appModuleName}");
-        startInfo.ArgumentList.Add($"--settings={appSettingsPath}");
+        // Give the engine an extra asset root (the editor's bundled asset-viewer sky/world) so asset
+        // previews can load it regardless of which project is open. Owned launches only.
+        if (!string.IsNullOrEmpty(extraAssetDirectory) && Directory.Exists(extraAssetDirectory))
+            startInfo.ArgumentList.Add($"--register-assets={extraAssetDirectory}");
 
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start '{launcherPath}'.");

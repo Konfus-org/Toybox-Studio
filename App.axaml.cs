@@ -12,6 +12,7 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Toybox.Studio.Shell;
+using Toybox.Studio.Widgets.AssetViewer;
 using Toybox.Studio.Widgets.Ecs;
 using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;
@@ -330,6 +331,10 @@ public partial class App : Application
         DockableCatalog.RegisterDockables(services);
         services.AddSingleton<LayoutStore>();
         services.AddSingleton<WorkspaceViewModel>();
+
+        // Opens a new Asset Viewer panel for a chosen asset (File ▸ Open ▸ Asset), passing the target
+        // asset to the freshly-spawned panel.
+        services.AddSingleton<AssetViewerLauncher>();
 
         services.AddSingleton<ShellViewModel>();
     }

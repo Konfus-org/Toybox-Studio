@@ -214,12 +214,17 @@ public sealed class Session : IAsyncDisposable
             var port = GetFreeLoopbackPort();
             _log.Info($"Launching project '{project.Name}' on RPC port {port}...");
 
+            // The bundled asset-viewer content (preview sky + base world) lives beside the editor and
+            // is handed to the engine as an extra asset root so previews can load it for any project.
+            var assetViewerDir = Path.Combine(AppContext.BaseDirectory, "Assets", "AssetViewer");
+
             _process = Engine.Start(
                 launcherPath,
                 project.ModuleName,
                 project.AppSettingsPath,
                 _settings.Engine.HideEngineWindow,
-                port);
+                port,
+                assetViewerDir);
             _process.Exited += OnProcessExited;
             _log.Info($"Engine process started (pid {_process.Id}).");
 

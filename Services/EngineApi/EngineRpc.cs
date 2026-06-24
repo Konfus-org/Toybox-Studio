@@ -138,11 +138,21 @@ public sealed class EngineRpc : IAsyncDisposable
     /// <summary>
     /// Asks the engine to start a new view and returns its unique id. Each call creates an
     /// independent view with its own engine camera: an editor camera (free, spawned at the game
-    /// camera) or a game view that mirrors the game camera. The view's shared GPU texture arrives
-    /// shortly after as a <see cref="SurfaceReceived"/> notification (created on the render lane).
+    /// camera), a game view that mirrors the game camera, or an asset-preview view that orbits an
+    /// isolated world holding the asset identified by <paramref name="assetId"/>. The view's shared
+    /// GPU texture arrives shortly after as a <see cref="SurfaceReceived"/> notification (created on
+    /// the render lane).
     /// </summary>
-    public Task<Result<ViewInfo>> StartViewAsync(ViewKind kind, CancellationToken ct) =>
-        InvokeAsync<ViewInfo>("view.start", new { Kind = kind == ViewKind.Game ? "game" : "editor" }, ct);
+    public Task<Result<ViewInfo>> StartViewAsync(ViewKind kind, CancellationToken ct, long assetId = 0)
+    {
+        var kindToken = kind switch
+        {
+            ViewKind.Game => "game",
+            ViewKind.AssetPreview => "asset",
+            _ => "editor",
+        };
+        return InvokeAsync<ViewInfo>("view.start", new { Kind = kindToken, AssetId = assetId }, ct);
+    }
 
     /// <summary>Stops the engine view with the given id (from <see cref="StartViewAsync"/>).</summary>
     public Task<Result> StopViewAsync(string name, CancellationToken ct) =>
@@ -169,6 +179,20 @@ public sealed class EngineRpc : IAsyncDisposable
     /// <summary>Sets the engine's active transform tool (fire-and-forget); drives the viewport gizmo.</summary>
     public Task SetGizmoAsync(string mode) =>
         NotifyAsync("view.setGizmo", new { Mode = mode });
+
+    /// <summary>
+    /// Rebuilds an asset-preview view with a different mesh/material option (fire-and-forget): for a
+    /// material/texture the option is a built-in mesh token (or "skybox"/"skysphere" for a material);
+    /// for a model it's a built-in material token ("metal"/"matte"/"unlit"/"original").
+    /// </summary>
+    public Task SetPreviewOptionAsync(string view, string option) =>
+        NotifyAsync("view.setPreviewOption", new { View = view, Option = option });
+
+    /// <summary>
+    /// Changes an asset-preview view's background sky (fire-and-forget): "day", "night", or "none".
+    /// </summary>
+    public Task SetPreviewSkyboxAsync(string view, string skybox) =>
+        NotifyAsync("view.setPreviewSkybox", new { View = view, Skybox = skybox });
 
     /// <summary>
     /// Picks the entity under a viewport click. <paramref name="u"/>/<paramref name="v"/> are normalized image

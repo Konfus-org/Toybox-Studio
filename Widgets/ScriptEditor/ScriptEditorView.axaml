@@ -64,7 +64,7 @@
                            HorizontalAlignment="Center" TextAlignment="Left"/>
                 <TextBlock Foreground="{DynamicResource ThemeMutedTextBrush}" HorizontalAlignment="Center"
                            TextAlignment="Center" MaxWidth="320"
-                           Text="No script open.&#x0a;Open an entity's Script tab and click Pop out to edit it here."/>
+                           Text="No script open."/>
             </StackPanel>
 
             <TextBlock IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"

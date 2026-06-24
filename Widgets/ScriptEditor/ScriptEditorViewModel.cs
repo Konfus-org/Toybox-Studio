@@ -1,19 +1,14 @@
-using Toybox.Studio.Utils;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.Utils.Extensions;
+using System.Collections.ObjectModel;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
-using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
+using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.Settings;
 using Toybox.Studio.Services.Theming;
+using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Extensions;
 
 namespace Toybox.Studio.Widgets.ScriptEditor;
 
@@ -39,57 +34,44 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
     private readonly Dictionary<string, Action<object?>> _externalEditHandlers =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Raw literal at column 0 so the art's leading spaces (its shape) are preserved verbatim.
+    private const string GhostArt =
+"""
+             :::::::::::::::::             
+         .:::::::::::::::::::::::          
+       .:::::::::::::::::::::::::::.       
+     .:::::::::::::::::::::::::::::::.     
+    :::::::::::::::::::::::::::::::::::    
+   :::::::::::::::::::::::::::::::::::::   
+  :::::::::::::::::::::::::::::::::::::::  
+ ::::::::::::::::::::::::::::::::::::::::. 
+ ::::::::::......::::::::......::::::::::: 
+.:::::::::........:::::::.......:::::::::: 
+.:::::::::........:::::::........:::::::::.
+.::::::::::......::::::::.......::::::::::.
+.::::::::::::...:::::::::::..:::::::::::::.
+.:::::::::::::::::::::::::::::::::::::::::.
+.:::::::::::::::::::::::::::::::::::::::::.
+.:::::::::::::::::::::::::::::::::::::::::.
+.:::::::::::::::::::::::::::::::::::::::::.
+.:::::::::::::::::::::::::::::::::::::::::.
+::::::::::::::::::::::::::::::::::::::::::.
+.:::::::::::::::::::::::::::::::::::::::::.
+::::::::::::::::::::::::::::::::::::::::::.
+.:::::::.:::::::::::::::::::::::::.:::::::.
+::::::.    :::::::::. .:::::::::    .:::::.
+.:::.       .::::::.   .::::::        .:::.
+:::           .:::.     .:::.           ::.
+.               ..       ..               .
+""";
+
     private ClangdSession? _clangd;
     private bool _clangdAttempted;
     private IDisposable? _settingsSubscription;
 
-    // Raw literal at column 0 so the art's leading spaces (its shape) are preserved verbatim.
-    private const string GhostArt =
-"""
-
-                          ..:::::.........
-                      .:::::::................
-                   :::::::::.....................
-                 :::::::::.........................
-               :::::::::::...........................
-              ::::::::::::............................
-            .::::::::::++:::...........................
-           .:::::::::::$$$$$:..........+$$$XXX..........
-           :::::::::::::::$$XX.......::$$$XXX$...........
-          :::::::::::::$$$$$::.......::X$$$$$$............
-          :::::::::::::xx:::::........::;+x;..............
-         .::::::::::::::::::::............................
-         ::::::::::::::::::::::............................
-         :::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$.............
- ........:::::::::::::$$$$$$$$$$$$$$$$$$$$$$$$.....................
-::::::::::::::::::::::;$$$$$$$$$$$$$$$$$$$$$$+......................
- ::::::::::::::::::::::X$$XXXXXXXXXXXXXXXX$$$......................
-   :::::::::::::::::::::xXXXXXXXXXXXXXXXx+xX.....................
-    .:::::::::::::::::::;;XXXXXXXXXXXXXX++;....................
-      .:::::::::::::::::;;XXXXXXXXXXXXx+++....................
-       .::::::::::::::::;;;XXXXXXXXXxx+xx...................
-       :::::::::::::::::;;;;XXXXXXXXXXXX:....................
-       :::::::::::::::::::;;;;;XXXXXX::::....................
-       :::::::::::::::::::::::::::::::::.....................
-       ::::::::::::::::::::::::::::::::......................
-      .::::::::::::::::::::::::::::::::...::.................
-      ::::::::::::::::::::::::::::::::::::::::................
-      :::::::::::::::::::::::::::::::::::::::::...............
-      ::::::::::::::::::::::::::::::::::::::::::..............
-      :::::::::::::::::::::::::::::::::::::::::::.............
-     .::::::::::::::::::::::::::::::::::::::::::::............
-     ::::::::::::::::::::::::::::::::::::::::::::::............
-     ::::::::::::::::::::::::::::::::::::::::::::::::..........
-     :::::::::::::;;;;;;;;;;;::::::::::::::;;;;;;::::::........
-     ::::::::::::;;;;::;;;;;;;;:::::::::::;;:::;;;;::::::::....
-     :;::::::::;:          ;;;;;:::::::::          ;;;::::::::.
-      .;;;;;;;.              .;;;;::::.              :;;:::::
-
-""";
-
     // The page's language client last reported this state ("starting" | "ready" | "error" | "unavailable").
     // Folded with the active tab's language into LanguageStatus, so the bar tracks whichever file is showing.
-    private string _lspState = "";
+    private string _lspState = string.Empty;
 
     public ScriptEditorViewModel(
         MonacoAssetServer server, ScriptDocumentService documents, ProjectManager projects,
@@ -102,6 +84,14 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         _theme = theme;
         _settings = settings;
         _log = log;
+
+        // HasTabs / ShowEmptyState derive from the tab list, so let the collection drive their change
+        // notifications instead of hand-poking them on every add/remove.
+        Tabs.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasTabs));
+            OnPropertyChanged(nameof(ShowEmptyState));
+        };
 
         var started = server.EnsureStarted();
         if (!started)
@@ -148,7 +138,7 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
     /// <summary>Language (and, when one backs it, language-server) state shown at the left of the status bar.</summary>
     [ObservableProperty]
-    public partial string LanguageStatus { get; set; } = "";
+    public partial string LanguageStatus { get; set; } = string.Empty;
 
     public bool HasTabs => Tabs.Count > 0;
 
@@ -185,7 +175,6 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         var tab = new ScriptTabViewModel(document, Close);
         _byPath[full] = tab;
         Tabs.Add(tab);
-        NotifyState();
 
         Session.OpenDocument(document.Path, document.Text, document.Language.Id);
 
@@ -261,7 +250,7 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         var language = ActiveTab?.Document.Language;
         if (language is null)
         {
-            LanguageStatus = "";
+            LanguageStatus = string.Empty;
             return;
         }
 
@@ -309,12 +298,6 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
 
     partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(ShowEmptyState));
 
-    private void NotifyState()
-    {
-        OnPropertyChanged(nameof(HasTabs));
-        OnPropertyChanged(nameof(ShowEmptyState));
-    }
-
     partial void OnActiveTabChanged(ScriptTabViewModel? oldValue, ScriptTabViewModel? newValue)
     {
         if (oldValue is not null)
@@ -340,7 +323,6 @@ public sealed partial class ScriptEditorViewModel : ObservableObject, IDisposabl
         var index = Tabs.IndexOf(tab);
         Tabs.Remove(tab);
         _byPath.Remove(tab.Path);
-        NotifyState();
 
         if (ActiveTab == tab)
             ActiveTab = Tabs.Count == 0 ? null : Tabs[Math.Min(index, Tabs.Count - 1)];

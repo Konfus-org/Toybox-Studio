@@ -67,6 +67,27 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// Opens a world/chunk asset (by id) as the active editing world, replacing the current one, then
+    /// re-pulls so the tree/inspector and every viewport reflect it. The engine preserves the current
+    /// world on failure.
+    /// </summary>
+    public async Task<Result> OpenWorldAsync(long assetId, CancellationToken ct = default)
+    {
+        var result = await _engine
+            .InvokeAsync("world.open", new { AssetId = assetId }, ct).ContinueOnAnyContext();
+        if (!result.Success)
+        {
+            _log.Error(result.Error ?? "Failed to open the world.");
+            return result;
+        }
+
+        // A freshly opened world starts clean; pull its entities so the editor reflects it.
+        SetDirty(false);
+        await RefreshAsync(ct).ContinueOnAnyContext();
+        return result;
+    }
+
+    /// <summary>
     /// Re-fetches the world from the engine. Failures surface as an empty world. All fetching and tree
     /// building happens off the UI thread.
     /// </summary>

@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.AssetViewer"
+             xmlns:vp="using:Toybox.Studio.Widgets.Viewport"
+             xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             x:Class="Toybox.Studio.Widgets.AssetViewer.AssetViewerView"
+             x:DataType="local:AssetViewerViewModel">
+
+    <Panel>
+        <!-- Input + the zero-copy GPU-texture surface. The engine interprets the forwarded input
+             deltas as orbit/zoom for an asset-preview view; a clean left click picks. -->
+        <Panel x:Name="Surface" Background="#FF0A0A0E" Focusable="True" vp:ViewportInput.Enabled="True">
+            <vp:CompositionInteropViewport
+                Surface="{Binding CurrentSurface}"
+                InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
+
+            <ghost:GhostView Message="Loading asset…" IsVisible="{Binding ShowEmptyGhost}"/>
+        </Panel>
+
+        <!-- Preview pickers, kept as a SIBLING of the input panel (not a child): otherwise a click on a
+             dropdown bubbles to ViewportInput, which focuses the surface and captures the pointer,
+             instantly dismissing the just-opened popup. A mesh/material choice, plus a background sky. -->
+        <Border IsVisible="{Binding ShowPreviewOptions}"
+                HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
+                Background="{DynamicResource ThemeScrimBrush}" CornerRadius="6" Padding="8,5">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding PreviewOptionLabel}" VerticalAlignment="Center"/>
+                <ComboBox MinWidth="130"
+                          ItemsSource="{Binding PreviewOptions}"
+                          SelectedItem="{Binding SelectedPreviewOption}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:PreviewOption">
+                            <TextBlock Text="{Binding Label}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBlock Text="Sky" VerticalAlignment="Center"/>
+                <ComboBox MinWidth="100"
+                          ItemsSource="{Binding SkyboxOptions}"
+                          SelectedItem="{Binding SelectedSkybox}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:PreviewOption">
+                            <TextBlock Text="{Binding Label}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+        </Border>
+    </Panel>
+</UserControl>

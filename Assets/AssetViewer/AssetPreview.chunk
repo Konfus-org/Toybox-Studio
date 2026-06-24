@@ -1,0 +1,14 @@
+{
+    "coord": {
+        "type": "vec3",
+        "value": [
+            0,
+            0,
+            0
+        ]
+    },
+    "entities": {
+        "type": "array",
+        "value": []
+    }
+}

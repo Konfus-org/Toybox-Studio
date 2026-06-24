@@ -15,6 +15,7 @@ public sealed class ViewportStream : IDisposable
     private readonly Session _session;
     private readonly EngineRpc _engine;
     private readonly ViewKind _kind;
+    private readonly long _assetId;
 
     // Serializes start/stop so overlapping StartViewAsync calls (e.g. a reconnect racing the mid-session
     // open) can't both run StartView and leak an engine view, and so _viewName/_cts are never written
@@ -24,11 +25,13 @@ public sealed class ViewportStream : IDisposable
     private volatile string? _viewName;
     private bool _disposed;
 
-    public ViewportStream(Session session, EngineRpc engine, ViewKind kind = ViewKind.Editor)
+    public ViewportStream(
+        Session session, EngineRpc engine, ViewKind kind = ViewKind.Editor, long assetId = 0)
     {
         _session = session;
         _engine = engine;
         _kind = kind;
+        _assetId = assetId;
         session.StateChanged += OnSessionStateChanged;
         engine.SurfaceReceived += OnSurfaceReceived;
         engine.MouseLockModeChanged += OnMouseLockModeChanged;
@@ -82,6 +85,23 @@ public sealed class ViewportStream : IDisposable
     }
 
     /// <summary>
+    /// Rebuilds this asset-preview view with a different mesh/material option (no-op until the view has
+    /// started or for non-preview views). Fire-and-forget.
+    /// </summary>
+    public void SetPreviewOption(string option)
+    {
+        if (_viewName is { } name && _engine.IsConnected)
+            _engine.SetPreviewOptionAsync(name, option).FireAndForget();
+    }
+
+    /// <summary>Changes this asset-preview view's background sky (no-op until the view has started).</summary>
+    public void SetPreviewSkybox(string skybox)
+    {
+        if (_viewName is { } name && _engine.IsConnected)
+            _engine.SetPreviewSkyboxAsync(name, skybox).FireAndForget();
+    }
+
+    /// <summary>
     /// Picks the entity under a normalized viewport coordinate (top-left origin) on this stream's engine view.
     /// Fails (without changing selection) when the view hasn't started or the engine is gone.
     /// </summary>
@@ -129,7 +149,7 @@ public sealed class ViewportStream : IDisposable
             await StopViewLockedAsync().ContinueOnAnyContext();
 
             // The engine may have no rendering service or have gone away; the viewport just stays empty.
-            var result = await _engine.StartViewAsync(_kind, CancellationToken.None).ContinueOnAnyContext();
+            var result = await _engine.StartViewAsync(_kind, CancellationToken.None, _assetId).ContinueOnAnyContext();
             if (_disposed || result is not { Success: true, Value: { } view })
             {
                 // Disposed (or torn down) while the call was in flight: don't keep an orphaned engine view.

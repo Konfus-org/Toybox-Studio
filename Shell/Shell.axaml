@@ -31,7 +31,10 @@
                  > Separator" in AppStyles). Separators inside the dropdowns are unaffected. -->
             <Menu HorizontalAlignment="Left" VerticalAlignment="Center">
                 <MenuItem Header="File">
-                    <MenuItem Header="Open Project…" Command="{Binding OpenProjectCommand}"/>
+                    <MenuItem Header="Open">
+                        <MenuItem Header="Project…" Command="{Binding OpenProjectCommand}"/>
+                        <MenuItem Header="Asset…" Command="{Binding OpenAssetCommand}"/>
+                    </MenuItem>
                     <Separator/>
                     <MenuItem Header="Save" InputGesture="Ctrl+S" Command="{Binding SaveCommand}"/>
                     <MenuItem Header="Save All" InputGesture="Ctrl+Shift+S" Command="{Binding SaveAllCommand}"/>

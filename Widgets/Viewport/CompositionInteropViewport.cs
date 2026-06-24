@@ -241,8 +241,9 @@ public sealed class CompositionInteropViewport : Control
         UpdateVisualLayout();
     }
 
-    /// <summary>Fits the shared texture inside the control preserving its aspect ratio (Stretch=Uniform),
-    /// centred with letterbox bars on the short axis (see <see cref="ViewportMapping.ImageRect"/>).</summary>
+    /// <summary>Covers the control with the shared texture preserving its aspect ratio
+    /// (Stretch=UniformToFill), centred and clipped on the long axis (see
+    /// <see cref="ViewportMapping.ImageRect"/>); <see cref="ClipToBounds"/> trims the overflow.</summary>
     private void UpdateVisualLayout()
     {
         if (_visual is null)

@@ -12,42 +12,37 @@ namespace Toybox.Studio.Widgets.WorldTree;
 /// <summary>
 /// Makes the world tree behave like an editable list: drag an entity by its handle to reorder it among its
 /// siblings (drop on the upper/lower edge of a row) or reparent it (drop onto the middle of a row, or onto
-/// empty space to move it to the root). The computed parent + index is handed to
-/// <see cref="WorldViewModel.MoveEntityAsync"/>, which pushes it to the engine and re-syncs.
+/// empty space to move it to the root), or drop it on the Globals section to promote it to global. The
+/// computed parent + index is handed to <see cref="WorldViewModel.MoveEntityAsync"/>, which pushes it to the
+/// engine and re-syncs.
 ///
-/// Two attached properties keep the view declarative (no code-behind routing): <c>Enabled</c> on the
-/// <see cref="TreeView"/> wires the drop target, and <c>Handle</c> on a per-row grip starts the drag.
+/// The gesture is a manual pointer-capture drag — the same pattern the toolbar and property-grid list
+/// reorders use (<c>ToolbarDockDrag</c>, <c>ListReorder</c>) — rather than the OS drag-drop loop: arm on
+/// press, capture once a small movement threshold is crossed, hit-test the row under the pointer each move to
+/// drive the drop indicator, and commit one move on release. (Avalonia 12's <c>DoDragDropAsync</c> /
+/// in-process <c>DataTransfer</c> path did not deliver the drop here, leaving the row to snap back.)
+///
+/// Two attached properties keep the view declarative (no code-behind routing): <c>Handle</c> on a per-row
+/// grip starts the drag, and <c>GlobalsZone</c> marks the Globals section so a drop there promotes to global.
 /// </summary>
 public static class EntityTreeDragDrop
 {
-    // In-process drag payload: the dragged entity view-model itself (never serialized to the OS clipboard).
-    private static readonly DataFormat<EntityViewModel> EntityFormat =
-        DataFormat.CreateInProcessFormat<EntityViewModel>("toybox.entity");
-
     private const double DragThreshold = 4.0;
 
     private static readonly ConditionalWeakTable<Control, DragState> States = new();
 
-    public static readonly AttachedProperty<bool> EnabledProperty =
-        AvaloniaProperty.RegisterAttached<TreeView, bool>("Enabled", typeof(EntityTreeDragDrop));
-
     public static readonly AttachedProperty<bool> HandleProperty =
         AvaloniaProperty.RegisterAttached<Control, bool>("Handle", typeof(EntityTreeDragDrop));
 
-    // Marks a control (the Globals section) as a drop target that promotes the dragged entity to global.
+    // Marks the Globals section so the drag can recognise a drop there (promote the dragged entity to global)
+    // and light the whole zone while a drag hovers it.
     public static readonly AttachedProperty<bool> GlobalsZoneProperty =
         AvaloniaProperty.RegisterAttached<Control, bool>("GlobalsZone", typeof(EntityTreeDragDrop));
 
     static EntityTreeDragDrop()
     {
-        EnabledProperty.Changed.AddClassHandler<TreeView>(OnEnabledChanged);
         HandleProperty.Changed.AddClassHandler<Control>(OnHandleChanged);
-        GlobalsZoneProperty.Changed.AddClassHandler<Control>(OnGlobalsZoneChanged);
     }
-
-    public static void SetEnabled(TreeView element, bool value) => element.SetValue(EnabledProperty, value);
-
-    public static bool GetEnabled(TreeView element) => element.GetValue(EnabledProperty);
 
     public static void SetHandle(Control element, bool value) => element.SetValue(HandleProperty, value);
 
@@ -58,75 +53,52 @@ public static class EntityTreeDragDrop
 
     public static bool GetGlobalsZone(Control element) => element.GetValue(GlobalsZoneProperty);
 
-    private static void OnEnabledChanged(TreeView tree, AvaloniaPropertyChangedEventArgs args)
-    {
-        if (args.GetNewValue<bool>())
-        {
-            DragDrop.SetAllowDrop(tree, true);
-            tree.AddHandler(DragDrop.DragOverEvent, OnDragOver);
-            tree.AddHandler(DragDrop.DropEvent, OnDrop);
-            tree.AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        }
-        else
-        {
-            tree.RemoveHandler(DragDrop.DragOverEvent, OnDragOver);
-            tree.RemoveHandler(DragDrop.DropEvent, OnDrop);
-            tree.RemoveHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        }
-    }
-
-    private static void OnGlobalsZoneChanged(Control zone, AvaloniaPropertyChangedEventArgs args)
-    {
-        if (args.GetNewValue<bool>())
-        {
-            DragDrop.SetAllowDrop(zone, true);
-            zone.AddHandler(DragDrop.DragOverEvent, OnGlobalsDragOver);
-            zone.AddHandler(DragDrop.DropEvent, OnGlobalsDrop);
-            zone.AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        }
-        else
-        {
-            zone.RemoveHandler(DragDrop.DragOverEvent, OnGlobalsDragOver);
-            zone.RemoveHandler(DragDrop.DropEvent, OnGlobalsDrop);
-            zone.RemoveHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        }
-    }
-
     private static void OnHandleChanged(Control handle, AvaloniaPropertyChangedEventArgs args)
     {
         if (args.GetNewValue<bool>())
         {
-            handle.AddHandler(InputElement.PointerPressedEvent, OnHandlePressed, RoutingStrategies.Tunnel);
-            handle.AddHandler(InputElement.PointerMovedEvent, OnHandleMoved, RoutingStrategies.Tunnel);
+            handle.AddHandler(InputElement.PointerPressedEvent, OnPressed, RoutingStrategies.Tunnel);
+            handle.AddHandler(InputElement.PointerMovedEvent, OnMoved, RoutingStrategies.Tunnel);
+            handle.AddHandler(InputElement.PointerReleasedEvent, OnReleased, RoutingStrategies.Tunnel);
         }
         else
         {
-            handle.RemoveHandler(InputElement.PointerPressedEvent, OnHandlePressed);
-            handle.RemoveHandler(InputElement.PointerMovedEvent, OnHandleMoved);
+            handle.RemoveHandler(InputElement.PointerPressedEvent, OnPressed);
+            handle.RemoveHandler(InputElement.PointerMovedEvent, OnMoved);
+            handle.RemoveHandler(InputElement.PointerReleasedEvent, OnReleased);
             States.Remove(handle);
         }
     }
 
-    private static void OnHandlePressed(object? sender, PointerPressedEventArgs args)
+    private static void OnPressed(object? sender, PointerPressedEventArgs args)
     {
-        if (sender is not Control handle || handle.DataContext is not EntityViewModel)
+        if (sender is not Control handle || handle.DataContext is not EntityViewModel dragged)
             return;
         if (!args.GetCurrentPoint(handle).Properties.IsLeftButtonPressed)
+            return;
+
+        // The whole world view is the hit-test surface (it contains both trees and the Globals zone); its
+        // DataContext is the shared WorldViewModel the move commits against.
+        if (handle.FindAncestorOfType<WorldTreeView>() is not { DataContext: WorldViewModel world } root)
             return;
 
         var state = States.GetValue(handle, _ => new DragState());
         state.Armed = true;
-        state.Start = args.GetPosition(handle);
-        // The drag must be started from the press event (DoDragDropAsync takes it), so keep it until the
-        // pointer moves past the threshold.
-        state.Press = args;
-        // Swallow the press so the grip doesn't also toggle expand/select while starting a drag.
+        state.Dragging = false;
+        state.Dragged = dragged;
+        state.World = world;
+        state.Root = root;
+        state.Start = args.GetPosition(root);
+
+        // Swallow the press so the grip doesn't also select the row or toggle expand while starting a drag.
         args.Handled = true;
     }
 
-    private static async void OnHandleMoved(object? sender, PointerEventArgs args)
+    private static void OnMoved(object? sender, PointerEventArgs args)
     {
         if (sender is not Control handle || !States.TryGetValue(handle, out var state) || !state.Armed)
+            return;
+        if (state.Root is null)
             return;
         if (!args.GetCurrentPoint(handle).Properties.IsLeftButtonPressed)
         {
@@ -134,74 +106,93 @@ public static class EntityTreeDragDrop
             return;
         }
 
-        var position = args.GetPosition(handle);
-        if (Math.Abs(position.Y - state.Start.Y) < DragThreshold
-            && Math.Abs(position.X - state.Start.X) < DragThreshold)
-            return;
-        if (handle.DataContext is not EntityViewModel item || state.Press is null)
+        if (!state.Dragging)
         {
-            state.Armed = false;
-            return;
+            var position = args.GetPosition(state.Root);
+            if (Math.Abs(position.Y - state.Start.Y) < DragThreshold
+                && Math.Abs(position.X - state.Start.X) < DragThreshold)
+                return;
+
+            state.Dragging = true;
+            args.Pointer.Capture(handle);
+            handle.Cursor = new Cursor(StandardCursorType.SizeAll);
         }
 
-        var press = state.Press;
-        state.Armed = false;
-        state.Press = null;
-
-        var transfer = new DataTransfer();
-        transfer.Add(DataTransferItem.Create(EntityFormat, item));
-        await DragDrop.DoDragDropAsync(press, transfer, DragDropEffects.Move);
-    }
-
-    private static void OnDragOver(object? sender, DragEventArgs args)
-    {
-        var dragging = args.DataTransfer?.Contains(EntityFormat) == true;
-        args.DragEffects = dragging ? DragDropEffects.Move : DragDropEffects.None;
-        args.Handled = true;
-        if (!dragging)
-            return;
-
-        // Mirror the drop logic's target so the indicator shows exactly where it will land: a highlight on
-        // the row being reparented onto, or an insertion line at the row edge being reordered to.
-        var row = (args.Source as Visual)?.FindAncestorOfType<TreeViewItem>();
-        if (row is null)
-        {
+        // Mirror the drop logic's target so the indicator shows exactly where it will land.
+        var hit = Resolve(state, args);
+        if (hit.Tree is null && hit.GlobalsZone is null)
             DropIndicator.Clear();
+        else if (hit.Tree is null)
+            DropIndicator.Show(hit.GlobalsZone!, DropMarker.Onto); // over the Globals zone → promote
+        else if (hit.Row is null)
+            DropIndicator.Clear(); // over a tree but no row (empty area) → append, no insertion line
+        else
+            DropIndicator.Show(hit.Row, hit.Position switch
+            {
+                DropPosition.Before => DropMarker.Before,
+                DropPosition.After => DropMarker.After,
+                _ => DropMarker.Onto,
+            });
+
+        args.Handled = true;
+    }
+
+    private static void OnReleased(object? sender, PointerReleasedEventArgs args)
+    {
+        if (sender is not Control handle || !States.TryGetValue(handle, out var state))
+            return;
+
+        var commit = state.Dragging && state.World is { } world && state.Dragged is { } dragged
+            ? (World: world, Dragged: dragged, Target: Resolve(state, args))
+            : default;
+
+        if (state.Dragging)
+        {
+            args.Pointer.Capture(null);
+            handle.Cursor = Cursor.Default;
+            args.Handled = true;
+        }
+
+        DropIndicator.Clear();
+        state.Armed = false;
+        state.Dragging = false;
+        state.Dragged = null;
+        state.World = null;
+        state.Root = null;
+
+        if (commit.World is not null)
+            Commit(commit.World, commit.Dragged, commit.Target);
+    }
+
+    // Applies the drop: reorder/reparent within a bucket, append to a bucket root (empty area), or promote to
+    // global (Globals zone). The local move lands the row instantly; the engine move + refresh reconcile to
+    // the same arrangement. async void to fire the RPC after the synchronous release housekeeping above —
+    // matching the other reorder commits.
+    private static async void Commit(WorldViewModel world, EntityViewModel dragged, DropTarget hit)
+    {
+        // Dropped outside every tree and the Globals zone → nothing to do.
+        if (hit.Tree is null && hit.GlobalsZone is null)
+            return;
+
+        // Over the Globals zone but not over a tree row → promote to global (a no-op if already global).
+        if (hit.Tree is null)
+        {
+            if (!dragged.IsGlobal)
+                await world.SetEntityGlobalAsync(dragged.Id, true);
             return;
         }
 
-        DropIndicator.Show(row, Classify(row, args) switch
-        {
-            DropPosition.Before => DropMarker.Before,
-            DropPosition.After => DropMarker.After,
-            _ => DropMarker.Onto,
-        });
-    }
-
-    private static async void OnDrop(object? sender, DragEventArgs args)
-    {
-        DropIndicator.Clear();
-        if (sender is not TreeView { DataContext: WorldViewModel world } tree)
-            return;
-        if (args.DataTransfer?.TryGetValue(EntityFormat) is not { } dragged)
-            return;
-
-        args.Handled = true;
-
-        // Which forest this tree shows. Both trees use the same reorder/reparent logic; dropping into the
-        // other bucket also flips the entity's global flag so it lands where it was dropped (reorder within
-        // globals, drag a streamed entity into a globals slot, or drag a global out into a streamed slot).
-        var targetIsGlobal = ReferenceEquals(tree.ItemsSource, world.Globals);
+        // Which forest the entity is landing in. Dropping into the other bucket also flips the entity's global
+        // flag so it lands where it was dropped.
+        var targetIsGlobal = ReferenceEquals(hit.Tree.ItemsSource, world.Globals);
         var bucketRoots = targetIsGlobal ? world.Globals : world.RootEntities;
-
-        var row = (args.Source as Visual)?.FindAncestorOfType<TreeViewItem>();
-        var target = row?.DataContext as EntityViewModel;
+        var target = hit.Entity;
 
         ulong parentId;
         int index;
         if (target is null)
         {
-            // Dropped on empty space → move to the root of this bucket and append.
+            // Dropped on a tree's empty space → move to the root of this bucket and append.
             parentId = 0UL;
             index = int.MaxValue;
         }
@@ -212,7 +203,7 @@ public static class EntityTreeDragDrop
                 await world.SetEntityGlobalAsync(dragged.Id, targetIsGlobal);
             return;
         }
-        else if (Classify(row!, args) == DropPosition.Onto)
+        else if (hit.Position == DropPosition.Onto)
         {
             // Dropped onto a row → become its (last) child.
             parentId = target.Id;
@@ -220,15 +211,15 @@ public static class EntityTreeDragDrop
         }
         else
         {
-            // Dropped on a row edge → become a sibling, before or after the target. Index is computed in
-            // the sibling list with the dragged entity removed, matching the engine's renumber.
+            // Dropped on a row edge → become a sibling, before or after the target. Index is computed in the
+            // sibling list with the dragged entity removed, matching the engine's renumber.
             var siblings = (target.Parent?.Children ?? bucketRoots)
                 .Where(sibling => !ReferenceEquals(sibling, dragged))
                 .ToList();
             var slot = siblings.IndexOf(target);
             if (slot < 0)
                 slot = siblings.Count;
-            index = Classify(row!, args) == DropPosition.After ? slot + 1 : slot;
+            index = hit.Position == DropPosition.After ? slot + 1 : slot;
             parentId = target.Parent?.Id ?? 0UL;
         }
 
@@ -242,35 +233,27 @@ public static class EntityTreeDragDrop
         await world.MoveEntityAsync(dragged.Id, parentId, index, targetIsGlobal, changeBucket);
     }
 
-    // The Globals section is a single drop target: dropping any entity onto it promotes that entity to
-    // global. The whole zone highlights while a drag hovers it.
-    private static void OnGlobalsDragOver(object? sender, DragEventArgs args)
+    // Hit-tests the current pointer position against the world view to find the row / tree / Globals zone it
+    // is over, plus where within a row it would drop. The pointer is captured by the grip during a drag, so
+    // we hit-test the view ourselves rather than relying on the event's source.
+    private static DropTarget Resolve(DragState state, PointerEventArgs args)
     {
-        var dragging = args.DataTransfer?.Contains(EntityFormat) == true;
-        args.DragEffects = dragging ? DragDropEffects.Move : DragDropEffects.None;
-        args.Handled = true;
-        if (dragging && sender is Control zone)
-            DropIndicator.Show(zone, DropMarker.Onto);
+        var root = state.Root!;
+        var hit = root.InputHitTest(args.GetPosition(root)) as Visual;
+        if (hit is null)
+            return default;
+
+        var ancestors = hit.GetSelfAndVisualAncestors().OfType<Control>().ToList();
+        var row = ancestors.OfType<Border>().FirstOrDefault(border => border.Classes.Contains("entityRow"));
+        var tree = ancestors.OfType<TreeView>().FirstOrDefault(view => view.Classes.Contains("entities"));
+        var zone = ancestors.FirstOrDefault(GetGlobalsZone);
+        var position = row is not null ? Classify(row, args) : DropPosition.Onto;
+        return new DropTarget(row, row?.DataContext as EntityViewModel, tree, zone, position);
     }
-
-    private static async void OnGlobalsDrop(object? sender, DragEventArgs args)
-    {
-        DropIndicator.Clear();
-        if (sender is not Control { DataContext: WorldViewModel world })
-            return;
-        if (args.DataTransfer?.TryGetValue(EntityFormat) is not { } dragged)
-            return;
-
-        args.Handled = true;
-        if (!dragged.IsGlobal)
-            await world.SetEntityGlobalAsync(dragged.Id, true);
-    }
-
-    private static void OnDragLeave(object? sender, DragEventArgs args) => DropIndicator.Clear();
 
     // The drop position within a row: its top third reorders before, its bottom third after, and the
     // middle reparents the dragged entity under this one.
-    private static DropPosition Classify(Visual row, DragEventArgs args)
+    private static DropPosition Classify(Visual row, PointerEventArgs args)
     {
         var height = row.Bounds.Height;
         if (height <= 0)
@@ -291,10 +274,23 @@ public static class EntityTreeDragDrop
         After,
     }
 
+    // The resolved drop context under the pointer: the row Border and its entity (null off any row), the tree
+    // the pointer is over (null outside both forests), the Globals zone (null outside it), and where in the
+    // row it would land.
+    private readonly record struct DropTarget(
+        Border? Row,
+        EntityViewModel? Entity,
+        TreeView? Tree,
+        Control? GlobalsZone,
+        DropPosition Position);
+
     private sealed class DragState
     {
         public bool Armed;
+        public bool Dragging;
+        public EntityViewModel? Dragged;
+        public WorldViewModel? World;
+        public Control? Root;
         public Point Start;
-        public PointerPressedEventArgs? Press;
     }
 }

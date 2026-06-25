@@ -11,8 +11,8 @@ using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Shell.Panels;
+using Toybox.Studio.Services.AssetViewing;
 using Toybox.Studio.Shell.Workspace;
-using Toybox.Studio.Widgets.AssetViewer;
 using Toybox.Studio.Widgets.Ecs;
 
 namespace Toybox.Studio.Shell;

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Toybox.Studio.Services.AssetViewing;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;

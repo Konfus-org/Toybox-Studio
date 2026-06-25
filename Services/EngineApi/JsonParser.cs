@@ -352,7 +352,10 @@ public sealed class JsonParser
             IsDefault = wrapper.IsDefault,
             Default = wrapper.Default,
             ElementTemplate = wrapper.ElementTemplate,
-            Choices = children is null ? wrapper.Choices : null,
+            // Choices are an asset-type filter (handle/entity) or enum options on a leaf. A struct drops
+            // them, but a std::vector keeps them so the list widget can apply the filter to its elements
+            // (e.g. a vector<Handle> with [[asset(...)]] renders each element as a filtered asset picker).
+            Choices = children is null || type == ArrayToken ? wrapper.Choices : null,
             Children = children ?? [],
         };
 

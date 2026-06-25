@@ -24,6 +24,11 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
     private readonly Action? _commit;
     private readonly int _depth;
 
+    // The array field's asset-type filter (its [[asset(...)]] choices), present on a vector<Handle>. When
+    // set, each scalar element is an asset reference rendered as a filtered handle picker rather than a raw
+    // number field.
+    private readonly IReadOnlyList<string>? _elementChoices;
+
     // Maps each live element token (a stable reference in <see cref="_array"/> across add/remove/reorder) to
     // the row VM built for it, so a structural edit reuses the unchanged rows instead of recreating them all.
     private readonly Dictionary<JToken, PropertyViewModel> _rowsByToken = new(ReferenceEqualityComparer.Instance);
@@ -40,6 +45,7 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
         _elementTemplate = node.ElementTemplate;
         _commit = commit;
         _depth = depth;
+        _elementChoices = node.Choices;
 
         Items = [];
         AddCommand = new RelayCommand(Add, () => IsResizable);
@@ -210,7 +216,7 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
             // the source index) instead of assuming positional parity.
             foreach (var (token, parsed) in VisibleElements())
             {
-                var node = Headered(parsed);
+                var node = AsHandleElement(Headered(parsed));
                 // Reuse the row built for this token when it's still in shape (Sync refreshes its value in
                 // place); otherwise build a fresh one and wire its parts.
                 if (!_rowsByToken.TryGetValue(token, out var element) || !element.Sync(node))
@@ -246,6 +252,38 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
 
         Summary = $"{Items.Count} item{(Items.Count == 1 ? "" : "s")}";
         RecomputeModified();
+    }
+
+    // Retypes a scalar element of an asset-filtered list (a vector<Handle> carrying [[asset(...)]] choices)
+    // as a "handle" so the factory builds a filtered asset picker for it instead of a raw number field — the
+    // picker reads the id as a ulong, so a high-bit handle id round-trips without the precision loss a JSON
+    // number field would inflict. Non-asset lists and non-scalar elements are returned unchanged.
+    private PropertyNode AsHandleElement(PropertyNode element)
+    {
+        if (_elementChoices is not { Count: > 0 }
+            || element.Type == "handle"
+            || element.Value is not JValue { Type: JTokenType.Integer })
+            return element;
+
+        return new PropertyNode
+        {
+            Name = element.Name,
+            Type = "handle",
+            Value = element.Value,
+            Choices = _elementChoices,
+            Category = element.Category,
+            Description = element.Description,
+            ReadOnly = element.ReadOnly,
+            Hidden = element.Hidden,
+            Order = element.Order,
+            View = element.View,
+            Label = element.Label,
+            Icon = element.Icon,
+            IconColor = element.IconColor,
+            IsDefault = element.IsDefault,
+            ElementTemplate = element.ElementTemplate,
+            Children = element.Children,
+        };
     }
 
     // A struct/object element shows a meaningful header instead of its "[i]" index when it carries an obvious

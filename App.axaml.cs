@@ -12,7 +12,7 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Toybox.Studio.Shell;
-using Toybox.Studio.Widgets.AssetViewer;
+using Toybox.Studio.Services.AssetViewing;
 using Toybox.Studio.Widgets.Ecs;
 using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;

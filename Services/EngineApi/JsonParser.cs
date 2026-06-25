@@ -39,6 +39,8 @@ public sealed class JsonParser
     private const string HiddenKey = "hidden";
     private const string IconKey = "icon";
     private const string IconColorKey = "iconColor";
+    private const string ViewportIconKey = "viewportIcon";
+    private const string ViewportIconColorKey = "viewportIconColor";
     private const string IsDefaultKey = "is_default";
     private const string DefaultKey = "default";
     private const string OrderKey = "order";
@@ -175,11 +177,18 @@ public sealed class JsonParser
             if (property.Value is not JObject raw)
                 continue;
 
-            string? icon = null, iconColor = null;
+            string? icon = null, iconColor = null, viewportIcon = null, viewportIconColor = null;
             if (componentTypes?[property.Name] is JObject info)
+            {
                 (icon, iconColor) = (info.Value<string>(IconKey), info.Value<string>(IconColorKey));
+                (viewportIcon, viewportIconColor) =
+                    (info.Value<string>(ViewportIconKey), info.Value<string>(ViewportIconColorKey));
+            }
 
-            result.Add(new ComponentDescription(property.Name, raw, ParseProperties(raw), icon, iconColor));
+            result.Add(
+                new ComponentDescription(
+                    property.Name, raw, ParseProperties(raw), icon, iconColor, viewportIcon,
+                    viewportIconColor));
         }
 
         // Present components in the engine's registration order (component_order), not the alphabetical key

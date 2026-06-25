@@ -50,6 +50,18 @@ internal static class ViewportMapping
     }
 
     /// <summary>
+    /// The inverse of <see cref="TryNormalize"/>: maps normalized image coordinates in [0,1] (top-left
+    /// origin) back to a control-space point, accounting for the cover scaling/centring. Used to place the
+    /// billboard overlay's labels + icons at the engine-projected entity positions.
+    /// </summary>
+    public static (double X, double Y) Unnormalize(
+        double u, double v, double controlW, double controlH, double surfW, double surfH)
+    {
+        var (x, y, width, height) = ImageRect(controlW, controlH, surfW, surfH);
+        return (x + (u * width), y + (v * height));
+    }
+
+    /// <summary>
     /// Maps a control-space point to normalized image coordinates, clamped to [0,1] (so a point in the
     /// letterbox bars or past the control edge folds onto the nearest image edge). Used for a marquee whose
     /// corners may fall outside the image.

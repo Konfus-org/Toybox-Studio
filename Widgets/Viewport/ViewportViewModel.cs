@@ -1,8 +1,12 @@
 using Toybox.Studio.Utils;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
+using Avalonia;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using System.Threading.Tasks;
@@ -37,6 +41,17 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     private readonly Logger _logger;
 
     private readonly ViewKind _kind;
+
+    // The billboard overlay (editor views only): the live billboards keyed by entity id, and a flat
+    // id→entity map of the current world snapshot used to resolve each billboard's name + icon stack.
+    private readonly Dictionary<ulong, BillboardViewModel> _billboardsById = [];
+    private readonly Dictionary<ulong, EntityDescription> _entitiesById = [];
+    private readonly Action<IReadOnlyList<BillboardPosition>>? _onBillboards;
+    private readonly Action<WorldDescription>? _onWorldChanged;
+    private readonly Action? _onSelectionChanged;
+    // Polls the engine for each visible icon's occlusion (decoupled from the render frame rate); an icon
+    // shows only while its entity isn't hidden behind scene geometry.
+    private readonly DispatcherTimer? _occlusionTimer;
 
     public ViewportViewModel(
         Session session, Func<ViewKind, ViewportStream> streamFactory, Logger logger, EngineWatcher watcher,
@@ -90,6 +105,24 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
                 Dispatch.To(DispatchContext.UI, () => RelativeMouse = mode == "relative");
             _stream.MouseLockModeChanged += _onMouseLockChanged;
         }
+
+        // The clickable name/icon billboard overlay is editor-only. The engine streams each entity's
+        // projected screen position every frame; names + icon stacks come from the world snapshot.
+        if (!IsGame)
+        {
+            RebuildEntityMap(_world.Current);
+            _onBillboards = positions =>
+                Dispatch.To(DispatchContext.UI, () => ApplyBillboards(positions));
+            _onWorldChanged = world => Dispatch.To(DispatchContext.UI, () => OnWorldChanged(world));
+            _onSelectionChanged = () => Dispatch.To(DispatchContext.UI, ApplyBillboardSelection);
+            _stream.BillboardsArrived += _onBillboards;
+            _world.WorldChanged += _onWorldChanged;
+            _selection.SelectionChanged += _onSelectionChanged;
+
+            _occlusionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            _occlusionTimer.Tick += OnOcclusionTick;
+            _occlusionTimer.Start();
+        }
     }
 
     /// <summary>The dock-tab base title; the '*' is appended by <see cref="DataPanel"/> while the world is dirty.</summary>
@@ -134,6 +167,19 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
 
     [ObservableProperty]
     public partial double MarqueeHeight { get; private set; }
+
+    /// <summary>
+    /// The editor viewport's billboard overlay: one entry per visible entity (name label + component icon
+    /// stack), positioned in control space and clickable to select. Empty for the game view.
+    /// </summary>
+    public ObservableCollection<BillboardViewModel> Billboards { get; } = [];
+
+    /// <summary>
+    /// The overlay control's pixel bounds, pushed from the view (one-way to source). Drives reprojection of
+    /// the billboards' normalized positions into control space whenever the viewport resizes.
+    /// </summary>
+    [ObservableProperty]
+    public partial Rect OverlayBounds { get; set; }
 
     /// <summary>
     /// The engine view's shared GPU texture, bound by the view into the interop control. Null while
@@ -187,6 +233,17 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
         _gizmoTool.Changed -= OnGizmoToolChanged;
         if (_onMouseLockChanged is not null)
             _stream.MouseLockModeChanged -= _onMouseLockChanged;
+        if (_onBillboards is not null)
+            _stream.BillboardsArrived -= _onBillboards;
+        if (_onWorldChanged is not null)
+            _world.WorldChanged -= _onWorldChanged;
+        if (_onSelectionChanged is not null)
+            _selection.SelectionChanged -= _onSelectionChanged;
+        if (_occlusionTimer is not null)
+        {
+            _occlusionTimer.Stop();
+            _occlusionTimer.Tick -= OnOcclusionTick;
+        }
         Toolbar?.Dispose();
         _stream.Dispose();
     }
@@ -280,6 +337,134 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
             x + width, y + height, controlWidth, controlHeight, surface.Width, surface.Height);
         PickRectAsync(u0, v0, u1, v1, additive).FireAndForget();
     }
+
+    /// <summary>Selects the entity behind a billboard click (replaces the selection).</summary>
+    [RelayCommand]
+    private void SelectBillboard(ulong id) => _selection.Set(id);
+
+    partial void OnOverlayBoundsChanged(Rect value)
+    {
+        foreach (var billboard in Billboards)
+            UpdateBillboardPosition(billboard);
+    }
+
+    // Applies one frame of engine-projected positions: reconciles the billboard set by id (creating a
+    // billboard the first time an entity appears, dropping any that left this frame) and reprojects each.
+    private void ApplyBillboards(IReadOnlyList<BillboardPosition> positions)
+    {
+        if (_entitiesById.Count == 0)
+            RebuildEntityMap(_world.Current);
+
+        var seen = new HashSet<ulong>();
+        foreach (var position in positions)
+        {
+            if (!_entitiesById.TryGetValue(position.Id, out var entity))
+                continue; // The world snapshot doesn't know this id yet; it'll appear after the next refresh.
+
+            if (!_billboardsById.TryGetValue(position.Id, out var billboard))
+            {
+                // Only entities with a viewport icon get a billboard — there are no name labels.
+                var icons = BuildIcons(entity);
+                if (icons.Count == 0)
+                    continue;
+
+                billboard = new BillboardViewModel(position.Id, entity.Name, icons)
+                {
+                    IsSelected = _selection.Contains(position.Id),
+                };
+                _billboardsById[position.Id] = billboard;
+                Billboards.Add(billboard);
+            }
+
+            seen.Add(position.Id);
+            billboard.U = position.U;
+            billboard.V = position.V;
+            billboard.Depth = position.Depth;
+            UpdateBillboardPosition(billboard);
+        }
+
+        if (seen.Count != _billboardsById.Count)
+            foreach (var id in _billboardsById.Keys.Where(id => !seen.Contains(id)).ToList())
+            {
+                Billboards.Remove(_billboardsById[id]);
+                _billboardsById.Remove(id);
+            }
+    }
+
+    // Reprojects a billboard's normalized position into control space for the current overlay + surface size.
+    private void UpdateBillboardPosition(BillboardViewModel billboard)
+    {
+        if (CurrentSurface is not { } surface || OverlayBounds is { Width: <= 0 } or { Height: <= 0 })
+            return;
+
+        var (x, y) = ViewportMapping.Unnormalize(
+            billboard.U, billboard.V, OverlayBounds.Width, OverlayBounds.Height,
+            surface.Width, surface.Height);
+        billboard.X = x;
+        billboard.Y = y;
+    }
+
+    // A new world snapshot: rebuild the id→entity map and drop the live billboards so the next frame
+    // recreates them with fresh names/icons (and any removed entities disappear).
+    private void OnWorldChanged(WorldDescription world)
+    {
+        RebuildEntityMap(world);
+        Billboards.Clear();
+        _billboardsById.Clear();
+    }
+
+    private void ApplyBillboardSelection()
+    {
+        foreach (var billboard in Billboards)
+            billboard.IsSelected = _selection.Contains(billboard.Id);
+    }
+
+    // Periodically refresh the visible icons' occlusion against the engine (off the render frame rate), in
+    // one batched call per tick rather than one per icon.
+    private void OnOcclusionTick(object? sender, EventArgs e)
+    {
+        if (Billboards.Count == 0)
+            return;
+
+        var snapshot = Billboards.ToList();
+        var ids = snapshot.Select(billboard => billboard.Id).ToList();
+        RefreshOcclusionAsync(snapshot, ids).FireAndForget();
+    }
+
+    private async Task RefreshOcclusionAsync(IReadOnlyList<BillboardViewModel> billboards, IReadOnlyList<ulong> ids)
+    {
+        var result = await _stream.QueryOcclusionAsync(ids).ContinueOnAnyContext();
+        if (!result.Success)
+            return; // Leave the last-known visibility on a transient failure.
+
+        var occluded = result.Value!;
+        Dispatch.To(DispatchContext.UI, () =>
+        {
+            for (var i = 0; i < billboards.Count && i < occluded.Count; i++)
+                billboards[i].IsOccluded = occluded[i];
+        });
+    }
+
+    private void RebuildEntityMap(WorldDescription world)
+    {
+        _entitiesById.Clear();
+        void Walk(EntityDescription entity)
+        {
+            _entitiesById[entity.Id] = entity;
+            foreach (var child in entity.Children)
+                Walk(child);
+        }
+
+        foreach (var root in world.Roots)
+            Walk(root);
+    }
+
+    // The entity's billboard icon stack: one icon per component that declares a [[tbx::viewport_icon]].
+    private static IReadOnlyList<BillboardIcon> BuildIcons(EntityDescription entity) =>
+        entity.Components
+            .Where(component => !string.IsNullOrEmpty(component.ViewportIcon))
+            .Select(component => new BillboardIcon(component.ViewportIcon!, component.ViewportIconColor))
+            .ToList();
 
     private void OnGizmoToolChanged() =>
         Dispatch.To(DispatchContext.UI, () => OnPropertyChanged(nameof(MarqueeEnabled)));

@@ -13,6 +13,14 @@ public sealed record Hello(int ProtocolVersion, string Engine, string App);
 public sealed record ViewInfo(string Name, string Format);
 
 /// <summary>
+/// One entity's projected screen position in a <c>view.billboards</c> notification: the entity id plus its
+/// normalized image coordinates (<see cref="U"/>/<see cref="V"/>, top-left origin, in front of the camera)
+/// and world-space distance from the camera (<see cref="Depth"/>, for distance fade). The editor joins these
+/// against the world snapshot to draw name labels + component icon stacks.
+/// </summary>
+public sealed record BillboardPosition(ulong Id, double U, double V, double Depth);
+
+/// <summary>
 /// A <c>view.surface</c> notification: the engine has created (or failed to create) a view's shared
 /// GPU texture. <see cref="Handle"/> is a Windows global shared D3D11 texture handle the editor's
 /// compositor imports directly; a zero handle means GPU sharing was unavailable for this view.
@@ -66,6 +74,13 @@ public sealed class EngineRpc : IAsyncDisposable
     /// or more entities, so the editor should mark the world dirty and refresh. Fired on the RPC thread.
     /// </summary>
     public event Action? TransformEdited;
+
+    /// <summary>
+    /// Raised for every view.billboards notification: one editor view's per-frame projected entity positions.
+    /// Carries the view name and the positions; each <see cref="ViewportStream"/> filters by view name. Fired
+    /// on the RPC listener thread.
+    /// </summary>
+    public event Action<string, IReadOnlyList<BillboardPosition>>? BillboardsReceived;
 
     /// <summary>Raised when the connection drops for any reason.</summary>
     public event Action? Disconnected;
@@ -236,6 +251,26 @@ public sealed class EngineRpc : IAsyncDisposable
         NotifyAsync("view.setSelection", new { Ids = ids });
 
     /// <summary>
+    /// For each entity id, whether it is hidden behind other geometry from a view's camera — used by the
+    /// billboard overlay to show an icon only when its entity is actually visible. Returns a list of flags
+    /// aligned with <paramref name="ids"/>. Batched into one engine pass so all icons refresh in one call.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<bool>>> QueryOcclusionAsync(
+        string view, IReadOnlyList<ulong> ids, CancellationToken ct)
+    {
+        var result = await InvokeAsync<JToken>("view.queryOcclusion", new { View = view, Ids = ids }, ct)
+            .ContinueOnAnyContext();
+        if (result is not { Success: true, Value: { } reply })
+            return Result<IReadOnlyList<bool>>.Fail(result.Error ?? "The engine returned no result.");
+
+        var occluded = new List<bool>();
+        if (reply["occluded"] is JArray array)
+            foreach (var token in array)
+                occluded.Add(token.Value<bool>());
+        return Result<IReadOnlyList<bool>>.Ok(occluded);
+    }
+
+    /// <summary>
     /// Executes a data-driven <see cref="RpcCall"/> against the engine (the transport behind data-driven tool
     /// commands; see <c>Widgets/Toolbar/ToolCommandRunner.cs</c>). Forwards to <see cref="RpcClient.RunAsync"/>.
     /// </summary>
@@ -271,5 +306,8 @@ public sealed class EngineRpc : IAsyncDisposable
         handlers.On("view.presented", (string name) => ViewPresented?.Invoke(name));
         handlers.On("input.mouseLock", (string mode) => MouseLockModeChanged?.Invoke(mode));
         handlers.On("view.transformEdited", (ulong[] ids) => TransformEdited?.Invoke());
+        handlers.On(
+            "view.billboards",
+            (string view, BillboardPosition[] items) => BillboardsReceived?.Invoke(view, items));
     }
 }

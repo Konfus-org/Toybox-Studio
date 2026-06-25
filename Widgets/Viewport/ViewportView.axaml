@@ -1,54 +1,132 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.Viewport"
+             xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              xmlns:vtb="using:Toybox.Studio.Widgets.Toolbar"
              x:Class="Toybox.Studio.Widgets.Viewport.ViewportView"
              x:DataType="local:ViewportViewModel">
 
-    <!-- ViewportInput captures pointer/keyboard while focused and forwards it to the engine view
-         (editor fly camera). An opaque near-black backdrop makes the panel hit-testable AND gives the
-         aspect-preserving image its letterbox/pillarbox bars (the engine renders at a fixed resolution and the
-         image is fit Uniform, so a mismatched panel shows bars rather than a stretched, squished frame). The
-         cursor hides while the game requests relative (mouselook) mode; the input behavior re-centres it. -->
-    <Panel x:Name="Surface" Background="#FF0A0A0E" Focusable="True" local:ViewportInput.Enabled="True">
-        <!-- The cursor hides only while the game wants mouselook AND this panel is focused, so Alt+Esc
-             (which drops focus) hands the cursor back even though the game still requests relative mode. -->
-        <Panel.Cursor>
-            <MultiBinding Converter="{x:Static local:RelativeMouseCursorConverter.Instance}">
-                <Binding Path="RelativeMouse"/>
-                <Binding Path="IsFocused" ElementName="Surface"/>
-            </MultiBinding>
-        </Panel.Cursor>
-        <!-- Samples the engine view's shared GPU texture directly (zero copy). Reports back to the
-             view-model if this compositor can't import it, so the ghost shows instead of black. -->
-        <local:CompositionInteropViewport
-            Surface="{Binding CurrentSurface}"
-            InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
+    <UserControl.Styles>
+        <!-- A billboard is a flat, label-like button (no chrome) drawn over the 3D scene; the dark pill keeps
+             the name legible against any background, and the accent ring marks the selected entity. -->
+        <Style Selector="Button.billboard">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.billboard /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.billboard Border#Pill">
+            <Setter Property="Background" Value="#B0000000"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="4,2"/>
+        </Style>
+        <Style Selector="Button.billboard.selected Border#Pill">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
+    </UserControl.Styles>
 
-        <!-- Rubber-band marquee, drawn over the surface during a left-drag. Non-hit-testable so the pointer
-             events keep flowing to the input Panel underneath. -->
-        <Canvas IsHitTestVisible="False">
-            <Rectangle IsVisible="{Binding MarqueeVisible}"
-                       Canvas.Left="{Binding MarqueeX}" Canvas.Top="{Binding MarqueeY}"
-                       Width="{Binding MarqueeWidth}" Height="{Binding MarqueeHeight}"
-                       Opacity="0.25"
-                       Fill="{DynamicResource ThemeAccentSolidBrush}"
-                       Stroke="{DynamicResource ThemeAccentSolidBrush}" StrokeThickness="1"/>
-        </Canvas>
+    <!-- Surface (the input/render panel) and the billboard overlay are SIBLINGS: the overlay must not be a
+         child of the ViewportInput-enabled panel or its clickable items would be light-dismissed by the
+         input behavior's pointer/focus capture. -->
+    <Panel>
+        <!-- ViewportInput captures pointer/keyboard while focused and forwards it to the engine view
+             (editor fly camera). An opaque near-black backdrop makes the panel hit-testable AND gives the
+             aspect-preserving image its letterbox/pillarbox bars (the engine renders at a fixed resolution and the
+             image is fit Uniform, so a mismatched panel shows bars rather than a stretched, squished frame). The
+             cursor hides while the game requests relative (mouselook) mode; the input behavior re-centres it. -->
+        <Panel x:Name="Surface" Background="#FF0A0A0E" Focusable="True" local:ViewportInput.Enabled="True">
+            <!-- The cursor hides only while the game wants mouselook AND this panel is focused, so Alt+Esc
+                 (which drops focus) hands the cursor back even though the game still requests relative mode. -->
+            <Panel.Cursor>
+                <MultiBinding Converter="{x:Static local:RelativeMouseCursorConverter.Instance}">
+                    <Binding Path="RelativeMouse"/>
+                    <Binding Path="IsFocused" ElementName="Surface"/>
+                </MultiBinding>
+            </Panel.Cursor>
+            <!-- Samples the engine view's shared GPU texture directly (zero copy). Reports back to the
+                 view-model if this compositor can't import it, so the ghost shows instead of black. -->
+            <local:CompositionInteropViewport
+                Surface="{Binding CurrentSurface}"
+                InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
 
-        <!-- The movable, data-driven viewport toolbar (transform tools by default). It docks to a viewport
-             edge and re-orders by drag; its config persists per-viewport in the dock layout. The wrapper keeps
-             ShowToolbar bound to the viewport VM while the toolbar itself binds to the child Toolbar VM. -->
-        <Panel IsVisible="{Binding ShowToolbar}">
-            <vtb:ToolbarView DataContext="{Binding Toolbar}"/>
+            <!-- Rubber-band marquee, drawn over the surface during a left-drag. Non-hit-testable so the pointer
+                 events keep flowing to the input Panel underneath. -->
+            <Canvas IsHitTestVisible="False">
+                <Rectangle IsVisible="{Binding MarqueeVisible}"
+                           Canvas.Left="{Binding MarqueeX}" Canvas.Top="{Binding MarqueeY}"
+                           Width="{Binding MarqueeWidth}" Height="{Binding MarqueeHeight}"
+                           Opacity="0.25"
+                           Fill="{DynamicResource ThemeAccentSolidBrush}"
+                           Stroke="{DynamicResource ThemeAccentSolidBrush}" StrokeThickness="1"/>
+            </Canvas>
+
+            <!-- The movable, data-driven viewport toolbar (transform tools by default). It docks to a viewport
+                 edge and re-orders by drag; its config persists per-viewport in the dock layout. The wrapper keeps
+                 ShowToolbar bound to the viewport VM while the toolbar itself binds to the child Toolbar VM. -->
+            <Panel IsVisible="{Binding ShowToolbar}">
+                <vtb:ToolbarView DataContext="{Binding Toolbar}"/>
+            </Panel>
+
+            <ghost:GhostView Message="No world loaded." IsVisible="{Binding ShowEmptyGhost}"/>
+
+            <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
+            <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding ShowLoadingGhost}">
+                <ghost:LoadingGhostView Message="{Binding LoadingMessage}"/>
+            </Border>
         </Panel>
 
-        <ghost:GhostView Message="No world loaded." IsVisible="{Binding ShowEmptyGhost}"/>
-
-        <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
-        <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding ShowLoadingGhost}">
-            <ghost:LoadingGhostView Message="{Binding LoadingMessage}"/>
-        </Border>
+        <!-- Editor-only billboard overlay: a name label + component icon stack per entity, placed at the
+             engine-projected screen position and clickable to select. No Background, so only the billboard
+             buttons are hit-testable — clicks on empty space fall through to the Surface (fly camera / pick /
+             marquee). Its Bounds drive reprojection on resize. -->
+        <ItemsControl ItemsSource="{Binding Billboards}"
+                      Bounds="{Binding OverlayBounds, Mode=OneWayToSource}"
+                      IsVisible="{Binding HasFrames}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+                <Style Selector="ContentPresenter" x:DataType="local:BillboardViewModel">
+                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:BillboardViewModel">
+                    <!-- Centre the billboard horizontally on the projected point (its width isn't known until
+                         layout, so a render transform shifts it left by half its measured width). -->
+                    <Button Classes="billboard"
+                            Classes.selected="{Binding IsSelected}"
+                            IsVisible="{Binding Visible}"
+                            Command="{Binding $parent[ItemsControl].((local:ViewportViewModel)DataContext).SelectBillboardCommand}"
+                            CommandParameter="{Binding Id}"
+                            RenderTransform="{Binding $self.Bounds.Width, Converter={x:Static local:CenterXTransformConverter.Instance}}">
+                        <Border x:Name="Pill">
+                            <ItemsControl ItemsSource="{Binding Icons}" HorizontalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:BillboardIcon">
+                                        <pg:IconView IconName="{Binding Name}" IconColor="{Binding Color}"
+                                                     Width="16" Height="16"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </Panel>
 </UserControl>

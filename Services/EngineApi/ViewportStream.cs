@@ -35,6 +35,7 @@ public sealed class ViewportStream : IDisposable
         session.StateChanged += OnSessionStateChanged;
         engine.SurfaceReceived += OnSurfaceReceived;
         engine.MouseLockModeChanged += OnMouseLockModeChanged;
+        engine.BillboardsReceived += OnBillboardsReceived;
 
         // Opened mid-session (e.g. a new viewport while the engine is already running): start
         // right away rather than waiting for the next connect.
@@ -52,6 +53,12 @@ public sealed class ViewportStream : IDisposable
     public event Action? SurfaceLost;
 
     /// <summary>
+    /// Raised (on the RPC listener thread) with this view's per-frame projected entity positions for the
+    /// billboard overlay (name labels + component icon stacks). Only this stream's view is forwarded.
+    /// </summary>
+    public event Action<IReadOnlyList<BillboardPosition>>? BillboardsArrived;
+
+    /// <summary>
     /// Raised when the playing game's mouse-lock mode changes ("unlocked", "relative", or "grabbed"),
     /// forwarded from the engine. Lets the game viewport capture the cursor for mouselook without holding the
     /// engine transport itself.
@@ -65,6 +72,7 @@ public sealed class ViewportStream : IDisposable
         _session.StateChanged -= OnSessionStateChanged;
         _engine.SurfaceReceived -= OnSurfaceReceived;
         _engine.MouseLockModeChanged -= OnMouseLockModeChanged;
+        _engine.BillboardsReceived -= OnBillboardsReceived;
         _disposed = true;
         StopViewAsync().FireAndForget();
     }
@@ -119,7 +127,23 @@ public sealed class ViewportStream : IDisposable
             ? _engine.PickRectAsync(name, u0, v0, u1, v1, CancellationToken.None)
             : Task.FromResult(Result<IReadOnlyList<ulong>>.Fail("The view has not started."));
 
+    /// <summary>
+    /// Which of the given entities are occluded from this stream's view (billboard overlay visibility).
+    /// Fails when the view hasn't started or the engine is gone, leaving icons at their last visibility.
+    /// </summary>
+    public Task<Result<IReadOnlyList<bool>>> QueryOcclusionAsync(IReadOnlyList<ulong> ids) =>
+        _viewName is { } name && _engine.IsConnected
+            ? _engine.QueryOcclusionAsync(name, ids, CancellationToken.None)
+            : Task.FromResult(Result<IReadOnlyList<bool>>.Fail("The view has not started."));
+
     private void OnMouseLockModeChanged(string mode) => MouseLockModeChanged?.Invoke(mode);
+
+    private void OnBillboardsReceived(string view, IReadOnlyList<BillboardPosition> positions)
+    {
+        // The engine sends one message per editor view; take only this stream's.
+        if (view == _viewName)
+            BillboardsArrived?.Invoke(positions);
+    }
 
     private void OnSessionStateChanged(ConnectionState state)
     {

@@ -62,16 +62,4 @@ public sealed class Component
             "reflect.reset",
             new { EntityId, Component = Name, Property = property },
             ct);
-
-    /// <summary>Asks whether one property currently equals its default value.</summary>
-    public async Task<Result<bool>> IsPropertyDefaultAsync(string property, CancellationToken ct)
-    {
-        var result = await _engine.InvokeAsync<JObject>(
-            "reflect.isDefault",
-            new { EntityId, Component = Name, Property = property },
-            ct).ContinueOnAnyContext();
-        return result is { Success: true, Value: { } reply }
-            ? Result<bool>.Ok(reply.Value<bool>("isDefault"))
-            : Result<bool>.Fail(result.Error ?? "The engine returned no result.");
-    }
 }

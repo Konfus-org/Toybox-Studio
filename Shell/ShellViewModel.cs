@@ -25,6 +25,7 @@ namespace Toybox.Studio.Shell;
 public sealed partial class ShellViewModel : ObservableObject
 {
     private readonly Session _session;
+    private readonly ProjectBuilder _builder;
     private readonly Logger _log;
     private readonly ProjectManager _projects;
     private readonly FilePicker _filePicker;
@@ -38,6 +39,7 @@ public sealed partial class ShellViewModel : ObservableObject
         StatusViewModel status,
         WorkspaceViewModel workspace,
         Session session,
+        ProjectBuilder builder,
         Logger log,
         ProjectManager projects,
         FilePicker filePicker,
@@ -51,6 +53,7 @@ public sealed partial class ShellViewModel : ObservableObject
         Workspace = workspace;
 
         _session = session;
+        _builder = builder;
         _log = log;
         _projects = projects;
         _filePicker = filePicker;
@@ -222,7 +225,7 @@ public sealed partial class ShellViewModel : ObservableObject
     [RelayCommand]
     private Task CompileAsync()
     {
-        return _session.CompileProjectAsync(CancellationToken.None);
+        return _builder.BuildAsync(CancellationToken.None);
     }
 
     [RelayCommand]
@@ -239,7 +242,7 @@ public sealed partial class ShellViewModel : ObservableObject
         if (folder is null)
             return;
 
-        await _session.ShipAsync(configuration, folder, CancellationToken.None).ContinueOnAnyContext();
+        await _builder.ShipAsync(configuration, folder, CancellationToken.None).ContinueOnAnyContext();
     }
 
     [RelayCommand]

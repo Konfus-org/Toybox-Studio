@@ -35,7 +35,6 @@ public sealed class ViewportStream : IDisposable
         session.StateChanged += OnSessionStateChanged;
         engine.SurfaceReceived += OnSurfaceReceived;
         engine.MouseLockModeChanged += OnMouseLockModeChanged;
-        engine.BillboardsReceived += OnBillboardsReceived;
 
         // Opened mid-session (e.g. a new viewport while the engine is already running): start
         // right away rather than waiting for the next connect.
@@ -53,12 +52,6 @@ public sealed class ViewportStream : IDisposable
     public event Action? SurfaceLost;
 
     /// <summary>
-    /// Raised (on the RPC listener thread) with this view's per-frame projected entity positions for the
-    /// billboard overlay (name labels + component icon stacks). Only this stream's view is forwarded.
-    /// </summary>
-    public event Action<IReadOnlyList<BillboardPosition>>? BillboardsArrived;
-
-    /// <summary>
     /// Raised when the playing game's mouse-lock mode changes ("unlocked", "relative", or "grabbed"),
     /// forwarded from the engine. Lets the game viewport capture the cursor for mouselook without holding the
     /// engine transport itself.
@@ -72,7 +65,6 @@ public sealed class ViewportStream : IDisposable
         _session.StateChanged -= OnSessionStateChanged;
         _engine.SurfaceReceived -= OnSurfaceReceived;
         _engine.MouseLockModeChanged -= OnMouseLockModeChanged;
-        _engine.BillboardsReceived -= OnBillboardsReceived;
         _disposed = true;
         StopViewAsync().FireAndForget();
     }
@@ -93,20 +85,25 @@ public sealed class ViewportStream : IDisposable
     }
 
     /// <summary>
-    /// Rebuilds this asset-preview view with a different mesh/material option (no-op until the view has
-    /// started or for non-preview views). Fire-and-forget.
+    /// Rebuilds this asset-preview view with a different presentation (no-op until the view has started
+    /// or for non-preview views). <paramref name="option"/> is a built-in mesh token (or "skybox"/
+    /// "skysphere" for a material); <paramref name="materialId"/> is a built-in surface material id for
+    /// a model (0 = the model's own). Fire-and-forget.
     /// </summary>
-    public void SetPreviewOption(string option)
+    public void SetPreviewOption(string option, long materialId)
     {
         if (_viewName is { } name && _engine.IsConnected)
-            _engine.SetPreviewOptionAsync(name, option).FireAndForget();
+            _engine.SetPreviewOptionAsync(name, option, materialId).FireAndForget();
     }
 
-    /// <summary>Changes this asset-preview view's background sky (no-op until the view has started).</summary>
-    public void SetPreviewSkybox(string skybox)
+    /// <summary>
+    /// Changes this asset-preview view's background sky (no-op until the view has started):
+    /// <paramref name="skyboxId"/> is a built-in sky material id, or 0 for no sky.
+    /// </summary>
+    public void SetPreviewSkybox(long skyboxId)
     {
         if (_viewName is { } name && _engine.IsConnected)
-            _engine.SetPreviewSkyboxAsync(name, skybox).FireAndForget();
+            _engine.SetPreviewSkyboxAsync(name, skyboxId).FireAndForget();
     }
 
     /// <summary>
@@ -136,14 +133,17 @@ public sealed class ViewportStream : IDisposable
             ? _engine.QueryOcclusionAsync(name, ids, CancellationToken.None)
             : Task.FromResult(Result<IReadOnlyList<bool>>.Fail("The view has not started."));
 
-    private void OnMouseLockModeChanged(string mode) => MouseLockModeChanged?.Invoke(mode);
+    /// <summary>
+    /// Projects this stream's view entities to normalized screen space (top-left origin) for the
+    /// billboard overlay. The viewport polls this; fails (positions unchanged) when the view hasn't
+    /// started or the engine is gone.
+    /// </summary>
+    public Task<Result<IReadOnlyList<BillboardPosition>>> ProjectEntitiesAsync() =>
+        _viewName is { } name && _engine.IsConnected
+            ? _engine.ProjectEntitiesAsync(name, CancellationToken.None)
+            : Task.FromResult(Result<IReadOnlyList<BillboardPosition>>.Fail("The view has not started."));
 
-    private void OnBillboardsReceived(string view, IReadOnlyList<BillboardPosition> positions)
-    {
-        // The engine sends one message per editor view; take only this stream's.
-        if (view == _viewName)
-            BillboardsArrived?.Invoke(positions);
-    }
+    private void OnMouseLockModeChanged(string mode) => MouseLockModeChanged?.Invoke(mode);
 
     private void OnSessionStateChanged(ConnectionState state)
     {

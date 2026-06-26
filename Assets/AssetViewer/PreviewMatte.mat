@@ -1,18 +1,14 @@
 {
-    "type": {
-        "type": "material_type",
-        "value": "sky"
-    },
     "shader": {
         "type": "shader_program",
         "value": {
             "vertex": {
                 "type": "handle",
-                "value": 317
+                "value": 304
             },
             "fragment": {
                 "type": "handle",
-                "value": 318
+                "value": 305
             },
             "tesselation": {
                 "type": "handle",
@@ -34,65 +30,88 @@
             {
                 "name": {
                     "type": "string",
-                    "value": "color"
+                    "value": "albedo_color"
                 },
                 "data": {
                     "type": "variant",
                     "value": {
                         "type": "color",
                         "value": {
-                            "r": 1,
-                            "g": 1,
-                            "b": 1,
+                            "r": 0.6,
+                            "g": 0.6,
+                            "b": 0.6,
                             "a": 1
                         }
                     }
-                },
-                "target": {
-                    "type": "string",
-                    "value": "sky_color"
                 }
             },
             {
                 "name": {
                     "type": "string",
-                    "value": "brightness"
+                    "value": "emissive_color"
                 },
                 "data": {
                     "type": "variant",
                     "value": {
-                        "type": "float",
-                        "value": 1
-                    }
-                },
-                "target": {
-                    "type": "string",
-                    "value": "sky_brightness"
-                }
-            },
-            {
-                "name": {
-                    "type": "string",
-                    "value": "ambient_multiplier"
-                },
-                "data": {
-                    "type": "variant",
-                    "value": {
-                        "type": "float",
-                        "value": 1
+                        "type": "color",
+                        "value": {
+                            "r": 0,
+                            "g": 0,
+                            "b": 0,
+                            "a": 1
+                        }
                     }
                 }
             },
             {
                 "name": {
                     "type": "string",
-                    "value": "blend_factor"
+                    "value": "metallic"
                 },
                 "data": {
                     "type": "variant",
                     "value": {
                         "type": "float",
                         "value": 0
+                    }
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "roughness"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "float",
+                        "value": 0.9
+                    }
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "normal_strength"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "float",
+                        "value": 1
+                    }
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "ao"
+                },
+                "data": {
+                    "type": "variant",
+                    "value": {
+                        "type": "float",
+                        "value": 1
                     }
                 }
             }
@@ -104,25 +123,61 @@
             {
                 "name": {
                     "type": "string",
-                    "value": "skybox_texture"
+                    "value": "albedo_map"
                 },
                 "texture": {
                     "type": "handle",
-                    "value": 3000000001
-                },
-                "target": {
-                    "type": "string",
-                    "value": "sky_texture"
+                    "value": 0
                 }
             },
             {
                 "name": {
                     "type": "string",
-                    "value": "secondary_skybox_texture"
+                    "value": "normal_map"
                 },
                 "texture": {
                     "type": "handle",
-                    "value": 3000000003
+                    "value": 0
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "metallic_map"
+                },
+                "texture": {
+                    "type": "handle",
+                    "value": 0
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "roughness_map"
+                },
+                "texture": {
+                    "type": "handle",
+                    "value": 0
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "ao_map"
+                },
+                "texture": {
+                    "type": "handle",
+                    "value": 0
+                }
+            },
+            {
+                "name": {
+                    "type": "string",
+                    "value": "emissive_map"
+                },
+                "texture": {
+                    "type": "handle",
+                    "value": 0
                 }
             }
         ]
@@ -136,7 +191,7 @@
             },
             "is_depth_write_enabled": {
                 "type": "bool",
-                "value": false
+                "value": true
             },
             "is_depth_prepass_enabled": {
                 "type": "bool",
@@ -144,15 +199,15 @@
             },
             "is_two_sided": {
                 "type": "bool",
-                "value": true
+                "value": false
             },
             "is_cullable": {
                 "type": "bool",
-                "value": false
+                "value": true
             },
             "depth_function": {
                 "type": "material_depth_function",
-                "value": "less_equal"
+                "value": "less"
             },
             "blend_mode": {
                 "type": "material_blend_mode",
@@ -160,7 +215,7 @@
             },
             "shadow_mode": {
                 "type": "shadow_mode",
-                "value": "off"
+                "value": "on"
             }
         }
     }

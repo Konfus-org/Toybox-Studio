@@ -129,21 +129,6 @@ public sealed class RpcClient : IAsyncDisposable
         return args is null ? rpc.NotifyAsync(method) : rpc.NotifyWithParameterObjectAsync(method, args);
     }
 
-    /// <summary>
-    /// Executes a data-driven <see cref="RpcCall"/>: a fire-and-forget notification when
-    /// <see cref="RpcCall.Notify"/> is set, otherwise an awaited request whose failure is returned.
-    /// </summary>
-    public async Task<Result> RunAsync(RpcCall call, CancellationToken ct)
-    {
-        if (call.Notify)
-        {
-            await NotifyAsync(call.Method, call.Params).ContinueOnAnyContext();
-            return Result.Ok();
-        }
-
-        return await InvokeAsync(call.Method, call.Params, ct).ContinueOnAnyContext();
-    }
-
     private static async Task<TcpClient> ConnectWithRetryAsync(int port, TimeSpan timeout, CancellationToken ct)
     {
         var deadline = Stopwatch.StartNew();

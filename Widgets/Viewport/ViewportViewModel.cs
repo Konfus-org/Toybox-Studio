@@ -46,12 +46,22 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     // id→entity map of the current world snapshot used to resolve each billboard's name + icon stack.
     private readonly Dictionary<ulong, BillboardViewModel> _billboardsById = [];
     private readonly Dictionary<ulong, EntityDescription> _entitiesById = [];
-    private readonly Action<IReadOnlyList<BillboardPosition>>? _onBillboards;
     private readonly Action<WorldDescription>? _onWorldChanged;
     private readonly Action? _onSelectionChanged;
-    // Polls the engine for each visible icon's occlusion (decoupled from the render frame rate); an icon
-    // shows only while its entity isn't hidden behind scene geometry.
+    // The editor owns the billboard cadence: it polls the engine for entity screen positions (the engine
+    // answers on request and never pushes), then refreshes each visible icon's occlusion on a slower
+    // timer. Both run off the render frame rate. _billboardPollInFlight drops a tick whose poll hasn't
+    // returned yet so requests can't pile up.
+    private readonly DispatcherTimer? _billboardTimer;
     private readonly DispatcherTimer? _occlusionTimer;
+    private bool _billboardPollInFlight;
+
+    // The occlusion query is a round-trip, so it is skipped while the visible icons haven't moved on screen
+    // (a static camera and world need no re-query). A slow heartbeat still re-queries every so often so an
+    // occluder moving behind an otherwise-static icon is eventually picked up. Touched only on the UI thread.
+    private const int OcclusionHeartbeatTicks = 8;
+    private int _ticksSinceOcclusionQuery = OcclusionHeartbeatTicks;
+    private int _lastOcclusionSignature;
 
     public ViewportViewModel(
         Session session, Func<ViewKind, ViewportStream> streamFactory, Logger logger, EngineWatcher watcher,
@@ -106,18 +116,21 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
             _stream.MouseLockModeChanged += _onMouseLockChanged;
         }
 
-        // The clickable name/icon billboard overlay is editor-only. The engine streams each entity's
-        // projected screen position every frame; names + icon stacks come from the world snapshot.
+        // The clickable name/icon billboard overlay is editor-only. The editor polls the engine for each
+        // entity's projected screen position (the engine answers on request, never pushes); names + icon
+        // stacks come from the world snapshot.
         if (!IsGame)
         {
             RebuildEntityMap(_world.Current);
-            _onBillboards = positions =>
-                Dispatch.To(DispatchContext.UI, () => ApplyBillboards(positions));
             _onWorldChanged = world => Dispatch.To(DispatchContext.UI, () => OnWorldChanged(world));
             _onSelectionChanged = () => Dispatch.To(DispatchContext.UI, ApplyBillboardSelection);
-            _stream.BillboardsArrived += _onBillboards;
             _world.WorldChanged += _onWorldChanged;
             _selection.SelectionChanged += _onSelectionChanged;
+
+            // Poll positions ~30 Hz so the overlay tracks the camera; refresh occlusion on a slower beat.
+            _billboardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            _billboardTimer.Tick += OnBillboardTick;
+            _billboardTimer.Start();
 
             _occlusionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
             _occlusionTimer.Tick += OnOcclusionTick;
@@ -233,12 +246,15 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
         _gizmoTool.Changed -= OnGizmoToolChanged;
         if (_onMouseLockChanged is not null)
             _stream.MouseLockModeChanged -= _onMouseLockChanged;
-        if (_onBillboards is not null)
-            _stream.BillboardsArrived -= _onBillboards;
         if (_onWorldChanged is not null)
             _world.WorldChanged -= _onWorldChanged;
         if (_onSelectionChanged is not null)
             _selection.SelectionChanged -= _onSelectionChanged;
+        if (_billboardTimer is not null)
+        {
+            _billboardTimer.Stop();
+            _billboardTimer.Tick -= OnBillboardTick;
+        }
         if (_occlusionTimer is not null)
         {
             _occlusionTimer.Stop();
@@ -348,8 +364,31 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
             UpdateBillboardPosition(billboard);
     }
 
-    // Applies one frame of engine-projected positions: reconciles the billboard set by id (creating a
-    // billboard the first time an entity appears, dropping any that left this frame) and reprojects each.
+    // Polls the engine for this view's entity screen positions. The editor drives the cadence (the engine
+    // never pushes); a tick is dropped while the previous poll is still outstanding so requests can't pile
+    // up, and skipped entirely until the view has frames to overlay.
+    private void OnBillboardTick(object? sender, EventArgs e)
+    {
+        if (!HasFrames || _billboardPollInFlight)
+            return;
+
+        _billboardPollInFlight = true;
+        PollBillboardsAsync().FireAndForget();
+    }
+
+    private async Task PollBillboardsAsync()
+    {
+        var result = await _stream.ProjectEntitiesAsync().ContinueOnAnyContext();
+        Dispatch.To(DispatchContext.UI, () =>
+        {
+            _billboardPollInFlight = false;
+            if (result.Success)
+                ApplyBillboards(result.Value!);
+        });
+    }
+
+    // Applies one poll of engine-projected positions: reconciles the billboard set by id (creating a
+    // billboard the first time an entity appears, dropping any that left this poll) and reprojects each.
     private void ApplyBillboards(IReadOnlyList<BillboardPosition> positions)
     {
         if (_entitiesById.Count == 0)
@@ -427,8 +466,37 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
             return;
 
         var snapshot = Billboards.ToList();
+
+        // Occlusion can only change when an icon's projected position shifts (camera or entity moved); skip
+        // the round-trip on an unchanged frame, but force one on the heartbeat so a moving occluder behind a
+        // static icon is still caught.
+        var signature = OcclusionSignature(snapshot);
+        if (signature == _lastOcclusionSignature && _ticksSinceOcclusionQuery < OcclusionHeartbeatTicks)
+        {
+            _ticksSinceOcclusionQuery++;
+            return;
+        }
+
+        _lastOcclusionSignature = signature;
+        _ticksSinceOcclusionQuery = 0;
+
         var ids = snapshot.Select(billboard => billboard.Id).ToList();
         RefreshOcclusionAsync(snapshot, ids).FireAndForget();
+    }
+
+    // A cheap order-sensitive signature of the visible icons and their on-screen positions (quantized to the
+    // nearest pixel), so a frame in which nothing moved skips the occlusion round-trip.
+    private static int OcclusionSignature(IReadOnlyList<BillboardViewModel> billboards)
+    {
+        var hash = new HashCode();
+        foreach (var billboard in billboards)
+        {
+            hash.Add(billboard.Id);
+            hash.Add((int)Math.Round(billboard.X));
+            hash.Add((int)Math.Round(billboard.Y));
+        }
+
+        return hash.ToHashCode();
     }
 
     private async Task RefreshOcclusionAsync(IReadOnlyList<BillboardViewModel> billboards, IReadOnlyList<ulong> ids)

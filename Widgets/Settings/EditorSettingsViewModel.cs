@@ -109,7 +109,7 @@ public sealed partial class EditorSettingsViewModel : ObservableObject
         await SaveAsync().ContinueOnSameContext();
         _savedTheme = _pendingTheme;
 
-        // A changed engine path must reach the Locator (CompileProjectAsync reads _locator.EngineSourcePath,
+        // A changed engine path must reach the Locator (the ProjectBuilder reads Locator.EngineSourcePath,
         // not the raw setting). If it isn't a valid checkout, surface that and skip the relaunch.
         if (enginePathChanged)
         {

@@ -288,6 +288,7 @@ public partial class App : Application
         services.AddSingleton<ProjectManager>();
         services.AddSingleton<FilePicker>();
         services.AddSingleton<CMakeCompiler>();
+        services.AddSingleton<ProjectBuilder>();
         services.AddSingleton<EngineRpc>();
         services.AddSingleton<EngineSettings>();
         // Each viewport/game-view owns its own engine view stream (parameterized by ViewKind), so it's vended

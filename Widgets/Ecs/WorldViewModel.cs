@@ -381,10 +381,6 @@ public sealed partial class WorldViewModel : ObservableObject
         // driven from the tree's multi-selection (WorldTreeSelection) and the viewport, so this setter only
         // follows it — it must not write back, or reflecting a multi-selection's primary would collapse it.
 
-        // Only the inspected entity needs live modified-state; query it on selection rather than every
-        // entity on every world refresh.
-        value?.RefreshModifiedState();
-
         // A freshly selected entity's components start unfiltered; re-apply the active inspector search.
         ApplyComponentFilter();
     }
@@ -450,10 +446,6 @@ public sealed partial class WorldViewModel : ObservableObject
 
             // Restore selection to the surviving persistent VM (the real id was preserved by the guard).
             ResolveSelection(_selection.SelectedId);
-
-            // Components were rebuilt by UpdateFrom; refresh the inspected entity's modified-state. (The
-            // selection reference is unchanged, so OnSelectedEntityChanged won't have fired.)
-            SelectedEntity?.RefreshModifiedState();
         }
         finally
         {

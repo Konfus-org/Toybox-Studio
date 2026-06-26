@@ -225,18 +225,6 @@ public sealed partial class EntityViewModel : ObservableObject
         return synced;
     }
 
-    /// <summary>
-    /// Re-queries each component's per-property modified (set vs default) state. Called when this entity is
-    /// the inspector's selection, so the indicator stays accurate without polling every entity in the world.
-    /// </summary>
-    public void RefreshModifiedState()
-    {
-        foreach (var component in Components)
-            component.RefreshModifiedAsync().FireAndForget();
-        // Script overrides carry their set/default state intrinsically (an override is a set value), so the
-        // script container needs no per-property reflect.isDefault round-trip.
-    }
-
     /// <summary>Replaces the child VMs (the persistent instances are reused by the world reconcile).</summary>
     public void SetChildren(IReadOnlyList<EntityViewModel> children)
     {

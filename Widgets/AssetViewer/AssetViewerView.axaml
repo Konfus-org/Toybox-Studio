@@ -35,16 +35,19 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
-                <TextBlock Text="Sky" VerticalAlignment="Center"/>
-                <ComboBox MinWidth="100"
-                          ItemsSource="{Binding SkyboxOptions}"
-                          SelectedItem="{Binding SelectedSkybox}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="local:PreviewOption">
-                            <TextBlock Text="{Binding Label}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
+                <!-- The background-sky picker is hidden for a sky material (it is itself the background). -->
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowSkyboxOptions}">
+                    <TextBlock Text="Sky" VerticalAlignment="Center"/>
+                    <ComboBox MinWidth="100"
+                              ItemsSource="{Binding SkyboxOptions}"
+                              SelectedItem="{Binding SelectedSkybox}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:PreviewOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
             </StackPanel>
         </Border>
     </Panel>

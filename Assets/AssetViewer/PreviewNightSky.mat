@@ -92,7 +92,7 @@
                     "type": "variant",
                     "value": {
                         "type": "float",
-                        "value": 0
+                        "value": 1
                     }
                 }
             }

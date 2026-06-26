@@ -171,17 +171,6 @@ public sealed partial class ComponentViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Refreshes the "modified" (set vs default) flag for every top-level property by asking the engine
-    /// whether each currently equals its default. Driven on selection (and after edits) so the indicator
-    /// reflects engine truth without querying every entity in the world on each refresh.
-    /// </summary>
-    public async Task RefreshModifiedAsync(CancellationToken ct = default)
-    {
-        foreach (var (property, viewModel) in _resettable)
-            await RefreshModifiedAsync(property, viewModel, ct).ContinueOnSameContext();
-    }
-
-    /// <summary>
     /// Removes this whole component from the entity (the header's "✕"), then re-syncs so the inspector drops
     /// its section. Surfaces the engine's message on failure.
     /// </summary>
@@ -269,15 +258,6 @@ public sealed partial class ComponentViewModel : ObservableObject
         // would zip against the wrong row set and force a full inspector rebuild every tick.
         var single = snapshot.Properties.Count == 1 ? snapshot.Properties[0] : null;
         return single is { HasChildren: true, Type: not "array" } ? single.Children : snapshot.Properties;
-    }
-
-    private async Task RefreshModifiedAsync(string property, PropertyViewModel viewModel, CancellationToken ct)
-    {
-        var result = await _component
-            .IsPropertyDefaultAsync(property, ct)
-            .ContinueOnSameContext();
-        if (result.Success)
-            viewModel.IsModified = !result.Value;
     }
 
     private async void OnPropertyEdited(string property)

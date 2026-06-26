@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.Services.AssetViewing;
@@ -26,19 +27,38 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
 {
     private readonly ViewportStream? _stream;
     private readonly Session _session;
+    private readonly AssetCatalog _catalog;
     private readonly WorldSelection _selection;
     private readonly Logger _logger;
     private readonly Asset? _asset;
     private readonly Action<ConnectionState> _onStateChanged;
 
+    // The editor owns the preview palette's labels; it looks up the engine-provided built-in assets by
+    // name (they arrive flagged as built-in through editor.listAssets) to get their ids. Built-in meshes
+    // are engine primitives (not assets), so the editor names those tokens directly.
+    private static readonly (string Token, string Label)[] PreviewMeshes =
+    [
+        ("sphere", "Sphere"), ("cube", "Cube"), ("capsule", "Capsule"),
+        ("half_sphere", "Half Sphere"), ("quad", "Plane"), ("triangle", "Triangle"),
+    ];
+    private static readonly (string Asset, string Label)[] SurfaceMaterials =
+    [
+        ("PreviewMetal", "Metal"), ("PreviewMatte", "Matte"), ("PreviewUnlit", "Unlit"),
+    ];
+    private static readonly (string Asset, string Label)[] SkyMaterials =
+    [
+        ("Sky", "Day"), ("PreviewNightSky", "Night"),
+    ];
+
     // Suppresses the rebuild RPC while the picker is seeded to its default in the constructor.
     private bool _suppressOptionPush;
 
     public AssetViewerViewModel(
-        AssetViewerLauncher launcher, Session session, EngineRpc engine, WorldSelection selection,
-        Logger logger)
+        AssetViewerLauncher launcher, Session session, EngineRpc engine, AssetCatalog catalog,
+        WorldSelection selection, Logger logger)
     {
         _session = session;
+        _catalog = catalog;
         _selection = selection;
         _logger = logger;
         _asset = launcher.TakePending();
@@ -51,20 +71,15 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
             _stream.SurfaceArrived += OnSurfaceArrived;
             _stream.SurfaceLost += OnSurfaceLost;
 
-            // The preview picker: a mesh choice for materials/textures, a material choice for models,
-            // plus a background-sky choice for all of them.
-            var (label, options) = OptionsFor(asset.Type);
-            PreviewOptionLabel = label;
-            foreach (var option in options)
-                PreviewOptions.Add(option);
-            foreach (var sky in SkyboxChoices)
-                SkyboxOptions.Add(sky);
-
-            // Seed both pickers to the engine's defaults (first option) without a redundant rebuild.
-            _suppressOptionPush = true;
-            SelectedPreviewOption = PreviewOptions.FirstOrDefault();
-            SelectedSkybox = SkyboxOptions.FirstOrDefault();
-            _suppressOptionPush = false;
+            // The preview picker: a sky material picks only its projection shape; a model picks a
+            // surface material; a material/texture picks the mesh it shows on. Most also pick a
+            // background sky. The material/sky choices are the engine's built-in assets (sourced from
+            // editor.listAssets, below); meshes/shapes are engine primitives.
+            PreviewOptionLabel =
+                IsSkyMaterial(asset) ? "Shape"
+                : IsModelType(asset.Type) ? "Material"
+                : "Mesh";
+            LoadPreviewOptionsAsync(asset.Type).FireAndForget();
         }
 
         _onStateChanged = state => Dispatch.To(DispatchContext.UI, () =>
@@ -97,6 +112,7 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
     [NotifyPropertyChangedFor(nameof(ShowPreviewOptions))]
+    [NotifyPropertyChangedFor(nameof(ShowSkyboxOptions))]
     public partial bool HasFrames { get; private set; }
 
     /// <summary>The preview-picker choices for this asset (built-in meshes, or model materials).</summary>
@@ -119,13 +135,9 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     /// <summary>The picker shows once the preview is on screen and there are options to choose.</summary>
     public bool ShowPreviewOptions => HasFrames && PreviewOptions.Count > 0;
 
-    // The background-sky options, the same for every asset type. "Day" is the engine default.
-    private static readonly PreviewOption[] SkyboxChoices =
-    [
-        new PreviewOption("Day", "day"),
-        new PreviewOption("Night", "night"),
-        new PreviewOption("None", "none"),
-    ];
+    /// <summary>The background-sky picker shows only when this asset offers one. A sky material is itself
+    /// the background, so it has none.</summary>
+    public bool ShowSkyboxOptions => HasFrames && SkyboxOptions.Count > 0;
 
     /// <summary>Set by the interop control when this compositor can't import shared GPU textures.</summary>
     [ObservableProperty]
@@ -205,59 +217,113 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     {
     }
 
-    // Sends the chosen mesh/material to the engine, which rebuilds the preview in place (the camera and
-    // orbit are preserved). Suppressed while the picker is seeded to its default in the constructor.
+    // Sends the chosen presentation to the engine, which rebuilds the preview in place (the camera and
+    // orbit are preserved): a built-in mesh token (or "skybox"/"skysphere") for a material/texture, or
+    // a built-in surface material id for a model. Suppressed while the picker is seeded to its default.
     partial void OnSelectedPreviewOptionChanged(PreviewOption? value)
     {
         if (_suppressOptionPush || _stream is null || value is null)
             return;
-        _stream.SetPreviewOption(value.Token);
+        _stream.SetPreviewOption(value.Token, value.Id);
     }
 
     partial void OnSelectedSkyboxChanged(PreviewOption? value)
     {
         if (_suppressOptionPush || _stream is null || value is null)
             return;
-        _stream.SetPreviewSkybox(value.Token);
+        _stream.SetPreviewSkybox(value.Id);
     }
 
-    // The preview-picker label and choices for an asset type. The first entry is the engine's default,
-    // so seeding the picker to it matches what the view already shows. Models pick a built-in material;
-    // materials and textures pick the built-in mesh the asset is shown on (materials add sky options).
-    private static (string Label, IReadOnlyList<PreviewOption> Options) OptionsFor(string type)
+    private static bool IsModelType(string type) => type is "fbx" or "obj" or "gltf" or "glb";
+
+    private static bool IsMaterialType(string type) => type == "mat";
+
+    // A material whose engine-declared render type is "sky": it previews as the environment background,
+    // not on a mesh. The engine tags it through editor.listAssets (Asset.MaterialType).
+    private static bool IsSkyMaterial(Asset asset) =>
+        IsMaterialType(asset.Type)
+        && string.Equals(asset.MaterialType, "sky", StringComparison.OrdinalIgnoreCase);
+
+    // Fills the pickers from the engine's built-in assets (looked up by name from the catalog, which the
+    // engine surfaces through editor.listAssets) plus the built-in mesh primitives. A sky material picks
+    // only its projection shape (it loads straight into the background, so no mesh/material/background
+    // pickers); a model picks a built-in surface material ("Original" keeps its own); a material/texture
+    // picks the built-in mesh it is shown on, plus a background sky ("None" removes it). Each picker is
+    // seeded to its default without a redundant rebuild.
+    private async Task LoadPreviewOptionsAsync(string type)
     {
-        if (type is "fbx" or "obj" or "gltf" or "glb")
-            return ("Material",
-            [
-                new PreviewOption("Metal", "metal"),
-                new PreviewOption("Matte", "matte"),
-                new PreviewOption("Unlit", "unlit"),
-                new PreviewOption("Original", "original"),
-            ]);
+        // Ensure the catalog is populated (its first fetch is also what registers the built-in assets
+        // engine-side), then resolve each built-in by name to its id.
+        await _catalog.RefreshAsync().ContinueOnAnyContext();
+        var builtins = _catalog.Assets.Where(asset => asset.IsBuiltin).ToList();
+        long IdOf(string name) =>
+            builtins.FirstOrDefault(asset => asset.Name == name)?.Id ?? 0;
 
-        if (type == "mat")
-            return ("Mesh",
-            [
-                new PreviewOption("Sphere", "sphere"),
-                new PreviewOption("Cube", "cube"),
-                new PreviewOption("Capsule", "capsule"),
-                new PreviewOption("Half Sphere", "half_sphere"),
-                new PreviewOption("Plane", "quad"),
-                new PreviewOption("Triangle", "triangle"),
-                new PreviewOption("Skybox", "skybox"),
-                new PreviewOption("Sky Sphere", "skysphere"),
-            ]);
+        var options = new List<PreviewOption>();
+        var skyOptions = new List<PreviewOption>();
+        string defaultToken;
 
-        // Textures.
-        return ("Mesh",
-        [
-            new PreviewOption("Plane", "quad"),
-            new PreviewOption("Sphere", "sphere"),
-            new PreviewOption("Cube", "cube"),
-            new PreviewOption("Capsule", "capsule"),
-            new PreviewOption("Half Sphere", "half_sphere"),
-            new PreviewOption("Triangle", "triangle"),
-        ]);
+        // The background-sky choices (day/night/none) every non-sky asset can sit against.
+        void AddBackgroundSkies()
+        {
+            foreach (var (asset, label) in SkyMaterials)
+            {
+                var id = IdOf(asset);
+                if (id != 0)
+                    skyOptions.Add(new PreviewOption(label, Id: id));
+            }
+            skyOptions.Add(new PreviewOption("None")); // id 0 → no sky
+        }
+
+        if (_asset is { } previewed && IsSkyMaterial(previewed))
+        {
+            // A sky material is the environment itself: only its projection shape is offered, and there
+            // is no background-sky picker (it would replace the very material being previewed). The
+            // engine defaults a sky material to the sphere projection, so seed that without a rebuild.
+            options.Add(new PreviewOption("Sphere", "skysphere"));
+            options.Add(new PreviewOption("Box", "skybox"));
+            defaultToken = "skysphere";
+        }
+        else if (IsModelType(type))
+        {
+            options.Add(new PreviewOption("Original"));
+            foreach (var (asset, label) in SurfaceMaterials)
+            {
+                var id = IdOf(asset);
+                if (id != 0)
+                    options.Add(new PreviewOption(label, Id: id));
+            }
+            defaultToken = string.Empty; // the "Original" entry
+            AddBackgroundSkies();
+        }
+        else
+        {
+            foreach (var (token, label) in PreviewMeshes)
+                options.Add(new PreviewOption(label, token));
+
+            // A texture previews flat on a plane; a material previews rounded on a sphere — match the
+            // engine's default mesh so seeding the picker doesn't trigger a rebuild.
+            defaultToken = IsMaterialType(type) ? "sphere" : "quad";
+            AddBackgroundSkies();
+        }
+
+        Dispatch.To(DispatchContext.UI, () =>
+        {
+            foreach (var option in options)
+                PreviewOptions.Add(option);
+            foreach (var sky in skyOptions)
+                SkyboxOptions.Add(sky);
+
+            _suppressOptionPush = true;
+            SelectedPreviewOption =
+                PreviewOptions.FirstOrDefault(option => option.Token == defaultToken)
+                ?? PreviewOptions.FirstOrDefault();
+            SelectedSkybox = SkyboxOptions.FirstOrDefault();
+            _suppressOptionPush = false;
+
+            OnPropertyChanged(nameof(ShowPreviewOptions));
+            OnPropertyChanged(nameof(ShowSkyboxOptions));
+        });
     }
 
     private async Task PickAtAsync(double u, double v, bool additive)

@@ -161,9 +161,10 @@ public abstract class PropertyViewModel : ObservableObject
 
     /// <summary>
     /// True when this property's current value differs from its engine default — i.e. it has actually been
-    /// set/overridden. Drives the "modified" indicator and revert button. It is resolved asynchronously for
-    /// top-level component properties (via <c>reflect.isDefault</c>) and left <c>false</c> wherever the
-    /// default is unknown (nested fields, settings grids), so a row never shows a false "set" marker.
+    /// set/overridden. Drives the "modified" indicator and revert button. Leaves seed it from the describe
+    /// response's <c>is_default</c> flag (at construction and on each <see cref="Sync"/>); composites aggregate
+    /// it from their children. Left <c>false</c> wherever the default is unknown (settings grids without the
+    /// flag), so a row never shows a false "set" marker.
     /// </summary>
     public bool IsModified
     {
@@ -265,7 +266,13 @@ public abstract class PropertyViewModel : ObservableObject
         _suppressCommit = true;
         try
         {
-            return SyncCore(node);
+            var synced = SyncCore(node);
+            // Re-seed the indicator from the fresh describe flag (leaves only; composites aggregate from their
+            // children, which re-seed themselves as the subtree syncs). The "modified" dot tracks engine truth
+            // from the same describe payload already being fetched — no per-property reflect.isDefault call.
+            if (!HasChildren)
+                IsModified = !node.IsDefault;
+            return synced;
         }
         finally
         {

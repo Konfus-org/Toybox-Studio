@@ -13,10 +13,10 @@ public sealed record Hello(int ProtocolVersion, string Engine, string App);
 public sealed record ViewInfo(string Name, string Format);
 
 /// <summary>
-/// One entity's projected screen position in a <c>view.billboards</c> notification: the entity id plus its
+/// One entity's projected screen position in a <c>view.projectEntities</c> reply: the entity id plus its
 /// normalized image coordinates (<see cref="U"/>/<see cref="V"/>, top-left origin, in front of the camera)
-/// and world-space distance from the camera (<see cref="Depth"/>, for distance fade). The editor joins these
-/// against the world snapshot to draw name labels + component icon stacks.
+/// and world-space distance from the camera (<see cref="Depth"/>, for distance fade). The editor polls for
+/// these and joins them against the world snapshot to draw name labels + component icon stacks.
 /// </summary>
 public sealed record BillboardPosition(ulong Id, double U, double V, double Depth);
 
@@ -28,20 +28,34 @@ public sealed record BillboardPosition(ulong Id, double U, double V, double Dept
 public sealed record ViewSurface(string Name, long Handle, int Width, int Height, string Format);
 
 /// <summary>
-/// The editor's connection to the engine: the engine-specific facade over a generic <see cref="RpcClient"/>.
-/// It performs the editor.hello handshake, exposes the engine's inbound notifications as typed events, and
-/// fronts the engine-lifecycle / viewport calls that only services make. The entity / component / world /
-/// asset / settings domain calls live on their own editor-side constructs
-/// (<see cref="Toybox.Studio.Services.World.WorldManager"/>, <see cref="Toybox.Studio.Services.World.Entity"/>,
-/// <see cref="Toybox.Studio.Services.World.Component"/>, <see cref="Toybox.Studio.Services.Project.AssetCatalog"/>,
+/// The editor's connection to the engine, and the single channel every engine call is piped through: the
+/// engine-specific facade over a generic <see cref="RpcClient"/>. It performs the editor.hello handshake,
+/// exposes the engine's inbound notifications as typed events, and fronts the engine-lifecycle / viewport
+/// calls that only services make. The entity / component / world / asset / settings domain calls live on
+/// their own editor-side constructs (<see cref="Toybox.Studio.Services.World.WorldManager"/>,
+/// <see cref="Toybox.Studio.Services.World.Entity"/>, <see cref="Toybox.Studio.Services.World.Component"/>,
+/// <see cref="Toybox.Studio.Services.Project.AssetCatalog"/>,
 /// <see cref="Toybox.Studio.Services.Settings.EngineSettings"/>), which build on the internal
-/// <see cref="InvokeAsync{T}"/>/<see cref="NotifyAsync"/> primitives here — thin forwarders to the underlying
-/// <see cref="RpcClient"/>. <see cref="Session"/> drives the connection
-/// (<see cref="ConnectAsync"/>/<see cref="Disconnect"/>). Every call returns a <see cref="Result"/> with a
-/// helpful message on failure (including "not connected") rather than throwing.
+/// <see cref="InvokeAsync{T}"/>/<see cref="NotifyAsync"/> primitives here. <see cref="Session"/> drives the
+/// connection (<see cref="ConnectAsync"/>/<see cref="Disconnect"/>).
+///
+/// Safety is enforced here so callers don't have to think about it: every request is <b>guarded</b> (the
+/// transport turns any error, including "not connected", into a failure <see cref="Result"/> rather than an
+/// exception) and <b>bounded</b> (each call is linked to a default deadline — <see cref="DefaultRequestTimeout"/>
+/// — so a hung or crashed engine can never park an editor operation forever). A caller therefore stays safe
+/// passing <see cref="CancellationToken.None"/>; it only needs an explicit token to cancel early, and the
+/// <c>timeout</c> overloads to pick a tighter or looser bound. Liveness detection (is the engine frozen?) is
+/// the <see cref="Session"/> watchdog's job; this layer just guarantees each individual await completes.
 /// </summary>
 public sealed class EngineRpc : IAsyncDisposable
 {
+    /// <summary>
+    /// The default deadline applied to every request that doesn't pass an explicit one. Generous enough for a
+    /// large <c>world.describe</c> or a cold settings/asset describe, but finite so the editor never blocks
+    /// indefinitely on an engine that wedged. Notifications (fire-and-forget) carry no reply and so no timeout.
+    /// </summary>
+    private static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(15);
+
     private readonly RpcClient _rpc = new();
 
     public EngineRpc() => _rpc.Disconnected += () => Disconnected?.Invoke();
@@ -75,13 +89,6 @@ public sealed class EngineRpc : IAsyncDisposable
     /// </summary>
     public event Action? TransformEdited;
 
-    /// <summary>
-    /// Raised for every view.billboards notification: one editor view's per-frame projected entity positions.
-    /// Carries the view name and the positions; each <see cref="ViewportStream"/> filters by view name. Fired
-    /// on the RPC listener thread.
-    /// </summary>
-    public event Action<string, IReadOnlyList<BillboardPosition>>? BillboardsReceived;
-
     /// <summary>Raised when the connection drops for any reason.</summary>
     public event Action? Disconnected;
 
@@ -97,8 +104,8 @@ public sealed class EngineRpc : IAsyncDisposable
         if (!connected.Success)
             return Result<Hello>.Fail(connected.Error!);
 
-        var hello = await _rpc
-            .InvokeAsync<Hello>("editor.hello", new { ProtocolVersion = 1, Client = "Toybox Studio" }, ct)
+        var hello = await InvokeAsync<Hello>(
+                "editor.hello", new { ProtocolVersion = 1, Client = "Toybox Studio" }, ct)
             .ContinueOnAnyContext();
         if (!hello.Success)
         {
@@ -196,18 +203,22 @@ public sealed class EngineRpc : IAsyncDisposable
         NotifyAsync("view.setGizmo", new { Mode = mode });
 
     /// <summary>
-    /// Rebuilds an asset-preview view with a different mesh/material option (fire-and-forget): for a
-    /// material/texture the option is a built-in mesh token (or "skybox"/"skysphere" for a material);
-    /// for a model it's a built-in material token ("metal"/"matte"/"unlit"/"original").
+    /// Rebuilds an asset-preview view with a different presentation (fire-and-forget): for a
+    /// material/texture <paramref name="option"/> is a built-in mesh token (or "skybox"/"skysphere" for
+    /// a material); for a model <paramref name="materialId"/> is a built-in surface material id (0 = the
+    /// model's own materials). Built-in ids come from the asset catalog's built-in assets.
     /// </summary>
-    public Task SetPreviewOptionAsync(string view, string option) =>
-        NotifyAsync("view.setPreviewOption", new { View = view, Option = option });
+    public Task SetPreviewOptionAsync(string view, string option, long materialId) =>
+        NotifyAsync(
+            "view.setPreviewOption",
+            new { View = view, Option = option, MaterialId = materialId });
 
     /// <summary>
-    /// Changes an asset-preview view's background sky (fire-and-forget): "day", "night", or "none".
+    /// Changes an asset-preview view's background sky (fire-and-forget): <paramref name="skyboxId"/> is
+    /// a built-in sky material id (from the asset catalog's built-in assets), or 0 for no sky.
     /// </summary>
-    public Task SetPreviewSkyboxAsync(string view, string skybox) =>
-        NotifyAsync("view.setPreviewSkybox", new { View = view, Skybox = skybox });
+    public Task SetPreviewSkyboxAsync(string view, long skyboxId) =>
+        NotifyAsync("view.setPreviewSkybox", new { View = view, SkyboxId = skyboxId });
 
     /// <summary>
     /// Picks the entity under a viewport click. <paramref name="u"/>/<paramref name="v"/> are normalized image
@@ -271,25 +282,97 @@ public sealed class EngineRpc : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes a data-driven <see cref="RpcCall"/> against the engine (the transport behind data-driven tool
-    /// commands; see <c>Widgets/Toolbar/ToolCommandRunner.cs</c>). Forwards to <see cref="RpcClient.RunAsync"/>.
+    /// Projects a view's entities to its normalized screen space (top-left origin) for the billboard
+    /// overlay. The editor polls this on its own cadence — the engine no longer pushes positions —
+    /// and joins the results against the world snapshot to place name labels + icon stacks.
     /// </summary>
-    public Task<Result> RunAsync(RpcCall call, CancellationToken ct) => _rpc.RunAsync(call, ct);
+    public async Task<Result<IReadOnlyList<BillboardPosition>>> ProjectEntitiesAsync(
+        string view, CancellationToken ct)
+    {
+        var result = await InvokeAsync<JToken>("view.projectEntities", new { View = view }, ct)
+            .ContinueOnAnyContext();
+        if (result is not { Success: true, Value: { } reply })
+            return Result<IReadOnlyList<BillboardPosition>>.Fail(
+                result.Error ?? "The engine returned no result.");
+
+        var positions = new List<BillboardPosition>();
+        if (reply["items"] is JArray array)
+            foreach (var token in array)
+                positions.Add(new BillboardPosition(
+                    token.Value<ulong>("id"),
+                    token.Value<double>("u"),
+                    token.Value<double>("v"),
+                    token.Value<double>("depth")));
+        return Result<IReadOnlyList<BillboardPosition>>.Ok(positions);
+    }
 
     /// <summary>
-    /// Invokes an engine RPC method expecting a typed reply. The primitive the editor-side constructs (the
-    /// world / entity / component / asset / settings facades) build their domain calls on; forwards to the
-    /// underlying <see cref="RpcClient"/>.
+    /// Executes a data-driven <see cref="RpcCall"/> against the engine (the transport behind data-driven tool
+    /// commands; see <c>Widgets/Toolbar/ToolCommandRunner.cs</c>): a fire-and-forget notification when
+    /// <see cref="RpcCall.Notify"/> is set, otherwise a bounded, guarded request.
+    /// </summary>
+    public async Task<Result> RunAsync(RpcCall call, CancellationToken ct)
+    {
+        if (call.Notify)
+        {
+            await NotifyAsync(call.Method, call.Params).ContinueOnAnyContext();
+            return Result.Ok();
+        }
+
+        return await InvokeAsync(call.Method, call.Params, ct).ContinueOnAnyContext();
+    }
+
+    /// <summary>
+    /// Invokes an engine RPC method expecting a typed reply, bounded by the default request timeout. The
+    /// primitive the editor-side constructs (the world / entity / component / asset / settings facades) build
+    /// their domain calls on.
     /// </summary>
     internal Task<Result<T>> InvokeAsync<T>(string method, object? args, CancellationToken ct) =>
-        _rpc.InvokeAsync<T>(method, args, ct);
+        InvokeAsync<T>(method, args, DefaultRequestTimeout, ct);
 
-    /// <summary>Invokes an engine RPC method whose reply is ignored (success/failure only).</summary>
+    /// <summary>
+    /// Invokes an engine RPC method expecting a typed reply, bounded by <paramref name="timeout"/>: a hung
+    /// engine cannot park the call past it. On expiry returns a clear timeout failure rather than the
+    /// transport's generic "operation canceled"; the caller's <paramref name="ct"/> still cancels early.
+    /// </summary>
+    internal async Task<Result<T>> InvokeAsync<T>(
+        string method, object? args, TimeSpan timeout, CancellationToken ct)
+    {
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(timeout);
+        var result = await _rpc.InvokeAsync<T>(method, args, bounded.Token).ContinueOnAnyContext();
+        return result.Success || !TimedOut(ct, bounded)
+            ? result
+            : Result<T>.Fail(TimeoutMessage(method, timeout));
+    }
+
+    /// <summary>Invokes an engine RPC method whose reply is ignored, bounded by the default request timeout.</summary>
     internal Task<Result> InvokeAsync(string method, object? args, CancellationToken ct) =>
-        _rpc.InvokeAsync(method, args, ct);
+        InvokeAsync(method, args, DefaultRequestTimeout, ct);
+
+    /// <summary>Invokes an engine RPC method whose reply is ignored, bounded by <paramref name="timeout"/>.</summary>
+    internal async Task<Result> InvokeAsync(
+        string method, object? args, TimeSpan timeout, CancellationToken ct)
+    {
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(timeout);
+        var result = await _rpc.InvokeAsync(method, args, bounded.Token).ContinueOnAnyContext();
+        return result.Success || !TimedOut(ct, bounded)
+            ? result
+            : Result.Fail(TimeoutMessage(method, timeout));
+    }
 
     /// <summary>Sends a fire-and-forget engine notification (no reply); a no-op when not connected.</summary>
     internal Task NotifyAsync(string method, object? args) => _rpc.NotifyAsync(method, args);
+
+    // The call expired on OUR deadline (not the caller's cancellation) when the linked source fired but the
+    // caller's own token did not — that's a timeout, reported with a clear message instead of the transport's
+    // generic "operation canceled".
+    private static bool TimedOut(CancellationToken ct, CancellationTokenSource bounded) =>
+        bounded.IsCancellationRequested && !ct.IsCancellationRequested;
+
+    private static string TimeoutMessage(string method, TimeSpan timeout) =>
+        $"The engine did not answer '{method}' within {timeout.TotalSeconds:F0}s.";
 
     // The engine's inbound notification handlers, wired before the connection starts listening. Re-raised as
     // typed events; each fires on the RPC listener thread.
@@ -306,8 +389,5 @@ public sealed class EngineRpc : IAsyncDisposable
         handlers.On("view.presented", (string name) => ViewPresented?.Invoke(name));
         handlers.On("input.mouseLock", (string mode) => MouseLockModeChanged?.Invoke(mode));
         handlers.On("view.transformEdited", (ulong[] ids) => TransformEdited?.Invoke());
-        handlers.On(
-            "view.billboards",
-            (string view, BillboardPosition[] items) => BillboardsReceived?.Invoke(view, items));
     }
 }

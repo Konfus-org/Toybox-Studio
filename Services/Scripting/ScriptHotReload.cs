@@ -5,8 +5,8 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.Settings;
 
 namespace Toybox.Studio.Services.Scripting;
@@ -21,7 +21,7 @@ namespace Toybox.Studio.Services.Scripting;
 public sealed partial class ScriptHotReload : ObservableObject, IDisposable
 {
     private readonly SettingsManager _settings;
-    private readonly Session _session;
+    private readonly ProjectBuilder _builder;
     private readonly Logger _log;
     private readonly IDisposable _settingsSubscription;
 
@@ -30,10 +30,10 @@ public sealed partial class ScriptHotReload : ObservableObject, IDisposable
     private bool _rebuildQueued;  // a save arrived mid-build; rebuild exactly once more when it finishes
     private string? _lastSavedFile; // the most recent file behind a queued rebuild, for the log line
 
-    public ScriptHotReload(SettingsManager settings, Session session, Logger log)
+    public ScriptHotReload(SettingsManager settings, ProjectBuilder builder, Logger log)
     {
         _settings = settings;
-        _session = session;
+        _builder = builder;
         _log = log;
 
         // Seed from the persisted setting now and re-sync whenever settings are saved (e.g. the Settings
@@ -92,7 +92,7 @@ public sealed partial class ScriptHotReload : ObservableObject, IDisposable
             {
                 _rebuildQueued = false;
                 _log.Info($"Hot reload: recompiling scripts after saving {Path.GetFileName(path)}…");
-                var built = await _session.CompileProjectAsync(CancellationToken.None).ContinueOnSameContext();
+                var built = await _builder.BuildAsync(CancellationToken.None).ContinueOnSameContext();
                 _log.Info(built
                     ? "Hot reload: scripts recompiled; the engine will reload them."
                     : "Hot reload: build failed — see the log above.");

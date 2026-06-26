@@ -19,8 +19,12 @@ using Toybox.Studio.Widgets.Status;
 using Toybox.Studio.Widgets.PropertyGrid;
 using Toybox.Studio.Widgets.Toolbar;
 using Toybox.Studio.Shell.Workspace;
+using Toybox.Studio.Services.Clipboard;
+using Toybox.Studio.Services.Commands;
 using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Services.Favorites;
 using Toybox.Studio.Services.Scripting;
+using Toybox.Studio.Widgets.ContextMenu;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
@@ -127,6 +131,10 @@ public partial class App : Application
 
             // Give the inspector's script cards their inline editor / pop-out / source-resolution service.
             ScriptEditing.Current = _host.Services.GetRequiredService<ScriptEditing>();
+
+            // Publish the data-driven context-menu service so the static MenuOpenBehavior (an attached
+            // property) can resolve menus, the favorites store and the selection without a per-view hookup.
+            ContextMenuService.Current = _host.Services.GetRequiredService<ContextMenuService>();
 
             // The Accessibility ▸ Animation intensity setting renders as a clay slider rather than a numeric
             // field (tagged [View("intensitySlider")] by the settings grid; see SettingsViewModel.TagView).
@@ -304,7 +312,12 @@ public partial class App : Application
         services.AddSingleton<ToolbarState>();
         services.AddSingleton<GizmoToolbarBridge>();
         services.AddSingleton<PlayToolbarBridge>();
+        services.AddSingleton<Clipboard>();
+        services.AddSingleton<EditorCommands>();
         services.AddSingleton<ToolCommandRunner>();
+        services.AddSingleton<FavoritesManager>();
+        services.AddSingleton<MenuCatalog>();
+        services.AddSingleton<ContextMenuService>();
         services.AddSingleton<Session>();
         services.AddSingleton<EngineWatcher>();
         services.AddSingleton<EngineWatchdog>();

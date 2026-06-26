@@ -7,7 +7,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using Toybox.Studio.Services.Commands;
 using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Widgets.ContextMenu;
 using Toybox.Studio.Widgets.Toolbar;
 
 namespace Toybox.Studio.Widgets.Viewport;
@@ -62,6 +64,11 @@ public sealed class ViewportInput
         private bool _pickAdditive;
         // True once a left-drag has grown past the slop into a rubber-band marquee selection.
         private bool _marqueeActive;
+
+        // A right press becomes a context-menu open on release if it stayed put (right-drag is the camera pan,
+        // so a right-tap is otherwise free). The menu acts on the current selection, like the world tree.
+        private bool _rightTapCandidate;
+        private Point _rightPressPosition;
 
         public Handler(Control control)
         {
@@ -124,6 +131,12 @@ public sealed class ViewportInput
             _pressPosition = point.Position;
             _pickAdditive = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
+            // Arm a right-tap context menu for a plain right press; a drag past the slop turns it into a pan.
+            _rightTapCandidate = point.Properties.IsRightButtonPressed
+                && !point.Properties.IsLeftButtonPressed
+                && !point.Properties.IsMiddleButtonPressed;
+            _rightPressPosition = point.Position;
+
             Send(0, 0, 0);
         }
 
@@ -151,8 +164,30 @@ public sealed class ViewportInput
                 var bounds = _control.Bounds;
                 sink.Pick(point.Position.X, point.Position.Y, bounds.Width, bounds.Height, _pickAdditive);
             }
+            else if (_rightTapCandidate && e.InitialPressMouseButton == MouseButton.Right
+                     && Sink is { IsGame: false })
+            {
+                OpenContextMenu();
+            }
 
             _pendingPick = false;
+            _rightTapCandidate = false;
+        }
+
+        // Opens the data-driven context menu over the current selection (entity menu) or empty space
+        // (background menu). The menu is a flyout in the popup layer — not a child of this input surface — so
+        // the surface's pointer/focus capture doesn't light-dismiss it.
+        private void OpenContextMenu()
+        {
+            if (ContextMenuService.Current is not { } service)
+                return;
+
+            var (menuId, context) = service.Selection.PrimaryId is { } id
+                ? (MenuCatalogDefaults.EntityMenu,
+                    new MenuContext { Host = MenuCatalogDefaults.EntityMenu, EntityId = id })
+                : (MenuCatalogDefaults.BackgroundMenu,
+                    new MenuContext { Host = MenuCatalogDefaults.BackgroundMenu, IsBackground = true });
+            MenuOpenBehavior.Show(_control, menuId, context);
         }
 
         // The marquee rectangle (normalized to top-left + size, control space) from the press anchor to `current`.
@@ -203,6 +238,15 @@ public sealed class ViewportInput
                     if (Sink is { IsGame: false, MarqueeEnabled: true })
                         _marqueeActive = true;
                 }
+            }
+
+            // A right press that moves past the slop is a camera pan, not a tap — cancel the context menu.
+            if (_rightTapCandidate)
+            {
+                var movedX = point.Position.X - _rightPressPosition.X;
+                var movedY = point.Position.Y - _rightPressPosition.Y;
+                if (movedX * movedX + movedY * movedY > ClickSlopSquared)
+                    _rightTapCandidate = false;
             }
 
             if (_marqueeActive)

@@ -1,11 +1,15 @@
+using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using Toybox.Studio.Services;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Extensions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Widgets.Status;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Services.Favorites;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.Scripting;
@@ -47,7 +51,8 @@ public sealed partial class ShellViewModel : ObservableObject
         WorldManager world,
         AssetCatalog assets,
         ScriptEditorLauncher scriptEditor,
-        AssetViewerLauncher assetViewer)
+        AssetViewerLauncher assetViewer,
+        FavoritesManager favorites)
     {
         Status = status;
         Workspace = workspace;
@@ -62,6 +67,11 @@ public sealed partial class ShellViewModel : ObservableObject
         _assets = assets;
         _scriptEditor = scriptEditor;
         _assetViewer = assetViewer;
+        _favorites = favorites;
+
+        BuildMenuActions();
+        // Keep the generated Favorites menu in step with the star toggles (fires immediately for the first build).
+        favorites.Listen(RefreshFavorites);
 
         projects.ProjectChanged += _ => Dispatch.To(DispatchContext.UI, RefreshTitle);
         // A project rename (its AppSettings "name" edited in Settings) updates the title without a relaunch.
@@ -73,6 +83,63 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The window manager: registered dockables, live dock state, and open/reset/save actions.</summary>
     public WorkspaceViewModel Workspace { get; }
+
+    // The favoritable menu-bar actions, by id, so the native menu items bind their icon/star and the generated
+    // Favorites menu can re-list them.
+    private readonly FavoritesManager _favorites;
+    private readonly List<MenuActionViewModel> _actions = [];
+
+    /// <summary>The starred menu-bar actions, surfaced in the generated "Favorites" menu (empty when none).</summary>
+    public ObservableCollection<MenuActionViewModel> Favorites { get; } = [];
+
+    public bool HasFavorites => Favorites.Count > 0;
+
+    /// <summary>The favoritable menu-bar actions (icon + label + command + star), looked up by their id.</summary>
+    public MenuActionViewModel SaveAction => Action("save");
+    public MenuActionViewModel SaveAllAction => Action("saveAll");
+    public MenuActionViewModel OpenProjectAction => Action("openProject");
+    public MenuActionViewModel OpenAssetAction => Action("openAsset");
+    public MenuActionViewModel CompileAction => Action("compile");
+    public MenuActionViewModel ShipDebugAction => Action("shipDebug");
+    public MenuActionViewModel ShipReleaseAction => Action("shipRelease");
+    public MenuActionViewModel AttachAction => Action("attach");
+    public MenuActionViewModel DebugEditorAction => Action("debugEditor");
+    public MenuActionViewModel ResetLayoutAction => Action("resetLayout");
+
+    private MenuActionViewModel Action(string id) => _actions.First(action => action.Id == id);
+
+    private void BuildMenuActions()
+    {
+        MenuActionViewModel Add(string id, string label, string icon, string? color, System.Windows.Input.ICommand command, object? parameter = null)
+        {
+            var action = new MenuActionViewModel(id, label, icon, color, command, _favorites, parameter);
+            _actions.Add(action);
+            return action;
+        }
+
+        Add("save", "Save", "Save", "BLUE", SaveCommand);
+        Add("saveAll", "Save All", "SaveAll", "BLUE", SaveAllCommand);
+        Add("openProject", "Project…", "FolderOpen", "YELLOW", OpenProjectCommand);
+        Add("openAsset", "Asset…", "FileInput", "YELLOW", OpenAssetCommand);
+        Add("compile", "Compile", "Hammer", "GREEN", CompileCommand);
+        Add("shipDebug", "Ship Debug", "Bug", "GREEN", ShipCommand, "Debug");
+        Add("shipRelease", "Ship Release", "Package", "GREEN", ShipCommand, "Release");
+        Add("attach", "Attach to Running Instance", "Plug", "CYAN", AttachCommand);
+        Add("debugEditor", "Avalonia Dev Tools", "Wrench", "GREY", DebugEditorCommand);
+        Add("resetLayout", "Reset Layout", "LayoutDashboard", "MAGENTA", Workspace.ResetLayoutCommand);
+    }
+
+    // Rebuilds the Favorites menu from the starred actions and refreshes each action's star indicator.
+    private void RefreshFavorites()
+    {
+        foreach (var action in _actions)
+            action.RefreshFavorite();
+
+        Favorites.Clear();
+        foreach (var action in _actions.Where(action => action.IsFavorite))
+            Favorites.Add(action);
+        OnPropertyChanged(nameof(HasFavorites));
+    }
 
     [ObservableProperty]
     public partial string Title { get; private set; } = "Toybox Studio";

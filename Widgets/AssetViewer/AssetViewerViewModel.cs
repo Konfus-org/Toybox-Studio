@@ -11,6 +11,7 @@ using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Shell.Panels;
+using Toybox.Studio.Shell.Workspace;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Widgets.Viewport;
 
@@ -23,15 +24,26 @@ namespace Toybox.Studio.Widgets.AssetViewer;
 /// engine interprets the same input deltas as orbit/zoom for an asset-preview view. Clicking an entity
 /// updates the shared <see cref="WorldSelection"/> so the existing Inspector shows it.
 /// </summary>
-public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IViewportInputSink
+public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IViewportInputSink, IAssetViewerHost
 {
-    private readonly ViewportStream? _stream;
     private readonly Session _session;
+    private readonly EngineRpc _engine;
     private readonly AssetCatalog _catalog;
     private readonly WorldSelection _selection;
     private readonly Logger _logger;
-    private readonly Asset? _asset;
     private readonly Action<ConnectionState> _onStateChanged;
+
+    // The previewed asset and its engine view. Both are null until an asset is shown — either claimed from
+    // the launcher on an explicit open, or resolved from the persisted layout state on a restore.
+    private ViewportStream? _stream;
+    private Asset? _asset;
+
+    // The persisted layout state this panel records into / restores from, bound by the window manager when
+    // the dock tool materializes (null until then). The restore listener waits on the asset catalog for the
+    // project to finish loading; _restoreStarted guards against the repeated bind passes a re-template causes.
+    private AssetViewerState? _state;
+    private Action? _restoreListener;
+    private bool _restoreStarted;
 
     // The editor owns the preview palette's labels; it looks up the engine-provided built-in assets by
     // name (they arrive flagged as built-in through editor.listAssets) to get their ids. Built-in meshes
@@ -58,29 +70,10 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
         WorldSelection selection, Logger logger)
     {
         _session = session;
+        _engine = engine;
         _catalog = catalog;
         _selection = selection;
         _logger = logger;
-        _asset = launcher.TakePending();
-
-        // No target asset (e.g. the panel was rematerialized by a layout restore): show the empty
-        // ghost and never start an engine view.
-        if (_asset is { } asset)
-        {
-            _stream = new ViewportStream(session, engine, ViewKind.AssetPreview, asset.Id);
-            _stream.SurfaceArrived += OnSurfaceArrived;
-            _stream.SurfaceLost += OnSurfaceLost;
-
-            // The preview picker: a sky material picks only its projection shape; a model picks a
-            // surface material; a material/texture picks the mesh it shows on. Most also pick a
-            // background sky. The material/sky choices are the engine's built-in assets (sourced from
-            // editor.listAssets, below); meshes/shapes are engine primitives.
-            PreviewOptionLabel =
-                IsSkyMaterial(asset) ? "Shape"
-                : IsModelType(asset.Type) ? "Material"
-                : "Mesh";
-            LoadPreviewOptionsAsync(asset.Type).FireAndForget();
-        }
 
         _onStateChanged = state => Dispatch.To(DispatchContext.UI, () =>
         {
@@ -88,10 +81,17 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
                 ClearSurface();
         });
         session.StateChanged += _onStateChanged;
+
+        // An explicit open hands the asset through the launcher; a layout restore has none here and instead
+        // reloads its remembered asset later (see BindAsset). With neither, the empty ghost shows and no
+        // engine view is ever started.
+        if (launcher.TakePending() is { } asset)
+            Show(asset);
     }
 
-    /// <summary>The dock-tab base title: the previewed asset's name.</summary>
-    public override string BaseTitle => _asset?.Name ?? "Asset Viewer";
+    /// <summary>The dock-tab base title: the previewed asset's name (the remembered name while a restore is
+    /// still resolving, else the generic title).</summary>
+    public override string BaseTitle => _asset?.Name ?? _state?.AssetName ?? "Asset Viewer";
 
     /// <summary>A live preview panel: it buffers nothing and never prompts on close.</summary>
     public override bool IsLive => true;
@@ -142,19 +142,62 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     /// <summary>Set by the interop control when this compositor can't import shared GPU textures.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
+    [NotifyPropertyChangedFor(nameof(GhostMessage))]
     public partial bool InteropUnavailable { get; set; }
+
+    /// <summary>Whether an asset is loaded or in the middle of loading (a restore awaiting the project, or a
+    /// shown asset whose first frame hasn't arrived). Distinguishes the ghost's "loading" from its "empty".</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GhostMessage))]
+    public partial bool IsLoadingTarget { get; private set; }
 
     /// <summary>The empty-state ghost shows until the first frame arrives (or if interop is unavailable).</summary>
     public bool ShowEmptyGhost => !HasFrames || InteropUnavailable;
 
+    /// <summary>The ghost's caption: a real "empty" message when nothing is loaded, a "loading" one only while
+    /// an asset is actually on its way in.</summary>
+    public string GhostMessage =>
+        InteropUnavailable ? "GPU texture sharing is unavailable for this view."
+        : IsLoadingTarget ? "Loading asset…"
+        : "No asset loaded.";
+
     public void Dispose()
     {
         _session.StateChanged -= _onStateChanged;
+        StopListeningForRestore();
         if (_stream is not null)
         {
             _stream.SurfaceArrived -= OnSurfaceArrived;
             _stream.SurfaceLost -= OnSurfaceLost;
             _stream.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Binds the persisted layout state. On an explicit open the asset is already shown, so this records it
+    /// for the layout to save; on a restore the state carries the remembered asset, which is reloaded once
+    /// the project has fully loaded.
+    /// </summary>
+    public void BindAsset(AssetViewerState state)
+    {
+        _state = state;
+
+        if (_asset is { } asset)
+        {
+            // Explicit open: remember what we're showing so a layout save persists it.
+            state.AssetPath = asset.Path;
+            state.AssetName = asset.Name;
+            return;
+        }
+
+        // Layout restore: reload the remembered asset. Guarded so the repeated bind passes a re-template
+        // triggers don't start a second restore.
+        if (!_restoreStarted && !string.IsNullOrEmpty(state.AssetPath))
+        {
+            _restoreStarted = true;
+            IsLoadingTarget = true;             // we're waiting on the project, not empty
+            OnPropertyChanged(nameof(Title));   // surface the remembered name on the tab meanwhile
+            BeginRestore(state.AssetPath);
         }
     }
 
@@ -374,5 +417,86 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     {
         CurrentSurface = null;
         HasFrames = false;
+    }
+
+    // Starts previewing an asset: opens its engine view (its own preview world + orbit camera) and populates
+    // the preview pickers. Called for an explicit open and again when a restore resolves its remembered asset.
+    private void Show(Asset asset)
+    {
+        _asset = asset;
+        IsLoadingTarget = true;             // a frame hasn't arrived yet → the ghost reads "loading"
+        OnPropertyChanged(nameof(Title));   // BaseTitle now resolves to the asset's name
+
+        _stream = new ViewportStream(_session, _engine, ViewKind.AssetPreview, asset.Id);
+        _stream.SurfaceArrived += OnSurfaceArrived;
+        _stream.SurfaceLost += OnSurfaceLost;
+
+        // The preview picker: a sky material picks only its projection shape; a model picks a surface
+        // material; a material/texture picks the mesh it shows on. Most also pick a background sky. The
+        // material/sky choices are the engine's built-in assets (sourced from editor.listAssets); meshes/
+        // shapes are engine primitives.
+        PreviewOptionLabel =
+            IsSkyMaterial(asset) ? "Shape"
+            : IsModelType(asset.Type) ? "Material"
+            : "Mesh";
+        OnPropertyChanged(nameof(PreviewOptionLabel));
+        LoadPreviewOptionsAsync(asset.Type).FireAndForget();
+
+        // Record the now-shown asset so a layout save persists it (no-op on a restore that's reloading the
+        // same path it came from).
+        if (_state is { } state)
+        {
+            state.AssetPath = asset.Path;
+            state.AssetName = asset.Name;
+        }
+    }
+
+    // Reloads a remembered asset (by its stable project-relative path) once the project has fully loaded —
+    // i.e. the engine is connected and its asset catalog is populated. Re-checks on every catalog change so
+    // the initial connect (or a reconnect) is handled. If the asset is gone, logs an error and leaves the
+    // empty ghost rather than starting a dead view.
+    private void BeginRestore(string assetPath)
+    {
+        void TryResolve()
+        {
+            if (_asset is not null)
+                return; // already resolved (a duplicate catalog event)
+
+            // Not fully loaded yet — the catalog is empty until the engine connects and lists its assets
+            // (which always include the built-in preview palette). Keep waiting.
+            if (_session.State != ConnectionState.Connected || _catalog.Assets.Count == 0)
+                return;
+
+            StopListeningForRestore();
+
+            var match = _catalog.Assets.FirstOrDefault(
+                candidate => string.Equals(candidate.Path, assetPath, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                _logger.Error(
+                    $"Asset viewer: the previously open asset '{assetPath}' could not be found; it may have "
+                    + "been moved or deleted. Showing the empty viewer.");
+                IsLoadingTarget = false; // nothing to load → the ghost reads "empty"
+                return;
+            }
+
+            Show(match);
+        }
+
+        // The catalog raises Changed off the UI thread; resolve (and start the engine view) back on it.
+        _restoreListener = () => Dispatch.To(DispatchContext.UI, TryResolve);
+        _catalog.Changed += _restoreListener;
+
+        // Cover the already-loaded case (the project was up before this panel was restored).
+        Dispatch.To(DispatchContext.UI, TryResolve);
+    }
+
+    private void StopListeningForRestore()
+    {
+        if (_restoreListener is { } listener)
+        {
+            _catalog.Changed -= listener;
+            _restoreListener = null;
+        }
     }
 }

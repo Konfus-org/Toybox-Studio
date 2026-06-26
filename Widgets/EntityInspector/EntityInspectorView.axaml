@@ -4,6 +4,7 @@
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              xmlns:search="using:Toybox.Studio.Widgets.Searching"
+             xmlns:cm="using:Toybox.Studio.Widgets.ContextMenu"
              x:Class="Toybox.Studio.Widgets.EntityInspector.EntityInspectorView"
              x:DataType="ecs:WorldViewModel">
 
@@ -13,7 +14,8 @@
         <Border DockPanel.Dock="Top" Background="{DynamicResource ThemeHeaderBrush}"
                 BorderBrush="{DynamicResource ThemeBorderBrush}"
                 BorderThickness="0,0,0,1" Padding="10,7" IsVisible="{Binding HasSelection}">
-            <DockPanel DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel">
+            <DockPanel DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel"
+                       Background="Transparent" cm:MenuOpenBehavior.Menu="entity">
                 <TextBlock DockPanel.Dock="Right" Text="{Binding Subtitle}" Opacity="0.55"
                            VerticalAlignment="Center" HorizontalAlignment="Right" Margin="8,0,0,0"/>
                 <!-- Wholesale enable toggle: a disabled entity is skipped by every runtime system but stays
@@ -59,7 +61,8 @@
                                          card, no gradient): a flat header band, then the embedded grid's rows
                                          flow beneath on the same surface. -->
                                     <StackPanel IsVisible="{Binding #ComponentGrid.HasVisibleItems}">
-                                        <ToggleButton x:Name="CompToggle" Classes="sectionHeader" IsChecked="True">
+                                        <ToggleButton x:Name="CompToggle" Classes="sectionHeader" IsChecked="True"
+                                                      cm:MenuOpenBehavior.Menu="inspector.component">
                                             <DockPanel>
                                                 <!-- Disclosure chevron on the LEFT, before the icon/label. -->
                                                 <Path DockPanel.Dock="Left" Classes="sectionChevron"

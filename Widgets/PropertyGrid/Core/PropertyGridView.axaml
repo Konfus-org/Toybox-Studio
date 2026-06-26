@@ -3,6 +3,7 @@
              xmlns:local="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              xmlns:behaviors="using:Toybox.Studio.Widgets.Behaviors.Animations"
+             xmlns:cm="using:Toybox.Studio.Widgets.ContextMenu"
              x:Class="Toybox.Studio.Widgets.PropertyGrid.PropertyGridView"
              x:Name="Root">
 
@@ -11,6 +12,8 @@
         <ControlTheme x:Key="{x:Type local:PropertyRow}" TargetType="local:PropertyRow">
             <Setter Property="MinHeight" Value="26"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <!-- Right-click a row for its property menu (copy/paste value, reset to default). -->
+            <Setter Property="cm:MenuOpenBehavior.Menu" Value="property"/>
             <Setter Property="Template">
                 <ControlTemplate>
                     <!-- Rows are flat (the card's surface shows through) and separated only by a pressed toy

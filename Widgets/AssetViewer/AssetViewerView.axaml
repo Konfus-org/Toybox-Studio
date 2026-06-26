@@ -14,7 +14,7 @@
                 Surface="{Binding CurrentSurface}"
                 InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
 
-            <ghost:GhostView Message="Loading asset…" IsVisible="{Binding ShowEmptyGhost}"/>
+            <ghost:GhostView Message="{Binding GhostMessage}" IsVisible="{Binding ShowEmptyGhost}"/>
         </Panel>
 
         <!-- Preview pickers, kept as a SIBLING of the input panel (not a child): otherwise a click on a

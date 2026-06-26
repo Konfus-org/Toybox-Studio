@@ -4,6 +4,7 @@
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              xmlns:vtb="using:Toybox.Studio.Widgets.Toolbar"
+             xmlns:cm="using:Toybox.Studio.Widgets.ContextMenu"
              x:Class="Toybox.Studio.Widgets.Viewport.ViewportView"
              x:DataType="local:ViewportViewModel">
 
@@ -106,6 +107,7 @@
                     <Button Classes="billboard"
                             Classes.selected="{Binding IsSelected}"
                             IsVisible="{Binding Visible}"
+                            cm:MenuOpenBehavior.Menu="entity"
                             Command="{Binding $parent[ItemsControl].((local:ViewportViewModel)DataContext).SelectBillboardCommand}"
                             CommandParameter="{Binding Id}"
                             RenderTransform="{Binding $self.Bounds.Width, Converter={x:Static local:CenterXTransformConverter.Instance}}">

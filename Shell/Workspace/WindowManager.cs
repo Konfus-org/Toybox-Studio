@@ -141,6 +141,7 @@ public sealed class WindowManager : Factory
             tool.Content = DeferredContent(descriptor, viewModel);
             BindTitle(tool, viewModel);
             BindToolbar(tool, viewModel);
+            BindAsset(tool, viewModel);
         }
 
         if (dockable is IDock dock && dock.VisibleDockables is { } children)
@@ -343,6 +344,7 @@ public sealed class WindowManager : Factory
             tool.Content = DeferredContent(descriptor, viewModel);
             BindTitle(tool, viewModel);
             BindToolbar(tool, viewModel);
+            BindAsset(tool, viewModel);
             EnsureDockCapabilities(tool);
             return tool;
         }
@@ -351,11 +353,13 @@ public sealed class WindowManager : Factory
     }
 
     // A fresh dock tool for a descriptor: a ToolbarTool (carrying a persisted ToolbarLayout) when the
-    // dockable's view-model hosts a toolbar, otherwise a plain Tool.
+    // dockable's view-model hosts a toolbar, an AssetViewerTool (carrying the persisted previewed asset) when
+    // it previews an asset, otherwise a plain Tool.
     private static Tool NewTool(DockableDescriptor descriptor, string id)
     {
-        Tool tool = typeof(IToolbarHost).IsAssignableFrom(descriptor.ViewModelType)
-            ? new ToolbarTool()
+        Tool tool =
+            typeof(IToolbarHost).IsAssignableFrom(descriptor.ViewModelType) ? new ToolbarTool()
+            : typeof(IAssetViewerHost).IsAssignableFrom(descriptor.ViewModelType) ? new AssetViewerTool()
             : new Tool();
         tool.Id = id;
         tool.Title = descriptor.Title;
@@ -371,6 +375,15 @@ public sealed class WindowManager : Factory
             host.BindToolbar(toolbarTool.Toolbar);
     }
 
+    // Hands an IAssetViewerHost view-model the persisted AssetViewerState its dock tool carries, so the
+    // previewed asset is recorded into (and, on restore, reloaded from) the serialized layout in place.
+    // Idempotent: BindAsset no-ops on the repeated AttachContent passes a re-template triggers.
+    private static void BindAsset(Tool tool, object? viewModel)
+    {
+        if (tool is AssetViewerTool assetTool && viewModel is IAssetViewerHost host)
+            host.BindAsset(assetTool.Asset);
+    }
+
     // Builds a spawned tool bound to a specific view-model, registering it so the deferred template
     // reuses the same instance and the close handler can dispose it.
     private Tool CreateInstanceTool(DockableDescriptor descriptor, string toolId, object viewModel)
@@ -380,6 +393,7 @@ public sealed class WindowManager : Factory
         tool.Content = DeferredContent(descriptor, viewModel);
         BindTitle(tool, viewModel);
         BindToolbar(tool, viewModel);
+        BindAsset(tool, viewModel);
         EnsureDockCapabilities(tool);
         return tool;
     }

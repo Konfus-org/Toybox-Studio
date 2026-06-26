@@ -6,6 +6,7 @@
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
              xmlns:util="using:Toybox.Studio.Widgets.Behaviors" xmlns:anim="using:Toybox.Studio.Widgets.Behaviors.Animations"
              xmlns:wt="using:Toybox.Studio.Widgets.WorldTree"
+             xmlns:cm="using:Toybox.Studio.Widgets.ContextMenu"
              xmlns:conv="using:Avalonia.Data.Converters"
              x:Class="Toybox.Studio.Widgets.WorldTree.WorldTreeView"
              x:DataType="ecs:WorldViewModel">
@@ -140,6 +141,7 @@
                  property row; a parent row also nods in the direction it opens/closes (ExpandNod, bound to its
                  tree node — leaf rows never toggle, so they never nod). -->
             <Border Classes="entityRow" Background="Transparent" anim:Pop.Enabled="True"
+                    cm:MenuOpenBehavior.Menu="entity"
                     anim:ExpandNod.State="{Binding $parent[TreeViewItem].IsExpanded}">
             <DockPanel>
                 <Border DockPanel.Dock="Left" Cursor="SizeAll" Background="Transparent"
@@ -201,9 +203,13 @@
             <!-- Browse the world as two collapsible lists when not searching, each styled like a property-grid
                  list section: Globals first, then the world tree ("Streamed"). Each header carries a "+" that
                  adds an entity to that bucket. A right inset keeps the rows' controls clear of the scrollbar. -->
-            <ScrollViewer IsVisible="{Binding ShowTree}"
+            <!-- Background="Transparent" + the menu on the ScrollViewer make the WHOLE tree area (including the
+                 empty space below the sections) right-clickable to add/paste an entity, not just the rows. -->
+            <ScrollViewer IsVisible="{Binding ShowTree}" Background="Transparent"
+                          cm:MenuOpenBehavior.Menu="background"
                           HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                <StackPanel Spacing="4" Margin="0,0,10,0">
+                <StackPanel Spacing="4" Margin="0,0,10,0" Background="Transparent"
+                            cm:MenuOpenBehavior.Menu="background">
                     <!-- Globals: a collapsible list of full-lifetime residents. The whole bordered area is a
                          drop target — drop an entity here to promote it to global; drag a global out into the
                          tree to demote it. -->
@@ -299,7 +305,8 @@
                      IsVisible="{Binding ShowResults}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="ecs:EntityViewModel">
-                        <TextBlock Text="{Binding Name}"/>
+                        <TextBlock Text="{Binding Name}" Background="Transparent"
+                                   cm:MenuOpenBehavior.Menu="entity"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

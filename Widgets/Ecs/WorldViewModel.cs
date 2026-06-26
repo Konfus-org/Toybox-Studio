@@ -1,3 +1,4 @@
+using Toybox.Studio.Services.Commands;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Utils.Extensions;
@@ -40,7 +41,11 @@ public sealed partial class WorldViewModel : ObservableObject
     private ulong? _pendingRenameId;
 
     public WorldViewModel(
-        WorldManager world, WorldSelection selection, ComponentCatalog components, ScriptCatalog scripts)
+        WorldManager world,
+        WorldSelection selection,
+        ComponentCatalog components,
+        ScriptCatalog scripts,
+        EditorCommands editor)
     {
         _world = world;
         _selection = selection;
@@ -49,6 +54,9 @@ public sealed partial class WorldViewModel : ObservableObject
         world.WorldChanged += snapshot => Dispatch.To(DispatchContext.UI, () => Reconcile(snapshot.Roots));
         selection.SelectionChanged +=
             () => Dispatch.To(DispatchContext.UI, () => ResolveSelection(_selection.SelectedId, reveal: true));
+        // The "Rename" context-menu verb is a view-layer action (inline edit in the tree); EditorCommands
+        // raises it and the world view performs it on the matching row.
+        editor.RenameRequested += id => Dispatch.To(DispatchContext.UI, () => BeginRenameEntity(id));
     }
 
     /// <summary>The shared entity selection (a set, to support multi-select). The world tree's selectors bind
@@ -275,6 +283,14 @@ public sealed partial class WorldViewModel : ObservableObject
         _pendingRenameId = entity.Id;
         await _world.RefreshAsync().ContinueOnSameContext();
         _selection.Select(entity.Id);
+    }
+
+    // Selects an entity and drops it into inline rename — the world-tree action behind the "Rename" menu verb.
+    private void BeginRenameEntity(ulong id)
+    {
+        _selection.Select(id);
+        if (_entities.TryGetValue(id, out var entity))
+            entity.BeginRename();
     }
 
     // Deletes the given entity (or the current selection) and its whole subtree.

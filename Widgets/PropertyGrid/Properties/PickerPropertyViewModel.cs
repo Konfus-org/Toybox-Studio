@@ -41,6 +41,21 @@ public abstract partial class PickerPropertyViewModel : PropertyViewModel
 
     public bool HasReference => CurrentId != 0;
 
+    // A reference is just its id. Read it from the live slot (the base field goes stale once a pick replaces
+    // the token), and accept any integer token on paste — the same shape Copy writes — so a "model" handle
+    // copies and pastes like any other property.
+    public override JToken? CurrentValue => new JValue(CurrentId);
+
+    public override void ApplyValue(JToken token)
+    {
+        var id = token.Type == JTokenType.Integer ? token.Value<ulong>() : 0UL;
+        if (_slot.Set(new JValue(id)))
+        {
+            RefreshDisplay();
+            RaiseCommit();
+        }
+    }
+
     /// <summary>
     /// Clicking the name link: a set reference activates — pickers with somewhere to go override
     /// <see cref="RevealsOnActivate"/> and <see cref="Reveal"/> (an asset reveals in the OS file explorer);
@@ -86,7 +101,7 @@ public abstract partial class PickerPropertyViewModel : PropertyViewModel
     protected abstract string ResolveDisplayName();
 
     /// <summary>The chooser title plus the options to present for this reference type.</summary>
-    protected abstract (string Title, IReadOnlyList<Asset> Options) BuildChoices();
+    protected abstract (string Title, IReadOnlyList<AssetInfo> Options) BuildChoices();
 
     /// <summary>Whether clicking a *set* reference navigates somewhere (default: no — re-open the chooser).</summary>
     protected virtual bool RevealsOnActivate => false;

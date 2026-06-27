@@ -23,7 +23,7 @@ public sealed class ScriptCatalog
     /// <summary>Raised (on the UI thread, with the asset catalog) after the script set is refreshed.</summary>
     public event Action? Changed;
 
-    public IReadOnlyList<Asset> Scripts { get; private set; }
+    public IReadOnlyList<AssetInfo> Scripts { get; private set; }
 
     private void OnAssetsChanged()
     {
@@ -31,5 +31,5 @@ public sealed class ScriptCatalog
         Changed?.Invoke();
     }
 
-    private IReadOnlyList<Asset> Filter() => _assets.Assets.Where(asset => asset.IsScript).ToList();
+    private IReadOnlyList<AssetInfo> Filter() => _assets.Assets.Where(asset => asset.IsScript).ToList();
 }

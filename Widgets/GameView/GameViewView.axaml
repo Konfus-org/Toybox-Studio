@@ -9,7 +9,22 @@
     <!-- The game frame fills the whole panel; the transport (Play/Stop/Pause) is the same movable, data-driven
          toolbar the viewport uses, floating over the frame and positioning itself from its docked edge. -->
     <Panel>
-        <viewport:ViewportView DataContext="{Binding Surface}"/>
+        <!-- ViewportInput captures pointer/keyboard while focused and forwards it to the game; the input
+             panel's DataContext is the game viewport (the input sink). An opaque near-black backdrop makes
+             the panel hit-testable and gives the aspect-preserving image its letterbox/pillarbox bars. The
+             cursor hides while the game requests relative (mouselook) mode AND the panel is focused, so
+             Alt+Esc (which drops focus) hands the cursor back even though the game still requests it. -->
+        <Panel x:Name="Surface" DataContext="{Binding Viewport}" x:DataType="local:GameViewportViewModel"
+               Background="#FF0A0A0E" Focusable="True" viewport:ViewportInput.Enabled="True">
+            <Panel.Cursor>
+                <MultiBinding Converter="{x:Static viewport:RelativeMouseCursorConverter.Instance}">
+                    <Binding Path="RelativeMouse"/>
+                    <Binding Path="IsFocused" ElementName="Surface"/>
+                </MultiBinding>
+            </Panel.Cursor>
+
+            <viewport:ViewportSurfaceView DataContext="{Binding Surface}"/>
+        </Panel>
 
         <toolbar:ToolbarView DataContext="{Binding Transport}"/>
     </Panel>

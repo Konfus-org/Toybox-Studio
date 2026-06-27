@@ -1,13 +1,8 @@
 using Toybox.Studio.Services.Settings;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Dock.Model.Controls;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Toybox.Studio.Services.Logging;
-using Toybox.Studio.Services.Project;
 
 namespace Toybox.Studio.Shell.Workspace;
 

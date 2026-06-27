@@ -10,7 +10,7 @@ namespace Toybox.Studio.Services.EngineApi;
 public sealed record Hello(int ProtocolVersion, string Engine, string App);
 
 /// <summary>The engine's reply to view.start: the new view's id and pixel format.</summary>
-public sealed record ViewInfo(string Name, string Format);
+public sealed record ViewInfo(string Name, string Format, uint WorldId = 0);
 
 /// <summary>
 /// One entity's projected screen position in a <c>view.projectEntities</c> reply: the entity id plus its
@@ -203,22 +203,26 @@ public sealed class EngineRpc : IAsyncDisposable
         NotifyAsync("view.setGizmo", new { Mode = mode });
 
     /// <summary>
-    /// Rebuilds an asset-preview view with a different presentation (fire-and-forget): for a
-    /// material/texture <paramref name="option"/> is a built-in mesh token (or "skybox"/"skysphere" for
-    /// a material); for a model <paramref name="materialId"/> is a built-in surface material id (0 = the
-    /// model's own materials). Built-in ids come from the asset catalog's built-in assets.
+    /// Frames an asset-preview world's orbit camera to the previewed entity's renderable bounds — called by
+    /// the editor after it builds or swaps the previewed entity through the world/entity API.
+    /// <paramref name="worldId"/> is the preview world id returned from <see cref="StartViewAsync"/>.
     /// </summary>
-    public Task SetPreviewOptionAsync(string view, string option, long materialId) =>
-        NotifyAsync(
-            "view.setPreviewOption",
-            new { View = view, Option = option, MaterialId = materialId });
+    public Task<Result> FrameAssetPreviewAsync(uint worldId, CancellationToken ct) =>
+        InvokeAsync("view.frameAssetPreview", new { WorldId = worldId }, ct);
 
     /// <summary>
-    /// Changes an asset-preview view's background sky (fire-and-forget): <paramref name="skyboxId"/> is
-    /// a built-in sky material id (from the asset catalog's built-in assets), or 0 for no sky.
+    /// Ensures an in-memory material instance that shows <paramref name="textureId"/> on the bundled unlit
+    /// preview material, returning its id — the asset viewer sets a Renderer slot to it to show a texture on
+    /// a primitive (a texture isn't itself a material, and the editor can't register in-memory assets).
     /// </summary>
-    public Task SetPreviewSkyboxAsync(string view, long skyboxId) =>
-        NotifyAsync("view.setPreviewSkybox", new { View = view, SkyboxId = skyboxId });
+    public async Task<Result<long>> PreviewTextureMaterialAsync(long textureId, CancellationToken ct)
+    {
+        var result = await InvokeAsync<JObject>(
+            "editor.previewTextureMaterial", new { TextureId = textureId }, ct).ContinueOnAnyContext();
+        return result is { Success: true, Value: { } reply }
+            ? Result<long>.Ok(reply.Value<long>("id"))
+            : Result<long>.Fail(result.Error ?? "The engine returned no result.");
+    }
 
     /// <summary>
     /// Picks the entity under a viewport click. <paramref name="u"/>/<paramref name="v"/> are normalized image

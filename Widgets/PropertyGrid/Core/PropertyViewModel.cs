@@ -160,6 +160,13 @@ public abstract class PropertyViewModel : ObservableObject
     public bool CanReset => ResetToDefault is not null;
 
     /// <summary>
+    /// When this row is an element of a resizable list, the list it belongs to (set by the list as it wires the
+    /// element's reorder/delete affordances); null for any other row. Lets the property context menu offer the
+    /// list-item actions (move up/down, duplicate, delete) on top of the value copy/paste every row has.
+    /// </summary>
+    public ArrayPropertyViewModel? OwningList { get; set; }
+
+    /// <summary>
     /// True when this property's current value differs from its engine default — i.e. it has actually been
     /// set/overridden. Drives the "modified" indicator and revert button. Leaves seed it from the describe
     /// response's <c>is_default</c> flag (at construction and on each <see cref="Sync"/>); composites aggregate
@@ -213,10 +220,14 @@ public abstract class PropertyViewModel : ObservableObject
     };
 
     /// <summary>
-    /// This leaf's current value as a bare JSON token, or null for composites/widgets that don't expose a
-    /// single scalar. Used to compare against a known default (the settings grid) without a per-type cast.
+    /// This row's current value as a bare JSON token — the unit copy/paste and reset operate on. The default
+    /// is the live backing token the row was built from, which is correct for every composite/aggregate row
+    /// (vector/quaternion/colour/struct/list), whose container is mutated in place and so stays current. Leaf
+    /// widgets that REPLACE their token on edit (anything backed by a <see cref="JsonValueSlot"/> — number,
+    /// string, bool, dropdown, picker) leave the base field stale, so they override this to read their live
+    /// value instead. Null only when there genuinely is no value (a header-style row).
     /// </summary>
-    public virtual JToken? CurrentValue => null;
+    public virtual JToken? CurrentValue => _value;
 
     /// <summary>
     /// Applies a header/value search across this row and its subtree, setting <see cref="Visible"/>
@@ -248,11 +259,19 @@ public abstract class PropertyViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Sets this leaf's value from a bare JSON token, going through the same path as a user edit (so it
-    /// persists and the bound control refreshes). No-op for composites/widgets without a scalar value.
-    /// Used by the reset affordance to restore a known default.
+    /// Sets this row's value from a bare JSON token, going through the same path as a user edit (so it persists
+    /// and the bound controls refresh). Used by the reset affordance and by clipboard paste. The default
+    /// re-parses the token into a property node and refreshes this row in place from it — which writes the live
+    /// backing tokens (with the commit suppressed) exactly as a user edit would — then commits once; a row
+    /// whose shape can't take the value (the in-place refresh reports a mismatch) is left unchanged. Widgets
+    /// whose value is a single replaced token override this to write straight through their slot instead.
     /// </summary>
-    public virtual void ApplyValue(JToken token) { }
+    public virtual void ApplyValue(JToken token)
+    {
+        var node = JsonParser.ParseValueNode(RawName, token);
+        if (Sync(node))
+            RaiseCommit();
+    }
 
     /// <summary>
     /// Refreshes this row's displayed value(s) from a fresh snapshot of the same property, WITHOUT persisting

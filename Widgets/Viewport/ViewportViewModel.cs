@@ -18,42 +18,37 @@ using Toybox.Studio.Widgets.Toolbar;
 namespace Toybox.Studio.Widgets.Viewport;
 
 /// <summary>
-/// The reusable "frame surface": shows one engine view (an editor camera or the game camera) by
-/// handing its shared GPU texture to a <see cref="CompositionInteropViewport"/>, which the
-/// compositor samples directly — no CPU readback, no per-frame upload. Each instance owns its own
-/// <see cref="ViewportStream"/>, so several can stream side by side; disposing it stops the engine
-/// view. Used directly by every editor viewport instance and embedded by the game view.
+/// The editor viewport: a free editor camera over the live world, shown by handing the engine view's
+/// shared GPU texture to a <see cref="ViewportSurfaceView"/> (the reusable surface primitive), with the
+/// editor's own concerns layered on top — the clickable billboard overlay, marquee box-select, click
+/// picking, and the movable transform toolbar. Each instance owns its own <see cref="ViewportSurfaceViewModel"/>
+/// (and through it a <see cref="ViewportStream"/>), so several editor viewports can stream side by side;
+/// disposing it stops the engine view. The game panel and the asset preview compose the same surface
+/// primitive with their own policies instead of this view-model.
 /// </summary>
 public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewportInputSink, IToolbarHost
 {
-    private readonly ViewportStream _stream;
-    private readonly Action<ConnectionState> _onStateChanged;
-    private readonly Action<EngineState> _onWatcherStateChanged;
-    private readonly Action<string>? _onMouseLockChanged;
+    private readonly ViewportSurfaceViewModel _surface;
     private readonly Action<bool> _onWorldDirtyChanged;
-    private readonly Session _session;
     private readonly EngineWatcher _watcher;
     private readonly WorldManager _world;
     private readonly WorldSelection _selection;
     private readonly GizmoTool _gizmoTool;
     private readonly ToolCommandRunner _toolCommandRunner;
     private readonly ToolbarState _toolbarState;
-    private readonly Logger _logger;
 
-    private readonly ViewKind _kind;
-
-    // The billboard overlay (editor views only): the live billboards keyed by entity id, and a flat
-    // id→entity map of the current world snapshot used to resolve each billboard's name + icon stack.
+    // The billboard overlay: the live billboards keyed by entity id, and a flat id→entity map of the
+    // current world snapshot used to resolve each billboard's name + icon stack.
     private readonly Dictionary<ulong, BillboardViewModel> _billboardsById = [];
     private readonly Dictionary<ulong, EntityDescription> _entitiesById = [];
-    private readonly Action<WorldDescription>? _onWorldChanged;
-    private readonly Action? _onSelectionChanged;
+    private readonly Action<WorldDescription> _onWorldChanged;
+    private readonly Action _onSelectionChanged;
     // The editor owns the billboard cadence: it polls the engine for entity screen positions (the engine
     // answers on request and never pushes), then refreshes each visible icon's occlusion on a slower
     // timer. Both run off the render frame rate. _billboardPollInFlight drops a tick whose poll hasn't
     // returned yet so requests can't pile up.
-    private readonly DispatcherTimer? _billboardTimer;
-    private readonly DispatcherTimer? _occlusionTimer;
+    private readonly DispatcherTimer _billboardTimer;
+    private readonly DispatcherTimer _occlusionTimer;
     private bool _billboardPollInFlight;
 
     // The occlusion query is a round-trip, so it is skipped while the visible icons haven't moved on screen
@@ -66,28 +61,27 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     public ViewportViewModel(
         Session session, Func<ViewKind, ViewportStream> streamFactory, Logger logger, EngineWatcher watcher,
         WorldManager world, WorldSelection selection, GizmoTool gizmoTool, ToolCommandRunner toolCommandRunner,
-        ToolbarState toolbarState, ViewKind kind = ViewKind.Editor)
+        ToolbarState toolbarState)
     {
-        _session = session;
         _watcher = watcher;
         _world = world;
         _selection = selection;
         _gizmoTool = gizmoTool;
         _toolCommandRunner = toolCommandRunner;
         _toolbarState = toolbarState;
-        _logger = logger;
-        _kind = kind;
         _gizmoTool.Changed += OnGizmoToolChanged;
 
         // Editor viewports carry a movable, data-driven toolbar. Seed a default now so a viewport restored
         // from a pre-toolbar layout still shows one; BindToolbar swaps in the persisted layout when the dock
-        // tool that owns it materializes. The game panel never shows a toolbar.
-        if (!IsGame)
-            Toolbar = new ToolbarViewModel(ToolbarLayout.Default(), _toolCommandRunner, _toolbarState, _watcher);
+        // tool that owns it materializes.
+        Toolbar = new ToolbarViewModel(ToolbarLayout.Default(), _toolCommandRunner, _toolbarState, _watcher);
 
-        _stream = streamFactory(kind);
-        _stream.SurfaceArrived += OnSurfaceArrived;
-        _stream.SurfaceLost += OnSurfaceLost;
+        // The reusable surface primitive owns the engine-view stream, the shared GPU texture, and the
+        // loading/empty ghost; this view-model layers the editor concerns (billboards, marquee, toolbar)
+        // on top. Re-raise ShowToolbar when the surface gains/loses frames.
+        _surface = new ViewportSurfaceViewModel(session, watcher, logger, ViewKind.Editor);
+        _surface.Prepare(streamFactory(ViewKind.Editor));
+        _surface.PropertyChanged += OnSurfacePropertyChanged;
 
         // The viewport shows the live world, so its tab carries the world's unsaved-changes '*'. No Save/Cancel
         // footer: it isn't a document — saving the world is an explicit editor action elsewhere.
@@ -95,47 +89,23 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
         _onWorldDirtyChanged = dirty => Dispatch.To(DispatchContext.UI, () => IsDirty = dirty);
         world.DirtyChanged += _onWorldDirtyChanged;
 
-        _onStateChanged = state => Dispatch.To(DispatchContext.UI, () =>
-        {
-            if (state != ConnectionState.Connected)
-            {
-                ClearSurface();
-                RelativeMouse = false;
-            }
-        });
-        // The watcher already raises on the UI thread; re-derive the ghost state whenever it changes.
-        _onWatcherStateChanged = _ => Dispatch.To(DispatchContext.UI, OnLoadingChanged);
-        session.StateChanged += _onStateChanged;
-        watcher.StateChanged += _onWatcherStateChanged;
+        // The clickable name/icon billboard overlay: the editor polls the engine for each entity's projected
+        // screen position (the engine answers on request, never pushes); names + icon stacks come from the
+        // world snapshot.
+        RebuildEntityMap(_world.Current);
+        _onWorldChanged = snapshot => Dispatch.To(DispatchContext.UI, () => OnWorldChanged(snapshot));
+        _onSelectionChanged = () => Dispatch.To(DispatchContext.UI, ApplyBillboardSelection);
+        _world.WorldChanged += _onWorldChanged;
+        _selection.SelectionChanged += _onSelectionChanged;
 
-        // Only the game panel mirrors the game's mouse-lock mode; editor viewports keep a normal cursor.
-        if (IsGame)
-        {
-            _onMouseLockChanged = mode =>
-                Dispatch.To(DispatchContext.UI, () => RelativeMouse = mode == "relative");
-            _stream.MouseLockModeChanged += _onMouseLockChanged;
-        }
+        // Poll positions ~30 Hz so the overlay tracks the camera; refresh occlusion on a slower beat.
+        _billboardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+        _billboardTimer.Tick += OnBillboardTick;
+        _billboardTimer.Start();
 
-        // The clickable name/icon billboard overlay is editor-only. The editor polls the engine for each
-        // entity's projected screen position (the engine answers on request, never pushes); names + icon
-        // stacks come from the world snapshot.
-        if (!IsGame)
-        {
-            RebuildEntityMap(_world.Current);
-            _onWorldChanged = world => Dispatch.To(DispatchContext.UI, () => OnWorldChanged(world));
-            _onSelectionChanged = () => Dispatch.To(DispatchContext.UI, ApplyBillboardSelection);
-            _world.WorldChanged += _onWorldChanged;
-            _selection.SelectionChanged += _onSelectionChanged;
-
-            // Poll positions ~30 Hz so the overlay tracks the camera; refresh occlusion on a slower beat.
-            _billboardTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
-            _billboardTimer.Tick += OnBillboardTick;
-            _billboardTimer.Start();
-
-            _occlusionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
-            _occlusionTimer.Tick += OnOcclusionTick;
-            _occlusionTimer.Start();
-        }
+        _occlusionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+        _occlusionTimer.Tick += OnOcclusionTick;
+        _occlusionTimer.Start();
     }
 
     /// <summary>The dock-tab base title; the '*' is appended by <see cref="DataPanel"/> while the world is dirty.</summary>
@@ -145,22 +115,19 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     /// Save/Cancel footer, and never prompts on tab close. Saving persists the live world.</summary>
     public override bool IsLive => true;
 
-    /// <summary>Whether this surface shows the game (vs an editor viewport).</summary>
-    public bool IsGame => _kind == ViewKind.Game;
+    /// <summary>The editor viewport keeps a normal cursor — no mouselook.</summary>
+    public bool WantsPointerLock => false;
+
+    /// <summary>A right-tap opens the entity/background context menu.</summary>
+    public bool AllowsContextMenu => true;
+
+    /// <summary>Whether a left-drag should box-select — only with the select tool active (a transform tool
+    /// reserves the left-drag for its gizmo).</summary>
+    public bool AllowsMarquee => _gizmoTool.Mode == GizmoMode.None;
 
     /// <summary>
-    /// Whether the playing game has requested relative-mouse (mouselook) mode. The game panel hides and
-    /// re-centres the cursor while true; always false for editor viewports.
-    /// </summary>
-    [ObservableProperty]
-    public partial bool RelativeMouse { get; private set; }
-
-    /// <summary>Whether a left-drag should box-select — only with the select tool (and never the game).</summary>
-    public bool MarqueeEnabled => !IsGame && _gizmoTool.Mode == GizmoMode.None;
-
-    /// <summary>
-    /// The viewport's movable, data-driven toolbar (the transform tools by default), or null for the game
-    /// panel. The view-model is bound to the persisted <see cref="ToolbarLayout"/> via <see cref="BindToolbar"/>.
+    /// The viewport's movable, data-driven toolbar (the transform tools by default). The view-model is bound
+    /// to the persisted <see cref="ToolbarLayout"/> via <see cref="BindToolbar"/>.
     /// </summary>
     [ObservableProperty]
     public partial ToolbarViewModel? Toolbar { get; private set; }
@@ -183,7 +150,7 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
 
     /// <summary>
     /// The editor viewport's billboard overlay: one entry per visible entity (name label + component icon
-    /// stack), positioned in control space and clickable to select. Empty for the game view.
+    /// stack), positioned in control space and clickable to select.
     /// </summary>
     public ObservableCollection<BillboardViewModel> Billboards { get; } = [];
 
@@ -195,42 +162,18 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     public partial Rect OverlayBounds { get; set; }
 
     /// <summary>
-    /// The engine view's shared GPU texture, bound by the view into the interop control. Null while
-    /// there is nothing to show (disconnected, not yet ready, or GPU sharing unavailable).
+    /// The reusable surface primitive (engine-view stream + shared GPU texture + ghost state). The view
+    /// embeds a <see cref="ViewportSurfaceView"/> bound to this; the editor concerns here read its
+    /// <see cref="ViewportSurfaceViewModel.CurrentSurface"/> and <see cref="ViewportSurfaceViewModel.HasFrames"/>.
     /// </summary>
-    [ObservableProperty]
-    public partial ViewSurface? CurrentSurface { get; private set; }
+    public ViewportSurfaceViewModel Surface => _surface;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
-    [NotifyPropertyChangedFor(nameof(ShowToolbar))]
-    public partial bool HasFrames { get; private set; }
+    // The bound engine-view link for this view's queries (pick / project / occlusion). The surface is
+    // Prepared in the constructor and only dropped on Dispose, so the stream is present for the VM's life.
+    private ViewportStream Stream => _surface.Stream!;
 
-    /// <summary>The viewport toolbar shows over an editor viewport once it has frames (never the game).</summary>
-    public bool ShowToolbar => !IsGame && HasFrames;
-
-    /// <summary>
-    /// Set by the interop control (bound one-way to source) when this editor's compositor can't
-    /// import shared GPU textures. Forces the empty ghost so the viewport is never silently black.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
-    public partial bool InteropUnavailable { get; set; }
-
-    /// <summary>The phase text shown by the loading ghost (e.g. "Compiling project…").</summary>
-    public string LoadingMessage => _watcher.StatusMessage;
-
-    /// <summary>
-    /// The loading ghost shows while compiling or loading. A play transition ("Loading into game…")
-    /// is the game's load, so only the game viewport shows it — editor viewports keep their live frame.
-    /// </summary>
-    public bool ShowLoadingGhost =>
-        (_watcher.State is EngineState.Compiling or EngineState.Loading)
-        && (!_watcher.IsGameLoad || IsGame);
-
-    /// <summary>The empty-state ghost shows when there's nothing to draw (or we can't draw it) and
-    /// the loading ghost isn't up (it owns the busy state), so the two never overlap.</summary>
-    public bool ShowEmptyGhost => (!HasFrames || InteropUnavailable) && !ShowLoadingGhost;
+    /// <summary>The viewport toolbar shows once the viewport has frames.</summary>
+    public bool ShowToolbar => _surface.HasFrames;
 
     /// <summary>File ▸ Save on a focused viewport persists the live world.</summary>
     public override Task SaveAsync() => _world.SaveAsync();
@@ -238,46 +181,29 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     /// <summary>Stops this surface's engine view and unhooks from the session.</summary>
     public void Dispose()
     {
-        _stream.SurfaceArrived -= OnSurfaceArrived;
-        _stream.SurfaceLost -= OnSurfaceLost;
-        _session.StateChanged -= _onStateChanged;
-        _watcher.StateChanged -= _onWatcherStateChanged;
+        _surface.PropertyChanged -= OnSurfacePropertyChanged;
         _world.DirtyChanged -= _onWorldDirtyChanged;
         _gizmoTool.Changed -= OnGizmoToolChanged;
-        if (_onMouseLockChanged is not null)
-            _stream.MouseLockModeChanged -= _onMouseLockChanged;
-        if (_onWorldChanged is not null)
-            _world.WorldChanged -= _onWorldChanged;
-        if (_onSelectionChanged is not null)
-            _selection.SelectionChanged -= _onSelectionChanged;
-        if (_billboardTimer is not null)
-        {
-            _billboardTimer.Stop();
-            _billboardTimer.Tick -= OnBillboardTick;
-        }
-        if (_occlusionTimer is not null)
-        {
-            _occlusionTimer.Stop();
-            _occlusionTimer.Tick -= OnOcclusionTick;
-        }
+        _world.WorldChanged -= _onWorldChanged;
+        _selection.SelectionChanged -= _onSelectionChanged;
+        _billboardTimer.Stop();
+        _billboardTimer.Tick -= OnBillboardTick;
+        _occlusionTimer.Stop();
+        _occlusionTimer.Tick -= OnOcclusionTick;
         Toolbar?.Dispose();
-        _stream.Dispose();
+        _surface.Dispose();
     }
 
-    /// <summary>Forwards captured viewport input to this surface's engine view, including the cursor mapped
-    /// to normalized image coordinates (for the gizmo).</summary>
-    public void ForwardInput(ViewportInputPayload payload)
-    {
-        var cursorU = 0.0;
-        var cursorV = 0.0;
-        if (CurrentSurface is { } surface)
-            (cursorU, cursorV) = ViewportMapping.NormalizeClamped(
-                payload.MouseX, payload.MouseY, payload.ControlWidth, payload.ControlHeight,
-                surface.Width, surface.Height);
+    /// <summary>Forwards captured viewport input to this surface's engine view (cursor mapping and the
+    /// engine relay live in the surface primitive).</summary>
+    public void ForwardInput(ViewportInputPayload payload) => _surface.ForwardInput(payload);
 
-        _stream.SendInput(
-            payload.Focused, payload.Buttons, payload.MoveKeys, payload.Keys,
-            payload.MouseX, payload.MouseY, payload.Dx, payload.Dy, payload.Wheel, cursorU, cursorV);
+    // Re-raise the toolbar's visibility when the surface gains or loses frames (the billboards overlay
+    // binds directly to Surface.HasFrames).
+    private void OnSurfacePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ViewportSurfaceViewModel.HasFrames))
+            Dispatch.To(DispatchContext.UI, () => OnPropertyChanged(nameof(ShowToolbar)));
     }
 
     /// <summary>
@@ -286,27 +212,24 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     /// </summary>
     public void BindToolbar(ToolbarLayout layout)
     {
-        if (IsGame || ReferenceEquals(Toolbar?.Layout, layout))
+        if (ReferenceEquals(Toolbar?.Layout, layout))
             return;
 
         Toolbar?.Dispose();
         Toolbar = new ToolbarViewModel(layout, _toolCommandRunner, _toolbarState, _watcher);
     }
 
-    /// <summary>Stops play mode (the game view's Esc); the engine and viewports keep running.</summary>
-    public void StopGame() => _session.StopPlayAsync().FireAndForget();
+    /// <summary>The editor viewport doesn't consume Esc (only the game view does, to stop play).</summary>
+    public bool HandleEscape() => false;
 
     /// <summary>
-    /// Picks the entity at a viewport click and updates the shared selection. The point is in control space;
-    /// it's mapped to the rendered image, then the engine resolves the hit. A miss (the engine resolves no
-    /// entity) clears the selection unless this is an additive (Shift) click. No-op for the game.
+    /// A viewport tap (left click that wasn't a drag): picks the entity at the point and updates the shared
+    /// selection. The point is in control space; it's mapped to the rendered image, then the engine resolves
+    /// the hit. A miss clears the selection unless this is an additive (Shift) click.
     /// </summary>
-    public void Pick(double pointerX, double pointerY, double controlWidth, double controlHeight, bool additive)
+    public void Tap(double pointerX, double pointerY, double controlWidth, double controlHeight, bool additive)
     {
-        if (IsGame)
-            return;
-
-        var surface = CurrentSurface;
+        var surface = _surface.CurrentSurface;
         if (surface is null
             || !ViewportMapping.TryNormalize(
                 pointerX, pointerY, controlWidth, controlHeight, surface.Width, surface.Height,
@@ -340,10 +263,8 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
         double controlWidth, double controlHeight, bool additive)
     {
         MarqueeVisible = false;
-        if (IsGame)
-            return;
 
-        var surface = CurrentSurface;
+        var surface = _surface.CurrentSurface;
         if (surface is null)
             return;
 
@@ -369,7 +290,7 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     // up, and skipped entirely until the view has frames to overlay.
     private void OnBillboardTick(object? sender, EventArgs e)
     {
-        if (!HasFrames || _billboardPollInFlight)
+        if (!_surface.HasFrames || _billboardPollInFlight)
             return;
 
         _billboardPollInFlight = true;
@@ -378,7 +299,7 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
 
     private async Task PollBillboardsAsync()
     {
-        var result = await _stream.ProjectEntitiesAsync().ContinueOnAnyContext();
+        var result = await Stream.ProjectEntitiesAsync().ContinueOnAnyContext();
         Dispatch.To(DispatchContext.UI, () =>
         {
             _billboardPollInFlight = false;
@@ -433,7 +354,7 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
     // Reprojects a billboard's normalized position into control space for the current overlay + surface size.
     private void UpdateBillboardPosition(BillboardViewModel billboard)
     {
-        if (CurrentSurface is not { } surface || OverlayBounds is { Width: <= 0 } or { Height: <= 0 })
+        if (_surface.CurrentSurface is not { } surface || OverlayBounds is { Width: <= 0 } or { Height: <= 0 })
             return;
 
         var (x, y) = ViewportMapping.Unnormalize(
@@ -501,7 +422,7 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
 
     private async Task RefreshOcclusionAsync(IReadOnlyList<BillboardViewModel> billboards, IReadOnlyList<ulong> ids)
     {
-        var result = await _stream.QueryOcclusionAsync(ids).ContinueOnAnyContext();
+        var result = await Stream.QueryOcclusionAsync(ids).ContinueOnAnyContext();
         if (!result.Success)
             return; // Leave the last-known visibility on a transient failure.
 
@@ -535,11 +456,11 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
             .ToList();
 
     private void OnGizmoToolChanged() =>
-        Dispatch.To(DispatchContext.UI, () => OnPropertyChanged(nameof(MarqueeEnabled)));
+        Dispatch.To(DispatchContext.UI, () => OnPropertyChanged(nameof(AllowsMarquee)));
 
     private async Task PickAtAsync(double u, double v, bool additive)
     {
-        var result = await _stream.PickAsync(u, v).ContinueOnAnyContext();
+        var result = await Stream.PickAsync(u, v).ContinueOnAnyContext();
         if (!result.Success)
             return; // Engine gone or no rendering service; leave the selection untouched.
 
@@ -560,9 +481,29 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
         });
     }
 
+    /// <inheritdoc/>
+    public async Task<ulong?> PickAndSelectForMenuAsync(
+        double x, double y, double controlWidth, double controlHeight)
+    {
+        var surface = _surface.CurrentSurface;
+        if (surface is null
+            || !ViewportMapping.TryNormalize(
+                x, y, controlWidth, controlHeight, surface.Width, surface.Height, out var u, out var v))
+            return null;
+
+        // Stay on the UI thread (ContinueOnSameContext) so the selection is set before the caller builds the
+        // entity menu against it — no marshalling race. A miss leaves the selection alone (→ background menu).
+        var result = await Stream.PickAsync(u, v).ContinueOnSameContext();
+        if (!result.Success || result.Value is not { } hit)
+            return null;
+
+        _selection.Set(hit);
+        return hit;
+    }
+
     private async Task PickRectAsync(double u0, double v0, double u1, double v1, bool additive)
     {
-        var result = await _stream.PickRectAsync(u0, v0, u1, v1).ContinueOnAnyContext();
+        var result = await Stream.PickRectAsync(u0, v0, u1, v1).ContinueOnAnyContext();
         if (!result.Success)
             return;
 
@@ -574,50 +515,5 @@ public sealed partial class ViewportViewModel : DataPanel, IDisposable, IViewpor
             else
                 _selection.SetMany(ids);
         });
-    }
-
-    private void OnLoadingChanged()
-    {
-        OnPropertyChanged(nameof(LoadingMessage));
-        OnPropertyChanged(nameof(ShowLoadingGhost));
-        OnPropertyChanged(nameof(ShowEmptyGhost));
-    }
-
-    partial void OnInteropUnavailableChanged(bool value)
-    {
-        if (value)
-            _logger.Error(
-                "This editor's compositor cannot import shared GPU textures (composition GPU interop "
-                + "unavailable), so engine viewports cannot be displayed. Ensure the editor and engine "
-                + "run on the same GPU adapter.");
-    }
-
-    private void OnSurfaceArrived(ViewSurface surface) =>
-        Dispatch.To(DispatchContext.UI, () => ApplySurface(surface));
-
-    private void OnSurfaceLost() =>
-        Dispatch.To(DispatchContext.UI, ClearSurface);
-
-    private void ApplySurface(ViewSurface surface)
-    {
-        if (surface.Handle == 0)
-        {
-            // The engine logs the underlying reason (and streams it to our console); note it here too
-            // so it's clear the empty viewport is a capability gap, not a missing world.
-            _logger.Warning(
-                $"GPU texture sharing is unavailable for this view; the viewport will stay empty. "
-                + "See the engine log for the driver/adapter reason.");
-            ClearSurface();
-            return;
-        }
-
-        CurrentSurface = surface;
-        HasFrames = true;
-    }
-
-    private void ClearSurface()
-    {
-        CurrentSurface = null;
-        HasFrames = false;
     }
 }

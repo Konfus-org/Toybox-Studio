@@ -120,6 +120,10 @@
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="Layout">
+                    <MenuItem Header="{Binding SaveLayoutAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                              Command="{Binding SaveLayoutAction.Command}"/>
+                    <MenuItem Header="{Binding LoadLayoutAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                              Command="{Binding LoadLayoutAction.Command}"/>
                     <MenuItem Header="{Binding ResetLayoutAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
                               Command="{Binding ResetLayoutAction.Command}"/>
                 </MenuItem>

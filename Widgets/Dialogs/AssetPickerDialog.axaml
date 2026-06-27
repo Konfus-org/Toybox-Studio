@@ -33,7 +33,7 @@
                          SelectedItem="{Binding SelectedAsset}"
                          behaviors:DoubleTapCommand.Command="{Binding SelectCommand}">
                     <ListBox.ItemTemplate>
-                        <DataTemplate x:DataType="project:Asset">
+                        <DataTemplate x:DataType="project:AssetInfo">
                             <StackPanel Margin="2,3">
                                 <TextBlock Text="{Binding Name}"/>
                                 <TextBlock Text="{Binding Type}" Opacity="0.55" FontSize="{DynamicResource ThemeFontSizeSmall}"/>

@@ -12,7 +12,6 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Toybox.Studio.Shell;
-using Toybox.Studio.Services.AssetViewing;
 using Toybox.Studio.Widgets.Ecs;
 using Toybox.Studio.Widgets.LogConsole;
 using Toybox.Studio.Widgets.Status;
@@ -316,7 +315,6 @@ public partial class App : Application
         services.AddSingleton<EditorCommands>();
         services.AddSingleton<ToolCommandRunner>();
         services.AddSingleton<FavoritesManager>();
-        services.AddSingleton<MenuCatalog>();
         services.AddSingleton<ContextMenuService>();
         services.AddSingleton<Session>();
         services.AddSingleton<EngineWatcher>();
@@ -362,7 +360,7 @@ public partial class App : Application
         // thread, before teardown, while the DockControl is still alive.
         try
         {
-            _host.Services.GetRequiredService<WorkspaceViewModel>().SaveCurrentLayout();
+            _host.Services.GetRequiredService<WorkspaceViewModel>().SaveLastLayout();
         }
         catch (Exception)
         {

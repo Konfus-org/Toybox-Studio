@@ -9,8 +9,8 @@ using Toybox.Studio.Widgets.Viewport;
 namespace Toybox.Studio.Widgets.GameView;
 
 /// <summary>
-/// The Game view: shows exactly what the game camera sees (a frame <see cref="Surface"/> streaming the
-/// engine's mirrored game camera) and hosts the Play/Stop/Pause <see cref="Transport"/> — the same
+/// The Game panel: a <see cref="GameViewportViewModel"/> frame (streaming the engine's mirrored game
+/// camera and forwarding raw input) plus the Play/Stop/Pause <see cref="Transport"/> — the same
 /// data-driven toolbar the viewport uses, seeded with the transport tools (whose game-mode conditions show
 /// Play while stopped and Stop/Pause while playing). Single-instance, so its surface streams for the app's
 /// lifetime.
@@ -19,18 +19,15 @@ public sealed class GameViewViewModel : ObservableObject, IDisposable
 {
     public GameViewViewModel(
         Session session, Func<ViewKind, ViewportStream> streamFactory, Logger logger, EngineWatcher watcher,
-        WorldManager world, WorldSelection selection, GizmoTool gizmoTool, ToolCommandRunner toolCommandRunner,
-        ToolbarState toolbarState)
+        ToolCommandRunner toolCommandRunner, ToolbarState toolbarState)
     {
         Transport = new ToolbarViewModel(
             ToolbarLayout.GameTransport(), toolCommandRunner, toolbarState, watcher);
-        Surface = new ViewportViewModel(
-            session, streamFactory, logger, watcher, world, selection, gizmoTool, toolCommandRunner,
-            toolbarState, ViewKind.Game);
+        Viewport = new GameViewportViewModel(session, streamFactory, watcher, logger);
     }
 
-    /// <summary>The frame surface bound to the engine's game-camera mirror.</summary>
-    public ViewportViewModel Surface { get; }
+    /// <summary>The game viewport (frame surface + game input policy).</summary>
+    public GameViewportViewModel Viewport { get; }
 
     /// <summary>The Play/Stop/Pause transport toolbar.</summary>
     public ToolbarViewModel Transport { get; }
@@ -38,6 +35,6 @@ public sealed class GameViewViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         Transport.Dispose();
-        Surface.Dispose();
+        Viewport.Dispose();
     }
 }

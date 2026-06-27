@@ -11,8 +11,8 @@
              deltas as orbit/zoom for an asset-preview view; a clean left click picks. -->
         <Panel x:Name="Surface" Background="#FF0A0A0E" Focusable="True" vp:ViewportInput.Enabled="True">
             <vp:CompositionInteropViewport
-                Surface="{Binding CurrentSurface}"
-                InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
+                Surface="{Binding Surface.CurrentSurface}"
+                InteropUnavailable="{Binding Surface.InteropUnavailable, Mode=OneWayToSource}"/>
 
             <ghost:GhostView Message="{Binding GhostMessage}" IsVisible="{Binding ShowEmptyGhost}"/>
         </Panel>

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using Toybox.Studio.Services.Clipboard;
 using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.Logging;
@@ -13,18 +12,16 @@ using Toybox.Studio.Utils;
 namespace Toybox.Studio.Services.Commands;
 
 /// <summary>
-/// Runs the editor-side verbs a data-driven context-menu (or toolbar) command names with an <c>editor.*</c>
-/// method — the ones the engine can't do directly because they coordinate selection, the clipboard, or the
-/// world's dirty/refresh cycle (delete, move up/down, duplicate, rename, enable/disable, make global, and
-/// cut/copy/paste of entities and components). The toolbar's <c>ToolCommandRunner</c> delegates any
-/// <c>editor.*</c> step it doesn't itself own (play/stop/pause) to <see cref="RunAsync"/>, passing the
-/// <see cref="MenuContext"/> the menu was opened with. Entity verbs act on the current
-/// <see cref="WorldSelection"/> (the menu-open gesture selects first); component verbs use the context.
+/// The editor-side actions a context menu invokes — the ones the engine can't do directly because they
+/// coordinate the selection, the clipboard, or the world's dirty/refresh cycle (delete, move, duplicate,
+/// rename, enable/disable, make global, add, and cut/copy/paste of entities and components). The code-driven
+/// menus in <see cref="Widgets.ContextMenu.ContextMenuService"/> bind each row straight to one of these
+/// methods, and gate a row's visibility on the matching predicate (e.g. <see cref="CanMoveUp"/>,
+/// <see cref="SelectionHasGlobal"/>). Entity actions operate on the current <see cref="WorldSelection"/> (the
+/// menu-open gesture selects first); component actions use the supplied <see cref="MenuContext"/>.
 /// </summary>
 public sealed class EditorCommands
 {
-    private const string ScriptContainerComponent = "script_container";
-
     private readonly WorldManager _world;
     private readonly WorldSelection _selection;
     private readonly Clipboard.Clipboard _clipboard;
@@ -39,73 +36,15 @@ public sealed class EditorCommands
         _log = log;
     }
 
-    /// <summary>Raised when a "Rename" command asks the world view to drop the entity into inline rename (a
+    /// <summary>Raised when a "Rename" action asks the world view to drop the entity into inline rename (a
     /// view-layer action the world view owns; <see cref="Widgets.Ecs.WorldViewModel"/> subscribes).</summary>
     public event Action<ulong>? RenameRequested;
 
-    /// <summary>
-    /// Runs one editor verb. Recognises the <c>editor.*</c> methods below and returns success for anything else
-    /// so an unknown verb is skipped rather than failing the whole command. Each verb does its own error
-    /// surfacing (a popup) and world refresh, so it returns <see cref="Result.Ok"/> even on a handled failure.
-    /// </summary>
-    public async Task<Result> RunAsync(string method, JObject? @params, MenuContext? context, CancellationToken ct)
-    {
-        switch (method)
-        {
-            case "editor.entity.delete":
-                await DeleteAsync().ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.entity.moveUp":
-                await MoveAsync(up: true).ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.entity.moveDown":
-                await MoveAsync(up: false).ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.entity.duplicate":
-                await DuplicateAsync().ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.entity.rename":
-                Rename(context);
-                return Result.Ok();
-            case "editor.entity.toggleEnabled":
-                await ToggleEnabledAsync().ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.entity.setGlobal":
-                await SetGlobalAsync(@params?["global"]?.Value<bool>() ?? true).ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.entity.add":
-                await AddAsync(@params?["global"]?.Value<bool>() ?? false).ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.clipboard.copy":
-                await CopyEntityAsync().ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.clipboard.cut":
-                await CopyEntityAsync().ContinueOnAnyContext();
-                await DeleteAsync().ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.clipboard.paste":
-                await PasteEntityAsync().ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.component.copy":
-                await CopyComponentAsync(context).ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.component.paste":
-                await PasteComponentAsync(context).ContinueOnAnyContext();
-                return Result.Ok();
-            case "editor.component.remove":
-                await RemoveComponentAsync(context).ContinueOnAnyContext();
-                return Result.Ok();
-            default:
-                _log.Warning($"Unknown editor command '{method}'; skipping.");
-                return Result.Ok();
-        }
-    }
-
-    // The entities a command targets: the whole selection (the menu-open gesture selects the right-clicked
+    // The entities an action targets: the whole selection (the menu-open gesture selects the right-clicked
     // entity first), newest last so the primary is the last entry.
     private IReadOnlyList<ulong> Targets => _selection.SelectedIds;
 
-    private async Task DeleteAsync()
+    public async Task DeleteAsync()
     {
         // Snapshot the ids: destroying mutates the selection as the refresh reconciles it away.
         foreach (var id in Targets.ToList())
@@ -122,7 +61,7 @@ public sealed class EditorCommands
         await _world.RefreshAsync().ContinueOnAnyContext();
     }
 
-    private async Task MoveAsync(bool up)
+    public async Task MoveAsync(bool up)
     {
         if (_selection.PrimaryId is not { } id || Find(id) is not { } located)
             return;
@@ -144,23 +83,20 @@ public sealed class EditorCommands
         await _world.RefreshAsync().ContinueOnAnyContext();
     }
 
-    private async Task DuplicateAsync()
+    public async Task DuplicateAsync()
     {
         foreach (var id in Targets.ToList())
         {
             var parentId = Find(id)?.parentId ?? 0UL;
-            var copy = await DescribeForClipboardAsync(id).ContinueOnAnyContext();
-            if (copy is null)
-                continue;
-
-            await SpawnAsync(copy, parentId).ContinueOnAnyContext();
+            if (await _world.Entity(id).SerializeAsync().ContinueOnAnyContext() is { Success: true, Value: { } body })
+                await _world.Active.AddEntityFromJsonAsync(body, parentId).ContinueOnAnyContext();
         }
 
         _world.MarkDirty();
         await _world.RefreshAsync().ContinueOnAnyContext();
     }
 
-    private async Task AddAsync(bool global)
+    public async Task AddAsync(bool global)
     {
         var created = await _world.CreateEntityAsync("Entity", parent: 0UL, CancellationToken.None)
             .ContinueOnAnyContext();
@@ -178,13 +114,13 @@ public sealed class EditorCommands
         _selection.Select(entity.Id);
     }
 
-    private void Rename(MenuContext? context)
+    public void Rename()
     {
-        if ((context?.EntityId ?? _selection.PrimaryId) is { } id)
+        if (_selection.PrimaryId is { } id)
             RenameRequested?.Invoke(id);
     }
 
-    private async Task ToggleEnabledAsync()
+    public async Task ToggleEnabledAsync()
     {
         if (_selection.PrimaryId is not { } id || Find(id) is not { } located)
             return;
@@ -199,7 +135,7 @@ public sealed class EditorCommands
         await _world.RefreshAsync().ContinueOnAnyContext();
     }
 
-    private async Task SetGlobalAsync(bool global)
+    public async Task SetGlobalAsync(bool global)
     {
         foreach (var id in Targets.ToList())
         {
@@ -217,52 +153,64 @@ public sealed class EditorCommands
         await _world.RefreshAsync().ContinueOnAnyContext();
     }
 
-    private async Task CopyEntityAsync()
+    public async Task CopyEntityAsync()
     {
         if (_selection.PrimaryId is not { } id)
             return;
 
-        if (await DescribeForClipboardAsync(id).ContinueOnAnyContext() is { } copy)
-            await _clipboard.PushAsync(copy).ContinueOnAnyContext();
+        if (await _world.Entity(id).SerializeAsync().ContinueOnAnyContext() is { Success: true, Value: { } json })
+            await _clipboard.Copy(new ClipboardEntity { Body = json }).ContinueOnAnyContext();
     }
 
-    private async Task PasteEntityAsync()
+    public async Task CutEntityAsync()
     {
-        // Paste keeps the clipboard (Peek, not Pop) so the same entity can be pasted repeatedly.
-        if (await _clipboard.PeekAsync<ClipboardEntity>().ContinueOnAnyContext() is not { } copy)
+        await CopyEntityAsync().ContinueOnAnyContext();
+        await DeleteAsync().ContinueOnAnyContext();
+    }
+
+    public async Task PasteEntityAsync()
+    {
+        // Paste keeps the clipboard (a non-consuming read) so the same entity can be pasted repeatedly.
+        if (await _clipboard.Paste<ClipboardEntity>().ContinueOnAnyContext() is not { Body: { } json })
             return;
 
-        var spawned = await SpawnAsync(copy, parent: 0UL).ContinueOnAnyContext();
+        var spawned = await _world.Active.AddEntityFromJsonAsync(json, parent: 0UL).ContinueOnAnyContext();
         _world.MarkDirty();
         await _world.RefreshAsync().ContinueOnAnyContext();
-        if (spawned is { } id)
-            _selection.Select(id);
+        if (spawned is { Success: true, Value: { } entity })
+            _selection.Select(entity.Id);
     }
 
-    private async Task CopyComponentAsync(MenuContext? context)
+    public async Task CopyComponentAsync(MenuContext? context)
     {
         if (ComponentTarget(context) is not (var entityId, var component))
             return;
 
-        var copy = await DescribeForClipboardAsync(entityId).ContinueOnAnyContext();
-        if (copy is not null && copy.Components.TryGetValue(component, out var value))
-            await _clipboard.PushAsync(new ClipboardComponent { Component = component, Value = value })
+        if (await _world.Entity(entityId).Component(component).ReadAsync().ContinueOnAnyContext()
+            is { Success: true, Value: { } body })
+            await _clipboard
+                .Copy(new ClipboardComponent { Component = component, Value = body })
                 .ContinueOnAnyContext();
     }
 
-    private async Task PasteComponentAsync(MenuContext? context)
+    public async Task PasteComponentAsync(MenuContext? context)
     {
         var entityId = context?.EntityId ?? _selection.PrimaryId;
         if (entityId is not { } id
-            || await _clipboard.PeekAsync<ClipboardComponent>().ContinueOnAnyContext() is not { } copy)
+            || await _clipboard.Paste<ClipboardComponent>().ContinueOnAnyContext()
+                is not { Component: { Length: > 0 } component, Value: { } value })
             return;
 
-        await ApplyComponentAsync(id, copy.Component, copy.Value).ContinueOnAnyContext();
+        var result = await _world.Entity(id).Component(component).SetAsync(value, CancellationToken.None)
+            .ContinueOnAnyContext();
+        if (!result.Success)
+            await Popups.ShowErrorAsync("Couldn't paste component", result.Error!).ContinueOnAnyContext();
+
         _world.MarkDirty();
         await _world.RefreshAsync().ContinueOnAnyContext();
     }
 
-    private async Task RemoveComponentAsync(MenuContext? context)
+    public async Task RemoveComponentAsync(MenuContext? context)
     {
         if (ComponentTarget(context) is not (var entityId, var component))
             return;
@@ -277,62 +225,36 @@ public sealed class EditorCommands
         await _world.RefreshAsync().ContinueOnAnyContext();
     }
 
-    // The (entity, component) a component verb targets, or null when nothing is addressable.
+    /// <summary>Whether the single-selected entity can move up within its sibling bucket (not already first).</summary>
+    public bool CanMoveUp(ulong id) => MoveIndex(id) is { } where && where.index > 0;
+
+    /// <summary>Whether the single-selected entity can move down within its sibling bucket (not already last).</summary>
+    public bool CanMoveDown(ulong id) => MoveIndex(id) is { } where && where.index < where.count - 1;
+
+    /// <summary>True when any selected entity is streamed (not global) — so "Make Global" is worth offering.</summary>
+    public bool SelectionHasStreamed() => Targets.Any(id => Find(id) is { entity.IsGlobal: false });
+
+    /// <summary>True when any selected entity is global — so "Make Streamed" is worth offering.</summary>
+    public bool SelectionHasGlobal() => Targets.Any(id => Find(id) is { entity.IsGlobal: true });
+
+    // The (display index, sibling count) of an entity within its bucket, or null when it can't be located.
+    private (int index, int count)? MoveIndex(ulong id)
+    {
+        if (Find(id) is not { } located)
+            return null;
+
+        var siblings = SiblingsOf(located.parentId, located.entity.IsGlobal);
+        var index = siblings.FindIndex(sibling => sibling.Id == id);
+        return index < 0 ? null : (index, siblings.Count);
+    }
+
+    // The (entity, component) a component action targets, or null when nothing is addressable.
     private (ulong entityId, string component)? ComponentTarget(MenuContext? context)
     {
         var entityId = context?.EntityId ?? _selection.PrimaryId;
         return entityId is { } id && !string.IsNullOrEmpty(context?.Component)
             ? (id, context!.Component!)
             : null;
-    }
-
-    // Re-describes an entity from the engine and packages it for the clipboard / a duplicate. Scripts are not
-    // copied yet — they carry per-binding asset references with their own flow; ordinary components only.
-    private async Task<ClipboardEntity?> DescribeForClipboardAsync(ulong id)
-    {
-        var result = await _world.Entity(id).DescribeAsync(CancellationToken.None).ContinueOnAnyContext();
-        if (result is not { Success: true, Value: { } data })
-            return null;
-
-        var copy = new ClipboardEntity { Name = data.Name, IsGlobal = data.IsGlobal, IsEnabled = data.IsEnabled };
-        foreach (var component in data.Components.Where(c => c.Name != ScriptContainerComponent))
-            copy.Components[component.Name] = component.Raw;
-        return copy;
-    }
-
-    // Creates a new entity from a copied one and returns its id (null on failure). Each component is added (in
-    // case the fresh entity doesn't carry it) and then overwritten with the copied value.
-    private async Task<ulong?> SpawnAsync(ClipboardEntity copy, ulong parent)
-    {
-        var created = await _world.CreateEntityAsync(copy.Name, parent, CancellationToken.None)
-            .ContinueOnAnyContext();
-        if (created is not { Success: true, Value: { } entity })
-        {
-            await Popups.ShowErrorAsync("Couldn't create entity", created.Error!).ContinueOnAnyContext();
-            return null;
-        }
-
-        foreach (var (component, value) in copy.Components)
-            await ApplyComponentAsync(entity.Id, component, value).ContinueOnAnyContext();
-
-        if (copy.IsGlobal)
-            await entity.SetGlobalAsync(true, CancellationToken.None).ContinueOnAnyContext();
-        if (!copy.IsEnabled)
-            await entity.SetEnabledAsync(false, CancellationToken.None).ContinueOnAnyContext();
-
-        return entity.Id;
-    }
-
-    // Ensures a component exists on the entity and then writes the typed value into it. add-component is
-    // best-effort (it fails when the component is already present, which is fine — the set still lands).
-    private async Task ApplyComponentAsync(ulong entityId, string component, JObject value)
-    {
-        var entity = _world.Entity(entityId);
-        await entity.AddComponentAsync(component, CancellationToken.None).ContinueOnAnyContext();
-        var result = await entity.Component(component).SetAsync(value, CancellationToken.None)
-            .ContinueOnAnyContext();
-        if (!result.Success)
-            await Popups.ShowErrorAsync("Couldn't paste component", result.Error!).ContinueOnAnyContext();
     }
 
     // Locates an entity in the current world snapshot, returning it with its parent's id (0 at the root).

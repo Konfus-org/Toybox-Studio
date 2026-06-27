@@ -19,7 +19,7 @@ public partial class AssetPickerDialog : Window
     public static async Task<AssetPick> ShowAsync(
         Window owner,
         string title,
-        IReadOnlyList<Asset> options,
+        IReadOnlyList<AssetInfo> options,
         long currentId)
     {
         var viewModel = new AssetPickerViewModel(title, options, currentId);

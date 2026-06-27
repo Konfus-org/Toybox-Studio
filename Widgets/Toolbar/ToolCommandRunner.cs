@@ -11,42 +11,35 @@ using Toybox.Studio.Utils;
 namespace Toybox.Studio.Widgets.Toolbar;
 
 /// <summary>
-/// Runs a data-driven toolbar or context-menu command (an ordered list of RPC steps) against the engine. The
-/// generic RPC step dispatch lives on <see cref="EngineRpc.RunAsync"/>; this runner adds the editor glue —
-/// stepping the command, routing <c>view.setGizmo</c> through <see cref="GizmoTool"/>, the
-/// <c>editor.play</c>/<c>editor.stop</c>/<c>editor.togglePause</c> transport steps through <see cref="Session"/>,
-/// and every other <c>editor.*</c> verb through <see cref="EditorCommands"/> (passing the
-/// <see cref="MenuContext"/> a context menu was opened with) — and logging failures. Steps run in sequence and
-/// the command stops at the first failed awaited step.
+/// Runs a data-driven toolbar command (an ordered list of RPC steps) against the engine. The generic RPC step
+/// dispatch lives on <see cref="EngineRpc.RunAsync"/>; this runner adds the editor glue — stepping the command,
+/// routing <c>view.setGizmo</c> through <see cref="GizmoTool"/> and the
+/// <c>editor.play</c>/<c>editor.stop</c>/<c>editor.togglePause</c> transport steps through <see cref="Session"/>
+/// — and logging failures. Steps run in sequence and the command stops at the first failed awaited step.
+/// (Editor verbs that coordinate the selection/clipboard now live as code-driven menu actions on
+/// <see cref="EditorCommands"/>, invoked directly by the context menus rather than as command steps.)
 /// </summary>
 public sealed class ToolCommandRunner
 {
     private readonly EngineRpc _engine;
     private readonly GizmoTool _gizmo;
     private readonly Session _session;
-    private readonly EditorCommands _editor;
     private readonly Logger _log;
 
-    public ToolCommandRunner(
-        EngineRpc engine, GizmoTool gizmo, Session session, EditorCommands editor, Logger log)
+    public ToolCommandRunner(EngineRpc engine, GizmoTool gizmo, Session session, Logger log)
     {
         _engine = engine;
         _gizmo = gizmo;
         _session = session;
-        _editor = editor;
         _log = log;
     }
 
-    /// <summary>
-    /// Runs every step of <paramref name="command"/> in order, stopping at the first failure. The optional
-    /// <paramref name="context"/> tells the <c>editor.*</c> verbs what the menu was opened over (null for
-    /// toolbar buttons, which act on the global selection alone).
-    /// </summary>
-    public async Task<Result> RunAsync(ToolCommand command, CancellationToken ct, MenuContext? context = null)
+    /// <summary>Runs every step of <paramref name="command"/> in order, stopping at the first failure.</summary>
+    public async Task<Result> RunAsync(ToolCommand command, CancellationToken ct)
     {
         foreach (var step in command.Steps)
         {
-            var result = await RunStepAsync(step, context, ct).ContinueOnAnyContext();
+            var result = await RunStepAsync(step, ct).ContinueOnAnyContext();
             if (!result.Success)
                 return result;
         }
@@ -54,12 +47,12 @@ public sealed class ToolCommandRunner
         return Result.Ok();
     }
 
-    private async Task<Result> RunStepAsync(ToolCommandStep step, MenuContext? context, CancellationToken ct)
+    private async Task<Result> RunStepAsync(ToolCommandStep step, CancellationToken ct)
     {
         switch (step.Kind)
         {
             case "rpc":
-                return await RunRpcAsync(step.Rpc, context, ct).ContinueOnAnyContext();
+                return await RunRpcAsync(step.Rpc, ct).ContinueOnAnyContext();
             case "script":
                 _log.Warning("Toolbar script steps are not supported yet; skipping.");
                 return Result.Ok();
@@ -69,7 +62,7 @@ public sealed class ToolCommandRunner
         }
     }
 
-    private async Task<Result> RunRpcAsync(RpcCall? call, MenuContext? context, CancellationToken ct)
+    private async Task<Result> RunRpcAsync(RpcCall? call, CancellationToken ct)
     {
         if (call is null || string.IsNullOrWhiteSpace(call.Method))
         {
@@ -111,12 +104,6 @@ public sealed class ToolCommandRunner
                     ? Result.Ok()
                     : Result.Fail("Toggling pause failed.");
         }
-
-        // Every other editor.* verb (delete/move/duplicate/clipboard/component ops) is editor-side state that
-        // coordinates the selection, clipboard and the world's dirty/refresh cycle — route it through
-        // EditorCommands with the menu's context rather than treating it as a raw engine call.
-        if (call.Method.StartsWith("editor.", System.StringComparison.Ordinal))
-            return await _editor.RunAsync(call.Method, call.Params, context, ct).ContinueOnAnyContext();
 
         var result = await _engine.RunAsync(call, ct).ContinueOnAnyContext();
         if (!result.Success)

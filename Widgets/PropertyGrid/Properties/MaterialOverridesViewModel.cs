@@ -84,13 +84,13 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
         if (materialId == 0)
             return;
 
-        var result = await _assets.DescribeAsync(materialId, CancellationToken.None)
+        var result = await _assets.LoadAsync(_assets.Handle(materialId), CancellationToken.None)
             .ContinueOnSameContext();
-        if (!result.Success || result.Value?["material"] is not JObject material)
+        if (!result.Success || result.Value is not { } material)
             return;
 
-        AddSlots(material["textures"], _textureOverrides, "texture", Textures);
-        AddSlots(material["parameters"], _paramOverrides, "data", Parameters);
+        AddSlots(material.Body["textures"], _textureOverrides, "texture", Textures);
+        AddSlots(material.Body["parameters"], _paramOverrides, "data", Parameters);
         NotifyCounts();
     }
 

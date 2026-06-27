@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Widgets.Viewport"
+             xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
+             x:Class="Toybox.Studio.Widgets.Viewport.ViewportSurfaceView"
+             x:DataType="local:ViewportSurfaceViewModel">
+
+    <!-- The reusable surface fragment: the zero-copy GPU-texture image plus the loading/empty ghosts.
+         Input capture, the dark backdrop, and any kind-specific overlays (billboards, marquee, toolbar,
+         preview pickers) live in the hosting viewport view, which embeds this with DataContext="{Binding
+         Surface}". -->
+    <Panel>
+        <!-- Samples the engine view's shared GPU texture directly (zero copy). Reports back to the
+             view-model if this compositor can't import it, so the ghost shows instead of black. -->
+        <local:CompositionInteropViewport
+            Surface="{Binding CurrentSurface}"
+            InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
+
+        <ghost:GhostView Message="{Binding EmptyMessage}" IsVisible="{Binding ShowEmptyGhost}"/>
+
+        <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
+        <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding ShowLoadingGhost}">
+            <ghost:LoadingGhostView Message="{Binding LoadingMessage}"/>
+        </Border>
+    </Panel>
+</UserControl>

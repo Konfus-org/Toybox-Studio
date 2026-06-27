@@ -1,13 +1,16 @@
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading.Tasks;
+using Toybox.Studio.Services.Dialogs;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Shell.Panels;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Shell.Workspace;
 
@@ -95,16 +98,6 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         Refresh();
     }
 
-    /// <summary>Opens the dockable only if it isn't already open — used by the Play button for the viewport.</summary>
-    public void EnsureOpen(string id)
-    {
-        if (Resolve(id) is not { } descriptor || _control?.Layout is not IRootDock root || Owner is not { } owner)
-            return;
-
-        _windows.EnsureOpen(descriptor, root, owner);
-        Refresh();
-    }
-
     /// <summary>Discards the current arrangement and rebuilds the built-in default layout.</summary>
     [RelayCommand]
     public void ResetLayout()
@@ -119,8 +112,67 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         Refresh();
     }
 
+    /// <summary>Opens the dockable only if it isn't already open — used by the Play button for the viewport.</summary>
+    public void EnsureOpen(string id)
+    {
+        if (Resolve(id) is not { } descriptor || _control?.Layout is not IRootDock root || Owner is not { } owner)
+            return;
+
+        _windows.EnsureOpen(descriptor, root, owner);
+        Refresh();
+    }
+
+    /// <summary>Prompts for a name and saves the current arrangement as a named layout the user can restore.</summary>
+    [RelayCommand]
+    private async Task SaveLayout()
+    {
+        if (_control?.Layout is not IRootDock root)
+            return;
+
+        var name = await Popups.PromptForTextAsync("Save Layout", "Layout name", confirmText: "Save")
+            .ContinueOnAnyContext();
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        _store.Save(name, root);
+        _log.Info($"Saved layout '{name}'.");
+    }
+
+    /// <summary>Lets the user pick a saved layout and swaps the live arrangement to it.</summary>
+    [RelayCommand]
+    private async Task LoadLayout()
+    {
+        var names = _store.List();
+        if (names.Count == 0)
+        {
+            await Popups.ShowMessageAsync("Load Layout", "No saved layouts yet.").ContinueOnAnyContext();
+            return;
+        }
+
+        var options = names.Select(name => new CatalogItem(name, name, "Saved layout")).ToList();
+        if (await CatalogPicker.ShowAsync("Load Layout", "No saved layouts.", options).ContinueOnAnyContext()
+            is not { } pick)
+            return;
+
+        if (_store.Load(pick.Key) is not { } layout)
+        {
+            await Popups.ShowErrorAsync("Load Layout", $"Couldn't load layout '{pick.Key}'.")
+                .ContinueOnAnyContext();
+            return;
+        }
+
+        if (_control is null)
+            return;
+
+        // Same rehydrate-then-swap sequence BuildInitialLayout/ResetLayout use to attach a fresh root.
+        _windows.InitLayout(layout);
+        _windows.AttachContent(layout);
+        _control.Layout = layout;
+        Refresh();
+    }
+
     /// <summary>Persists the current layout as the working layout. Called on app exit.</summary>
-    public void SaveCurrentLayout()
+    public void SaveLastLayout()
     {
         if (_control?.Layout is IRootDock root)
             _store.SaveLast(root);

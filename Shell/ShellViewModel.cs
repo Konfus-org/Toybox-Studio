@@ -15,7 +15,6 @@ using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.Scripting;
 using Toybox.Studio.Services.World;
 using Toybox.Studio.Shell.Panels;
-using Toybox.Studio.Services.AssetViewing;
 using Toybox.Studio.Shell.Workspace;
 using Toybox.Studio.Widgets.Ecs;
 
@@ -105,6 +104,8 @@ public sealed partial class ShellViewModel : ObservableObject
     public MenuActionViewModel AttachAction => Action("attach");
     public MenuActionViewModel DebugEditorAction => Action("debugEditor");
     public MenuActionViewModel ResetLayoutAction => Action("resetLayout");
+    public MenuActionViewModel SaveLayoutAction => Action("saveLayout");
+    public MenuActionViewModel LoadLayoutAction => Action("loadLayout");
 
     private MenuActionViewModel Action(string id) => _actions.First(action => action.Id == id);
 
@@ -127,6 +128,8 @@ public sealed partial class ShellViewModel : ObservableObject
         Add("attach", "Attach to Running Instance", "Plug", "CYAN", AttachCommand);
         Add("debugEditor", "Avalonia Dev Tools", "Wrench", "GREY", DebugEditorCommand);
         Add("resetLayout", "Reset Layout", "LayoutDashboard", "MAGENTA", Workspace.ResetLayoutCommand);
+        Add("saveLayout", "Save Layout", "LayoutDashboard", "MAGENTA", Workspace.SaveLayoutCommand);
+        Add("loadLayout", "Load Layout", "LayoutDashboard", "MAGENTA", Workspace.LoadLayoutCommand);
     }
 
     // Rebuilds the Favorites menu from the starred actions and refreshes each action's star indicator.

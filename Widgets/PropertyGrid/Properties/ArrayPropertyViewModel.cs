@@ -132,6 +132,73 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
         RaiseCommit();
     }
 
+    /// <summary>
+    /// The widget type token of this list's elements — the variant key a copied element is tagged with, so the
+    /// "Paste Item" affordance only offers an element of the matching type. Read from a live row when there is
+    /// one (it carries the same retyping the rows use, e.g. an asset list's "handle"); otherwise inferred from
+    /// the element template so an empty list can still accept a paste.
+    /// </summary>
+    public string ElementType => Items.Count > 0
+        ? Items[0].Type
+        : _elementTemplate is null ? "" : JsonParser.ParseValueNode("element", _elementTemplate).Type;
+
+    /// <summary>True when <paramref name="item"/> is a list element that can move toward the start.</summary>
+    public bool CanMoveUp(PropertyViewModel item) => Items.IndexOf(item) > 0;
+
+    /// <summary>True when <paramref name="item"/> is a list element that can move toward the end.</summary>
+    public bool CanMoveDown(PropertyViewModel item)
+    {
+        var index = Items.IndexOf(item);
+        return index >= 0 && index < Items.Count - 1;
+    }
+
+    /// <summary>Moves <paramref name="item"/> one place toward the start of the list.</summary>
+    public void MoveUp(PropertyViewModel item)
+    {
+        var index = Items.IndexOf(item);
+        if (index > 0)
+            Move(index, index - 1);
+    }
+
+    /// <summary>Moves <paramref name="item"/> one place toward the end of the list.</summary>
+    public void MoveDown(PropertyViewModel item)
+    {
+        var index = Items.IndexOf(item);
+        if (index >= 0 && index < Items.Count - 1)
+            Move(index, index + 1);
+    }
+
+    /// <summary>Inserts a copy of <paramref name="item"/>'s backing element right after it.</summary>
+    public void Duplicate(PropertyViewModel item)
+    {
+        if (_array is null || _commit is null)
+            return;
+
+        // Target the row's stable backing token (not its visible index — a [[hidden]] element ahead of it
+        // would diverge them), then insert a deep clone right after.
+        var token = TokenFor(item);
+        if (token is null)
+            return;
+
+        _array.Insert(_array.IndexOf(token) + 1, token.DeepClone());
+        Rebuild();
+        RaiseCommit();
+    }
+
+    /// <summary>Removes the given element row from the list (the context-menu / button delete).</summary>
+    public void RemoveItem(PropertyViewModel item) => Remove(item);
+
+    /// <summary>Appends a copy of a bare element value (a pasted item) to the end of the list.</summary>
+    public void AppendValue(JToken value)
+    {
+        if (_array is null || _commit is null)
+            return;
+
+        _array.Add(value.DeepClone());
+        Rebuild();
+        RaiseCommit();
+    }
+
     // A list is "set" when any element is (value-wise); recompute when an element's modified flag moves.
     private void OnElementChanged(object? sender, PropertyChangedEventArgs args)
     {
@@ -223,9 +290,11 @@ public sealed class ArrayPropertyViewModel : PropertyViewModel, IExpandable
                 {
                     element = PropertyViewModelFactory.Create(node, _commit, _depth + 1);
                     element.PropertyChanged += OnElementChanged;
-                    // A resizable list's elements carry their own reorder grip + delete affordance.
+                    // A resizable list's elements carry their own reorder grip + delete affordance, and point
+                    // back at this list so the property context menu can offer the item actions.
                     if (IsResizable)
                     {
+                        element.OwningList = this;
                         element.Parts.Add(new HandlePart(this, element));
                         element.Parts.Add(new ActionsPart(remove: new RelayCommand(() => Remove(element))));
                     }

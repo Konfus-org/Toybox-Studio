@@ -41,11 +41,11 @@ public sealed class EntityPickerPropertyViewModel : PickerPropertyViewModel
         return FindName(id) ?? $"#{id}";
     }
 
-    protected override (string Title, IReadOnlyList<Asset> Options) BuildChoices()
+    protected override (string Title, IReadOnlyList<AssetInfo> Options) BuildChoices()
     {
         // Reuse the asset chooser by presenting each entity as an entry (its id, name, and "Entity" kind).
         var options = Flatten()
-            .Select(entity => new Asset(unchecked((long)entity.Id), entity.Name, "Entity", ""))
+            .Select(entity => new AssetInfo(unchecked((long)entity.Id), entity.Name, "Entity", ""))
             .ToList();
         return ("Select entity", options);
     }

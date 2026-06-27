@@ -11,7 +11,7 @@ public sealed record ScriptEntry(string Name, int Version);
 /// <summary>
 /// The engine's reply to editor.listAssets.
 /// </summary>
-public sealed record AssetCatalogReply(List<Asset> Assets, List<ScriptEntry> Scripts);
+public sealed record AssetCatalogReply(List<AssetInfo> Assets, List<ScriptEntry> Scripts);
 
 /// <summary>
 /// Keeps a UI-ready catalog of the engine's assets and scripts, refreshed on connect, so the property
@@ -21,7 +21,7 @@ public sealed record AssetCatalogReply(List<Asset> Assets, List<ScriptEntry> Scr
 public sealed class AssetCatalog : IListenable
 {
     private readonly EngineRpc _engine;
-    private Dictionary<long, Asset> _byId = [];
+    private Dictionary<long, AssetInfo> _byId = [];
 
     // Bumped on every connection-state change. A refresh captures it before its RPC and drops the result if
     // the generation moved on (a disconnect or a newer refresh) so a slow reply can't publish over a newer
@@ -45,14 +45,14 @@ public sealed class AssetCatalog : IListenable
     /// </summary>
     public event Action<long>? AssetActivated;
 
-    public IReadOnlyList<Asset> Assets { get; private set; } = [];
+    public IReadOnlyList<AssetInfo> Assets { get; private set; } = [];
 
     public IReadOnlyList<ScriptEntry> Scripts { get; private set; } = [];
 
     /// <summary>
     /// Assets matching any of the given type tokens (case-insensitive); all assets when none are given.
     /// </summary>
-    public IReadOnlyList<Asset> AssetsOfType(IReadOnlyList<string>? types)
+    public IReadOnlyList<AssetInfo> AssetsOfType(IReadOnlyList<string>? types)
     {
         if (types is not { Count: > 0 })
             return Assets;
@@ -61,19 +61,51 @@ public sealed class AssetCatalog : IListenable
         return Assets.Where(asset => wanted.Contains(asset.Type)).ToList();
     }
 
-    /// <summary>
-    /// Fetches one asset's reflected fields by id (the enriched per-field shape entity.describe emits), so the
-    /// inspector can show a material's base parameter/texture values — the slots a MaterialInstance's overrides
-    /// apply on top of. Replies <c>{ material }</c> for a material. Fronts <c>asset.describe</c>.
-    /// </summary>
-    public Task<Result<JObject>> DescribeAsync(long id, CancellationToken ct) =>
-        _engine.InvokeAsync<JObject>("asset.describe", new { AssetId = id }, ct);
-
-    public Asset? Resolve(long id) => _byId.GetValueOrDefault(id);
+    public AssetInfo? Resolve(long id) => _byId.GetValueOrDefault(id);
 
     public string? ResolveName(long id) => Resolve(id)?.Name;
 
+    /// <summary>A string-free <see cref="AssetHandle"/> for an id (carrying its name/type/path), or
+    /// <see cref="AssetHandle.None"/> when the id is unknown.</summary>
+    public AssetHandle Handle(long id) =>
+        Resolve(id) is { } asset ? new AssetHandle(asset.Id, asset.Name, asset.Type, asset.Path) : AssetHandle.None;
+
+    /// <summary>Resolves an asset by its project-relative path or display name to an
+    /// <see cref="AssetHandle"/> (<see cref="AssetHandle.None"/> when nothing matches). Path wins over name.</summary>
+    public AssetHandle Find(string nameOrPath)
+    {
+        var match = Assets.FirstOrDefault(asset =>
+                        string.Equals(asset.Path, nameOrPath, StringComparison.OrdinalIgnoreCase))
+                    ?? Assets.FirstOrDefault(asset =>
+                        string.Equals(asset.Name, nameOrPath, StringComparison.OrdinalIgnoreCase));
+        return match is null ? AssetHandle.None : new AssetHandle(match.Id, match.Name, match.Type, match.Path);
+    }
+
     public void Activate(long id) => AssetActivated?.Invoke(id);
+
+    /// <summary>
+    /// Loads an asset's editable body (an <c>asset.describe</c> snapshot) into an <see cref="Asset"/> for
+    /// modify + save. Fails when the handle is unknown or the engine can't describe it (only materials are
+    /// describable today).
+    /// </summary>
+    public async Task<Result<Asset>> LoadAsync(AssetHandle handle, CancellationToken ct = default)
+    {
+        if (handle.IsNone || Resolve(handle.Id) is not { } info)
+            return Result<Asset>.Fail("Unknown asset.");
+
+        var result = await _engine
+            .InvokeAsync<JObject>("asset.describe", new { AssetId = handle.Id }, ct).ContinueOnAnyContext();
+        if (result is not { Success: true, Value: { } reply })
+            return Result<Asset>.Fail(result.Error ?? "The engine returned no asset.");
+
+        // The describe body lives under the asset-type key (e.g. "material" for a .mat).
+        var body = reply["material"] as JObject ?? reply;
+        return Result<Asset>.Ok(new Asset(_engine, info, body));
+    }
+
+    /// <summary>Loads an asset by project-relative path or display name (see <see cref="Find"/>).</summary>
+    public Task<Result<Asset>> LoadAsync(string nameOrPath, CancellationToken ct = default) =>
+        LoadAsync(Find(nameOrPath), ct);
 
     /// <summary>
     /// Re-fetches the catalog from the engine. Failures surface as an empty catalog.
@@ -121,7 +153,7 @@ public sealed class AssetCatalog : IListenable
         // The engine can legitimately report more than one asset with the same id (e.g. id 0 for entries
         // that have no stable id yet), so build the lookup defensively — a plain ToDictionary would throw
         // on the collision and take the whole catalog refresh down. First entry per id wins.
-        var byId = new Dictionary<long, Asset>(reply.Assets.Count);
+        var byId = new Dictionary<long, AssetInfo>(reply.Assets.Count);
         foreach (var asset in reply.Assets)
             byId.TryAdd(asset.Id, asset);
         _byId = byId;

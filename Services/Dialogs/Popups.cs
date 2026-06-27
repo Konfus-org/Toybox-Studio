@@ -79,6 +79,26 @@ public static class Popups
         return await SaveChangesDialog.ShowAsync(owner, "Unsaved changes", message).ContinueOnAnyContext();
     }
 
+    /// <summary>
+    /// Prompts for a single line of text (e.g. naming a layout) and returns it trimmed, or null if the user
+    /// cancelled. With <paramref name="canBeEmpty"/> false the OK button stays disabled until something is
+    /// typed. Owned by <paramref name="owner"/> when given, else the main window.
+    /// </summary>
+    public static async Task<string?> PromptForTextAsync(
+        string title,
+        string watermark = "",
+        string? initial = null,
+        bool canBeEmpty = false,
+        string confirmText = "OK",
+        Window? owner = null)
+    {
+        owner ??= MainWindow();
+        if (owner is null)
+            return null;
+        return await TextPromptDialog.ShowAsync(owner, title, watermark, initial, canBeEmpty, confirmText)
+            .ContinueOnAnyContext();
+    }
+
     /// <summary>The main window, which owns every dialog so it centres and stays modal over the editor.</summary>
     private static Window? MainWindow() =>
         (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;

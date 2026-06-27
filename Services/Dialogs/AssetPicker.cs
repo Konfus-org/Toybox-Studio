@@ -21,7 +21,7 @@ public static class AssetPicker
 {
     public static async Task<AssetPick> ShowAsync(
         string title,
-        IReadOnlyList<Asset> options,
+        IReadOnlyList<AssetInfo> options,
         long currentId)
     {
         var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)

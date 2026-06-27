@@ -24,6 +24,7 @@ public sealed class WorldManager
     private readonly JsonParser _parser;
     private readonly Session _session;
     private readonly Logger _log;
+    private readonly World _active;
 
     public WorldManager(Session session, EngineRpc engine, JsonParser parser, Logger log)
     {
@@ -31,10 +32,21 @@ public sealed class WorldManager
         _engine = engine;
         _parser = parser;
         _log = log;
+        _active = new World(engine, parser, id: 0U, owner: this);
         session.StateChanged += OnSessionStateChanged;
         // The engine's transform gizmo edits entities directly; mirror that back into the editor.
         engine.TransformEdited += OnTransformEdited;
     }
+
+    /// <summary>The active editing world (world id 0) — the root of the object graph the editor edits.</summary>
+    public World Active => _active;
+
+    /// <summary>
+    /// A handle to an isolated asset-preview world by its engine id (returned from <c>view.start</c>),
+    /// owned editor-side by <paramref name="owner"/> (e.g. the asset viewer). Per-entity ops on it resolve
+    /// the world engine-side from the entity id; only its create/describe carry the id.
+    /// </summary>
+    public World ForPreview(uint worldId, object owner) => new(_engine, _parser, worldId, owner);
 
     /// <summary>Raised with the new snapshot whenever the world changes.</summary>
     public event Action<WorldDescription>? WorldChanged;
@@ -48,23 +60,16 @@ public sealed class WorldManager
     /// <summary>Whether the world holds unsaved editor changes.</summary>
     public bool IsDirty { get; private set; }
 
-    /// <summary>A handle to one entity in the world, by id, for per-entity operations (rename, move, …).</summary>
-    public Entity Entity(ulong id) => new(_engine, _parser, id);
+    /// <summary>A handle to one entity in the active world, by id, for per-entity operations (rename, move, …).</summary>
+    public Entity Entity(ulong id) => _active.GetEntity(id);
 
     /// <summary>
-    /// Creates a new entity (optionally named and parented; a zero/omitted parent means a root entity) and
-    /// returns a handle to it. The engine appends it after its last sibling. The caller marks the world dirty
-    /// and refreshes — this performs no implicit re-pull.
+    /// Creates a new entity in the active world (optionally named and parented; a zero/omitted parent means a
+    /// root entity) and returns a handle to it. The engine appends it after its last sibling. The caller marks
+    /// the world dirty and refreshes — this performs no implicit re-pull.
     /// </summary>
-    public async Task<Result<Entity>> CreateEntityAsync(string? name, ulong parent, CancellationToken ct)
-    {
-        var result = await _engine
-            .InvokeAsync<JObject>("entity.create", new { Name = name ?? "", Parent = parent }, ct)
-            .ContinueOnAnyContext();
-        return result is { Success: true, Value: { } reply }
-            ? Result<Entity>.Ok(Entity(reply.Value<ulong>("id")))
-            : Result<Entity>.Fail(result.Error ?? "The engine returned no result.");
-    }
+    public Task<Result<Entity>> CreateEntityAsync(string? name, ulong parent, CancellationToken ct) =>
+        _active.CreateEntityAsync(name, parent, ct);
 
     /// <summary>
     /// Opens a world/chunk asset (by id) as the active editing world, replacing the current one, then

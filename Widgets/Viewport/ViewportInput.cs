@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
-using Toybox.Studio.Services.Commands;
 using Toybox.Studio.Services.EngineApi;
+using Toybox.Studio.Utils;
 using Toybox.Studio.Widgets.ContextMenu;
 using Toybox.Studio.Widgets.Toolbar;
 
@@ -148,9 +149,9 @@ public sealed class ViewportInput
                 e.Pointer.Capture(null);
             Send(0, 0, 0);
 
-            // Finish a marquee, else treat a left press that never became a drag as a selection click. Both
-            // hand control-space coordinates to the sink, which letterbox-maps them and asks the engine.
-            // Editor views only — the game owns its input.
+            // Finish a marquee, else treat a left press that never became a drag as a tap (the view picks /
+            // selects, or ignores it). Both hand control-space coordinates to the sink, which letterbox-maps
+            // them and asks the engine.
             if (_marqueeActive && e.InitialPressMouseButton == MouseButton.Left)
             {
                 _marqueeActive = false;
@@ -158,36 +159,34 @@ public sealed class ViewportInput
                 var (x, y, width, height) = MarqueeRect(point.Position);
                 Sink?.EndMarquee(x, y, width, height, bounds.Width, bounds.Height, _pickAdditive);
             }
-            else if (_pendingPick && e.InitialPressMouseButton == MouseButton.Left
-                     && Sink is { IsGame: false } sink)
+            else if (_pendingPick && e.InitialPressMouseButton == MouseButton.Left && Sink is { } sink)
             {
                 var bounds = _control.Bounds;
-                sink.Pick(point.Position.X, point.Position.Y, bounds.Width, bounds.Height, _pickAdditive);
+                sink.Tap(point.Position.X, point.Position.Y, bounds.Width, bounds.Height, _pickAdditive);
             }
             else if (_rightTapCandidate && e.InitialPressMouseButton == MouseButton.Right
-                     && Sink is { IsGame: false })
+                     && Sink is { AllowsContextMenu: true })
             {
-                OpenContextMenu();
+                OpenContextMenuAsync(point.Position).FireAndForget();
             }
 
             _pendingPick = false;
             _rightTapCandidate = false;
         }
 
-        // Opens the data-driven context menu over the current selection (entity menu) or empty space
-        // (background menu). The menu is a flyout in the popup layer — not a child of this input surface — so
-        // the surface's pointer/focus capture doesn't light-dismiss it.
-        private void OpenContextMenu()
+        // Picks + selects the entity under the cursor, then opens that entity's menu (or the background menu on
+        // a miss), so a right-click targets what was clicked rather than the prior selection. The menu is a
+        // flyout in the popup layer — not a child of this input surface — so the surface's pointer/focus
+        // capture doesn't light-dismiss it.
+        private async Task OpenContextMenuAsync(Point position)
         {
-            if (ContextMenuService.Current is not { } service)
+            if (Sink is not { } sink)
                 return;
 
-            var (menuId, context) = service.Selection.PrimaryId is { } id
-                ? (MenuCatalogDefaults.EntityMenu,
-                    new MenuContext { Host = MenuCatalogDefaults.EntityMenu, EntityId = id })
-                : (MenuCatalogDefaults.BackgroundMenu,
-                    new MenuContext { Host = MenuCatalogDefaults.BackgroundMenu, IsBackground = true });
-            MenuOpenBehavior.Show(_control, menuId, context);
+            var bounds = _control.Bounds;
+            var hit = await sink.PickAndSelectForMenuAsync(
+                position.X, position.Y, bounds.Width, bounds.Height);
+            await MenuOpenBehavior.ShowEntityOrBackgroundAsync(_control, hit is not null);
         }
 
         // The marquee rectangle (normalized to top-left + size, control space) from the press anchor to `current`.
@@ -234,8 +233,8 @@ public sealed class ViewportInput
                 if (movedX * movedX + movedY * movedY > ClickSlopSquared)
                 {
                     _pendingPick = false;
-                    // Box-select only with the select tool active; a transform tool owns the left-drag.
-                    if (Sink is { IsGame: false, MarqueeEnabled: true })
+                    // Box-select only when the view allows it (an editor viewport with the select tool).
+                    if (Sink is { AllowsMarquee: true })
                         _marqueeActive = true;
                 }
             }
@@ -260,7 +259,7 @@ public sealed class ViewportInput
 
             // Mouselook: pin the OS cursor to the panel centre so look-deltas keep flowing without the
             // (hidden) pointer drifting out of the panel or hitting a screen edge.
-            if (Sink is { RelativeMouse: true } && _control.IsFocused)
+            if (Sink is { WantsPointerLock: true } && _control.IsFocused)
                 RecenterCursor();
         }
 
@@ -289,16 +288,23 @@ public sealed class ViewportInput
 
         private void OnKeyDown(object? sender, KeyEventArgs e)
         {
-            // Game view focus model: Alt+Esc releases focus back to the editor; Esc stops the game.
-            // Neither is forwarded to the game.
-            if (Sink is { IsGame: true } gameSink && e.Key == Key.Escape)
+            // Escape focus model: Alt+Esc is a universal "release viewport focus" shortcut (so input stops
+            // forwarding); plain Esc is offered to the view, which consumes it if it acts (the game stops
+            // play). Neither is forwarded as input.
+            if (e.Key == Key.Escape)
             {
                 if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+                {
                     ReleaseFocus();
-                else
-                    gameSink.StopGame();
-                e.Handled = true;
-                return;
+                    e.Handled = true;
+                    return;
+                }
+
+                if (Sink?.HandleEscape() == true)
+                {
+                    e.Handled = true;
+                    return;
+                }
             }
 
             var changed = false;

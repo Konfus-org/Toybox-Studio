@@ -16,14 +16,14 @@ namespace Toybox.Studio.Widgets.Dialogs;
 /// </summary>
 public sealed partial class AssetPickerViewModel : ObservableObject
 {
-    private readonly IReadOnlyList<Asset> _options;
+    private readonly IReadOnlyList<AssetInfo> _options;
 
-    public AssetPickerViewModel(string title, IReadOnlyList<Asset> options, long currentId)
+    public AssetPickerViewModel(string title, IReadOnlyList<AssetInfo> options, long currentId)
     {
         Title = title;
         // "None" is always the first option, so a reference can be cleared from the list itself (id 0). Any
         // stray id-0 entry in the source is dropped so it isn't duplicated.
-        _options = options.Where(o => o.Id != 0).Prepend(new Asset(0, "None", "", "")).ToList();
+        _options = options.Where(o => o.Id != 0).Prepend(new AssetInfo(0, "None", "", "")).ToList();
         FilteredOptions = _options;
         SelectedAsset = _options.FirstOrDefault(o => o.Id == currentId);
         Refilter();
@@ -38,11 +38,11 @@ public sealed partial class AssetPickerViewModel : ObservableObject
     public partial string SearchText { get; set; } = "";
 
     [ObservableProperty]
-    public partial IReadOnlyList<Asset> FilteredOptions { get; set; }
+    public partial IReadOnlyList<AssetInfo> FilteredOptions { get; set; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SelectCommand))]
-    public partial Asset? SelectedAsset { get; set; }
+    public partial AssetInfo? SelectedAsset { get; set; }
 
     [ObservableProperty]
     public partial bool IsGhostVisible { get; set; }

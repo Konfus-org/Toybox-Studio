@@ -5,11 +5,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.Services.AssetViewing;
 using Toybox.Studio.Services.EngineApi;
 using Toybox.Studio.Services.Logging;
 using Toybox.Studio.Services.Project;
 using Toybox.Studio.Services.World;
+using Toybox.Studio.Services.World.Components;
 using Toybox.Studio.Shell.Panels;
 using Toybox.Studio.Shell.Workspace;
 using Toybox.Studio.Utils;
@@ -18,25 +18,39 @@ using Toybox.Studio.Widgets.Viewport;
 namespace Toybox.Studio.Widgets.AssetViewer;
 
 /// <summary>
-/// A non-singleton preview panel: shows one asset (a texture on a plane, a material on a sphere, or a
-/// model) loaded into its own isolated engine world, driven by an orbit camera. It reuses the viewport's
-/// GPU-texture surface (<see cref="ViewportStream"/> + the interop control) and input behavior; the
-/// engine interprets the same input deltas as orbit/zoom for an asset-preview view. Clicking an entity
-/// updates the shared <see cref="WorldSelection"/> so the existing Inspector shows it.
+/// A non-singleton preview panel: shows one asset (a texture on a plane, a material on a sphere, a model,
+/// or a sky material as the environment) in its own isolated engine preview world. The bridge seeds that
+/// world with a light + the sky assets; THIS view-model builds and configures the previewed entity (and the
+/// background sky) through the editor's world/entity API (<see cref="World"/>/<see cref="Entity"/> + the
+/// typed components), targeting the preview world by its id. It reuses the viewport's GPU-texture surface
+/// (<see cref="ViewportStream"/>) and orbit input; clicking an entity updates the shared
+/// <see cref="WorldSelection"/> so the Inspector shows it.
 /// </summary>
 public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IViewportInputSink, IAssetViewerHost
 {
     private readonly Session _session;
     private readonly EngineRpc _engine;
+    private readonly WorldManager _worlds;
     private readonly AssetCatalog _catalog;
     private readonly WorldSelection _selection;
+    private readonly EngineWatcher _watcher;
     private readonly Logger _logger;
-    private readonly Action<ConnectionState> _onStateChanged;
 
-    // The previewed asset and its engine view. Both are null until an asset is shown — either claimed from
-    // the launcher on an explicit open, or resolved from the persisted layout state on a restore.
-    private ViewportStream? _stream;
-    private Asset? _asset;
+    // The reusable surface primitive (engine-view stream + shared GPU texture + interop state). Its stream
+    // is bound lazily in Show() once an asset is known (the preview view needs the asset id to start).
+    private readonly ViewportSurfaceViewModel _surface;
+
+    // The previewed asset. Null until an asset is shown — either claimed from the launcher on an explicit
+    // open, or resolved from the persisted layout state on a restore.
+    private AssetInfo? _asset;
+
+    // The preview world this view drives (created once the view has started) and the entities the editor
+    // builds in it: the previewed asset's entity and the background sky entity.
+    private World? _world;
+    private Entity? _previewEntity;
+    private Entity? _skyEntity;
+    private bool _built;
+    private bool _optionsLoaded;
 
     // The persisted layout state this panel records into / restores from, bound by the window manager when
     // the dock tool materializes (null until then). The restore listener waits on the asset catalog for the
@@ -45,9 +59,8 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     private Action? _restoreListener;
     private bool _restoreStarted;
 
-    // The editor owns the preview palette's labels; it looks up the engine-provided built-in assets by
-    // name (they arrive flagged as built-in through editor.listAssets) to get their ids. Built-in meshes
-    // are engine primitives (not assets), so the editor names those tokens directly.
+    // The editor's preview palette. Meshes resolve to the bridge-provided preview-mesh model assets (by
+    // label); surface/sky materials resolve to the bridge-provided built-in materials (by name).
     private static readonly (string Token, string Label)[] PreviewMeshes =
     [
         ("sphere", "Sphere"), ("cube", "Cube"), ("capsule", "Capsule"),
@@ -62,25 +75,25 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
         ("Sky", "Day"), ("PreviewNightSky", "Night"),
     ];
 
-    // Suppresses the rebuild RPC while the picker is seeded to its default in the constructor.
+    // Suppresses the re-apply while the picker is seeded to its default.
     private bool _suppressOptionPush;
 
     public AssetViewerViewModel(
-        AssetViewerLauncher launcher, Session session, EngineRpc engine, AssetCatalog catalog,
-        WorldSelection selection, Logger logger)
+        AssetViewerLauncher launcher, Session session, EngineRpc engine, WorldManager worlds,
+        AssetCatalog catalog, WorldSelection selection, EngineWatcher watcher, Logger logger)
     {
         _session = session;
         _engine = engine;
+        _worlds = worlds;
         _catalog = catalog;
         _selection = selection;
+        _watcher = watcher;
         _logger = logger;
 
-        _onStateChanged = state => Dispatch.To(DispatchContext.UI, () =>
-        {
-            if (state != ConnectionState.Connected)
-                ClearSurface();
-        });
-        session.StateChanged += _onStateChanged;
+        // The surface primitive owns the stream lifecycle, the shared texture, and clearing on disconnect.
+        // This view-model keeps its own richer ghost (loading vs empty vs interop) and the preview options.
+        _surface = new ViewportSurfaceViewModel(session, watcher, _logger, ViewKind.AssetPreview);
+        _surface.PropertyChanged += OnSurfacePropertyChanged;
 
         // An explicit open hands the asset through the launcher; a layout restore has none here and instead
         // reloads its remembered asset later (see BindAsset). With neither, the empty ghost shows and no
@@ -96,24 +109,18 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     /// <summary>A live preview panel: it buffers nothing and never prompts on close.</summary>
     public override bool IsLive => true;
 
-    /// <summary>Never the game view.</summary>
-    public bool IsGame => false;
-
     /// <summary>The asset viewer keeps a normal cursor (no mouselook).</summary>
-    public bool RelativeMouse => false;
+    public bool WantsPointerLock => false;
 
     /// <summary>Orbit-only: a left-drag rotates the camera, so there is no box-select.</summary>
-    public bool MarqueeEnabled => false;
+    public bool AllowsMarquee => false;
 
-    /// <summary>The engine view's shared GPU texture, bound by the view into the interop control.</summary>
-    [ObservableProperty]
-    public partial ViewSurface? CurrentSurface { get; private set; }
+    /// <summary>A right-tap opens the context menu over the previewed entity.</summary>
+    public bool AllowsContextMenu => true;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
-    [NotifyPropertyChangedFor(nameof(ShowPreviewOptions))]
-    [NotifyPropertyChangedFor(nameof(ShowSkyboxOptions))]
-    public partial bool HasFrames { get; private set; }
+    /// <summary>The reusable frame surface (engine preview-camera stream + shared GPU texture). The view
+    /// binds its <see cref="ViewportSurfaceViewModel.CurrentSurface"/> into the interop control.</summary>
+    public ViewportSurfaceViewModel Surface => _surface;
 
     /// <summary>The preview-picker choices for this asset (built-in meshes, or model materials).</summary>
     public ObservableCollection<PreviewOption> PreviewOptions { get; } = [];
@@ -121,29 +128,23 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     /// <summary>The picker label: "Mesh" for materials/textures, "Material" for models.</summary>
     public string PreviewOptionLabel { get; private set; } = "Mesh";
 
-    /// <summary>The selected preview option; changing it rebuilds the preview engine-side.</summary>
+    /// <summary>The selected preview option; changing it re-applies the preview.</summary>
     [ObservableProperty]
     public partial PreviewOption? SelectedPreviewOption { get; set; }
 
     /// <summary>The background-sky choices (day/night/none), shared by every asset type.</summary>
     public ObservableCollection<PreviewOption> SkyboxOptions { get; } = [];
 
-    /// <summary>The selected background sky; changing it rebuilds the preview engine-side.</summary>
+    /// <summary>The selected background sky; changing it re-applies the sky.</summary>
     [ObservableProperty]
     public partial PreviewOption? SelectedSkybox { get; set; }
 
     /// <summary>The picker shows once the preview is on screen and there are options to choose.</summary>
-    public bool ShowPreviewOptions => HasFrames && PreviewOptions.Count > 0;
+    public bool ShowPreviewOptions => _surface.HasFrames && PreviewOptions.Count > 0;
 
     /// <summary>The background-sky picker shows only when this asset offers one. A sky material is itself
     /// the background, so it has none.</summary>
-    public bool ShowSkyboxOptions => HasFrames && SkyboxOptions.Count > 0;
-
-    /// <summary>Set by the interop control when this compositor can't import shared GPU textures.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
-    [NotifyPropertyChangedFor(nameof(GhostMessage))]
-    public partial bool InteropUnavailable { get; set; }
+    public bool ShowSkyboxOptions => _surface.HasFrames && SkyboxOptions.Count > 0;
 
     /// <summary>Whether an asset is loaded or in the middle of loading (a restore awaiting the project, or a
     /// shown asset whose first frame hasn't arrived). Distinguishes the ghost's "loading" from its "empty".</summary>
@@ -152,25 +153,36 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     public partial bool IsLoadingTarget { get; private set; }
 
     /// <summary>The empty-state ghost shows until the first frame arrives (or if interop is unavailable).</summary>
-    public bool ShowEmptyGhost => !HasFrames || InteropUnavailable;
+    public bool ShowEmptyGhost => !_surface.HasFrames || _surface.InteropUnavailable;
 
     /// <summary>The ghost's caption: a real "empty" message when nothing is loaded, a "loading" one only while
     /// an asset is actually on its way in.</summary>
     public string GhostMessage =>
-        InteropUnavailable ? "GPU texture sharing is unavailable for this view."
+        _surface.InteropUnavailable ? "GPU texture sharing is unavailable for this view."
         : IsLoadingTarget ? "Loading asset…"
         : "No asset loaded.";
 
     public void Dispose()
     {
-        _session.StateChanged -= _onStateChanged;
+        _surface.PropertyChanged -= OnSurfacePropertyChanged;
         StopListeningForRestore();
-        if (_stream is not null)
+        _surface.Dispose();
+    }
+
+    // The surface gaining frames means the engine view has started (its world id is known) and the preview's
+    // first frame is on screen — build the previewed entity then. Re-raise the ghost/options that derive from
+    // the surface's HasFrames / InteropUnavailable.
+    private void OnSurfacePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        Dispatch.To(DispatchContext.UI, () =>
         {
-            _stream.SurfaceArrived -= OnSurfaceArrived;
-            _stream.SurfaceLost -= OnSurfaceLost;
-            _stream.Dispose();
-        }
+            OnPropertyChanged(nameof(ShowEmptyGhost));
+            OnPropertyChanged(nameof(GhostMessage));
+            OnPropertyChanged(nameof(ShowPreviewOptions));
+            OnPropertyChanged(nameof(ShowSkyboxOptions));
+            if (e.PropertyName == nameof(ViewportSurfaceViewModel.HasFrames) && _surface.HasFrames)
+                TryBuildPreview();
+        });
     }
 
     /// <summary>
@@ -201,33 +213,18 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
         }
     }
 
-    /// <summary>Forwards captured viewport input to the engine view, mapping the cursor to normalized
-    /// image coordinates (the engine drives the orbit camera from the deltas).</summary>
-    public void ForwardInput(ViewportInputPayload payload)
-    {
-        if (_stream is null)
-            return;
-
-        var cursorU = 0.0;
-        var cursorV = 0.0;
-        if (CurrentSurface is { } surface)
-            (cursorU, cursorV) = ViewportMapping.NormalizeClamped(
-                payload.MouseX, payload.MouseY, payload.ControlWidth, payload.ControlHeight,
-                surface.Width, surface.Height);
-
-        _stream.SendInput(
-            payload.Focused, payload.Buttons, payload.MoveKeys, payload.Keys,
-            payload.MouseX, payload.MouseY, payload.Dx, payload.Dy, payload.Wheel, cursorU, cursorV);
-    }
+    /// <summary>Forwards captured viewport input to the engine view (the engine drives the orbit camera
+    /// from the deltas); cursor mapping and the relay live in the surface primitive.</summary>
+    public void ForwardInput(ViewportInputPayload payload) => _surface.ForwardInput(payload);
 
     /// <summary>Picks the entity under a viewport click and updates the shared selection so the Inspector
     /// shows it. The point is in control space; it's letterbox-mapped to the rendered image.</summary>
-    public void Pick(double pointerX, double pointerY, double controlWidth, double controlHeight, bool additive)
+    public void Tap(double pointerX, double pointerY, double controlWidth, double controlHeight, bool additive)
     {
-        if (_stream is null)
+        if (_surface.Stream is null)
             return;
 
-        var surface = CurrentSurface;
+        var surface = _surface.CurrentSurface;
         if (surface is null
             || !ViewportMapping.TryNormalize(
                 pointerX, pointerY, controlWidth, controlHeight, surface.Width, surface.Height,
@@ -256,25 +253,23 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
     {
     }
 
-    public void StopGame()
-    {
-    }
+    /// <summary>The preview doesn't consume Esc.</summary>
+    public bool HandleEscape() => false;
 
-    // Sends the chosen presentation to the engine, which rebuilds the preview in place (the camera and
-    // orbit are preserved): a built-in mesh token (or "skybox"/"skysphere") for a material/texture, or
-    // a built-in surface material id for a model. Suppressed while the picker is seeded to its default.
+    // Re-applies the previewed entity / sky when the user changes a picker (after the initial build). The
+    // change handlers fire on the UI thread during seeding too, so they're suppressed until seeded + built.
     partial void OnSelectedPreviewOptionChanged(PreviewOption? value)
     {
-        if (_suppressOptionPush || _stream is null || value is null)
+        if (_suppressOptionPush || !_built)
             return;
-        _stream.SetPreviewOption(value.Token, value.Id);
+        ApplyPreviewAndFrameAsync().FireAndForget();
     }
 
     partial void OnSelectedSkyboxChanged(PreviewOption? value)
     {
-        if (_suppressOptionPush || _stream is null || value is null)
+        if (_suppressOptionPush || !_built)
             return;
-        _stream.SetPreviewSkybox(value.Id);
+        ApplyBackgroundSkyAndFrameAsync().FireAndForget();
     }
 
     private static bool IsModelType(string type) => type is "fbx" or "obj" or "gltf" or "glb";
@@ -283,70 +278,65 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
 
     // A material whose engine-declared render type is "sky": it previews as the environment background,
     // not on a mesh. The engine tags it through editor.listAssets (Asset.MaterialType).
-    private static bool IsSkyMaterial(Asset asset) =>
+    private static bool IsSkyMaterial(AssetInfo asset) =>
         IsMaterialType(asset.Type)
         && string.Equals(asset.MaterialType, "sky", StringComparison.OrdinalIgnoreCase);
 
-    // Fills the pickers from the engine's built-in assets (looked up by name from the catalog, which the
-    // engine surfaces through editor.listAssets) plus the built-in mesh primitives. A sky material picks
-    // only its projection shape (it loads straight into the background, so no mesh/material/background
-    // pickers); a model picks a built-in surface material ("Original" keeps its own); a material/texture
-    // picks the built-in mesh it is shown on, plus a background sky ("None" removes it). Each picker is
-    // seeded to its default without a redundant rebuild.
+    // Fills the pickers, resolving each choice to its engine asset handle: a sky material offers only its
+    // projection shape; a model offers a built-in surface material ("Original" keeps its own); a material/
+    // texture offers the built-in mesh primitive it is shown on, plus a background sky ("None" removes it).
+    // Each picker is seeded to its default without a redundant re-apply.
     private async Task LoadPreviewOptionsAsync(string type)
     {
-        // Ensure the catalog is populated (its first fetch is also what registers the built-in assets
-        // engine-side), then resolve each built-in by name to its id.
+        // Ensure the catalog is populated (its first fetch also registers the built-in preview assets
+        // engine-side), then resolve each choice by name/label to a handle.
         await _catalog.RefreshAsync().ContinueOnAnyContext();
-        var builtins = _catalog.Assets.Where(asset => asset.IsBuiltin).ToList();
-        long IdOf(string name) =>
-            builtins.FirstOrDefault(asset => asset.Name == name)?.Id ?? 0;
 
         var options = new List<PreviewOption>();
         var skyOptions = new List<PreviewOption>();
-        string defaultToken;
+        string defaultLabel;
 
-        // The background-sky choices (day/night/none) every non-sky asset can sit against.
         void AddBackgroundSkies()
         {
             foreach (var (asset, label) in SkyMaterials)
             {
-                var id = IdOf(asset);
-                if (id != 0)
-                    skyOptions.Add(new PreviewOption(label, Id: id));
+                var handle = _catalog.Find(asset);
+                if (!handle.IsNone)
+                    skyOptions.Add(new PreviewOption(label, handle));
             }
-            skyOptions.Add(new PreviewOption("None")); // id 0 → no sky
+            skyOptions.Add(new PreviewOption("None")); // AssetHandle.None → no sky
         }
 
         if (_asset is { } previewed && IsSkyMaterial(previewed))
         {
-            // A sky material is the environment itself: only its projection shape is offered, and there
-            // is no background-sky picker (it would replace the very material being previewed). The
-            // engine defaults a sky material to the sphere projection, so seed that without a rebuild.
-            options.Add(new PreviewOption("Sphere", "skysphere"));
-            options.Add(new PreviewOption("Box", "skybox"));
-            defaultToken = "skysphere";
+            // The asset is the environment itself: only its projection shape is offered (no background sky).
+            options.Add(new PreviewOption("Sphere", Token: "skysphere"));
+            options.Add(new PreviewOption("Box", Token: "skybox"));
+            defaultLabel = "Sphere";
         }
         else if (IsModelType(type))
         {
-            options.Add(new PreviewOption("Original"));
+            options.Add(new PreviewOption("Original")); // AssetHandle.None → the model's own materials
             foreach (var (asset, label) in SurfaceMaterials)
             {
-                var id = IdOf(asset);
-                if (id != 0)
-                    options.Add(new PreviewOption(label, Id: id));
+                var handle = _catalog.Find(asset);
+                if (!handle.IsNone)
+                    options.Add(new PreviewOption(label, handle));
             }
-            defaultToken = string.Empty; // the "Original" entry
+            defaultLabel = "Original";
             AddBackgroundSkies();
         }
         else
         {
-            foreach (var (token, label) in PreviewMeshes)
-                options.Add(new PreviewOption(label, token));
+            foreach (var (_, label) in PreviewMeshes)
+            {
+                var handle = _catalog.Find(label); // the bridge-provided preview-mesh model assets
+                if (!handle.IsNone)
+                    options.Add(new PreviewOption(label, handle));
+            }
 
-            // A texture previews flat on a plane; a material previews rounded on a sphere — match the
-            // engine's default mesh so seeding the picker doesn't trigger a rebuild.
-            defaultToken = IsMaterialType(type) ? "sphere" : "quad";
+            // A texture previews flat on a plane; a material previews rounded on a sphere.
+            defaultLabel = IsMaterialType(type) ? "Sphere" : "Plane";
             AddBackgroundSkies();
         }
 
@@ -359,19 +349,202 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
 
             _suppressOptionPush = true;
             SelectedPreviewOption =
-                PreviewOptions.FirstOrDefault(option => option.Token == defaultToken)
+                PreviewOptions.FirstOrDefault(option => option.Label == defaultLabel)
                 ?? PreviewOptions.FirstOrDefault();
             SelectedSkybox = SkyboxOptions.FirstOrDefault();
             _suppressOptionPush = false;
 
             OnPropertyChanged(nameof(ShowPreviewOptions));
             OnPropertyChanged(nameof(ShowSkyboxOptions));
+
+            _optionsLoaded = true;
+            TryBuildPreview();
         });
+    }
+
+    // Builds the previewed entity + background sky once both the view has started (so its world id is known)
+    // and the pickers are seeded. Idempotent via _built.
+    private void TryBuildPreview()
+    {
+        if (_built || !_optionsLoaded || _surface.Stream is not { WorldId: not 0 } || _asset is null)
+            return;
+        _built = true;
+        BuildPreviewAsync().FireAndForget();
+    }
+
+    private async Task BuildPreviewAsync()
+    {
+        if (_surface.Stream is not { } stream || _asset is null)
+            return;
+
+        _world = _worlds.ForPreview(stream.WorldId, this);
+
+        // A non-sky asset sits against the chosen background sky; a sky material is itself the background.
+        if (!IsSkyMaterial(_asset))
+            await EnsureSkyAsync(SelectedSkybox?.Handle ?? AssetHandle.None, SkyShape.Sphere)
+                .ContinueOnAnyContext();
+
+        await ApplyPreviewAsync().ContinueOnAnyContext();
+        await stream.FrameAsync().ContinueOnAnyContext();
+    }
+
+    // (Re)builds the previewed asset's entity from the current selection, via the typed component API.
+    private async Task ApplyPreviewAsync()
+    {
+        if (_world is null || _asset is not { } asset)
+            return;
+
+        if (IsSkyMaterial(asset))
+        {
+            // The asset IS the sky: project it onto the chosen shape (no separate preview entity).
+            var shape = SelectedPreviewOption?.Token == "skybox" ? SkyShape.Box : SkyShape.Sphere;
+            await EnsureSkyAsync(_catalog.Handle(asset.Id), shape).ContinueOnAnyContext();
+            return;
+        }
+
+        var entity = await EnsurePreviewEntityAsync().ContinueOnAnyContext();
+        if (entity is null)
+            return;
+
+        if (IsModelType(asset.Type))
+        {
+            // Show the model as-is, optionally overriding every slot with the chosen surface material.
+            var surface = SelectedPreviewOption?.Handle ?? AssetHandle.None;
+            await entity
+                .SetComponentAsync(new Renderer
+                {
+                    Model = _catalog.Handle(asset.Id),
+                    Materials = surface.IsNone ? [] : [surface],
+                })
+                .ContinueOnAnyContext();
+            return;
+        }
+
+        // A material/texture shows on the chosen primitive mesh. A material binds directly; a texture binds
+        // through a bridge-provided unlit material instance (a texture isn't itself a material).
+        var mesh = SelectedPreviewOption?.Handle ?? AssetHandle.None;
+        var material = IsMaterialType(asset.Type)
+            ? _catalog.Handle(asset.Id)
+            : await ResolveTextureMaterialAsync(asset.Id).ContinueOnAnyContext();
+
+        await entity
+            .SetComponentAsync(new Renderer
+            {
+                Model = mesh,
+                Materials = material.IsNone ? [] : [material],
+            })
+            .ContinueOnAnyContext();
+    }
+
+    private async Task<AssetHandle> ResolveTextureMaterialAsync(long textureId)
+    {
+        var result = await _engine
+            .PreviewTextureMaterialAsync(textureId, CancellationToken.None).ContinueOnAnyContext();
+        if (result.Success)
+            return AssetHandle.FromId(result.Value);
+
+        _logger.Error($"Asset viewer: couldn't build a preview material for the texture: {result.Error}");
+        return AssetHandle.None;
+    }
+
+    private async Task<Entity?> EnsurePreviewEntityAsync()
+    {
+        if (_previewEntity is not null || _world is null)
+            return _previewEntity;
+
+        var created = await _world.CreateEntityAsync("Preview", parent: 0UL, CancellationToken.None)
+            .ContinueOnAnyContext();
+        if (!created.Success)
+        {
+            _logger.Error($"Asset viewer: couldn't create the preview entity: {created.Error}");
+            return null;
+        }
+
+        _previewEntity = created.Value;
+        return _previewEntity;
+    }
+
+    // Points the background sky at the given material (creating the sky entity on first use), or removes it
+    // when the handle is None.
+    private async Task EnsureSkyAsync(AssetHandle sky, SkyShape shape)
+    {
+        if (_world is null)
+            return;
+
+        if (sky.IsNone)
+        {
+            if (_skyEntity is { } existing)
+            {
+                await existing.DestroyAsync(CancellationToken.None).ContinueOnAnyContext();
+                _skyEntity = null;
+            }
+            return;
+        }
+
+        var skyEntity = _skyEntity;
+        if (skyEntity is null)
+        {
+            var created = await _world.CreateEntityAsync("Sky", parent: 0UL, CancellationToken.None)
+                .ContinueOnAnyContext();
+            if (!created.Success)
+            {
+                _logger.Error($"Asset viewer: couldn't create the sky entity: {created.Error}");
+                return;
+            }
+            skyEntity = created.Value;
+            if (skyEntity is null)
+                return;
+            _skyEntity = skyEntity;
+        }
+
+        await skyEntity
+            .SetComponentAsync(new Sky { Material = new MaterialInstance(sky), Shape = shape })
+            .ContinueOnAnyContext();
+    }
+
+    private async Task ApplyPreviewAndFrameAsync()
+    {
+        await ApplyPreviewAsync().ContinueOnAnyContext();
+        if (_surface.Stream is { } stream)
+            await stream.FrameAsync().ContinueOnAnyContext();
+    }
+
+    private async Task ApplyBackgroundSkyAndFrameAsync()
+    {
+        await EnsureSkyAsync(SelectedSkybox?.Handle ?? AssetHandle.None, SkyShape.Sphere)
+            .ContinueOnAnyContext();
+        if (_surface.Stream is { } stream)
+            await stream.FrameAsync().ContinueOnAnyContext();
+    }
+
+    /// <inheritdoc/>
+    public async Task<ulong?> PickAndSelectForMenuAsync(
+        double x, double y, double controlWidth, double controlHeight)
+    {
+        if (_surface.Stream is not { } stream)
+            return null;
+
+        var surface = _surface.CurrentSurface;
+        if (surface is null
+            || !ViewportMapping.TryNormalize(
+                x, y, controlWidth, controlHeight, surface.Width, surface.Height, out var u, out var v))
+            return null;
+
+        // Stay on the UI thread so the selection is set before the caller builds the menu against it.
+        var result = await stream.PickAsync(u, v).ContinueOnSameContext();
+        if (!result.Success || result.Value is not { } hit)
+            return null;
+
+        _selection.Set(hit);
+        return hit;
     }
 
     private async Task PickAtAsync(double u, double v, bool additive)
     {
-        var result = await _stream!.PickAsync(u, v).ContinueOnAnyContext();
+        if (_surface.Stream is not { } stream)
+            return;
+
+        var result = await stream.PickAsync(u, v).ContinueOnAnyContext();
         if (!result.Success)
             return;
 
@@ -392,49 +565,20 @@ public sealed partial class AssetViewerViewModel : DataPanel, IDisposable, IView
         });
     }
 
-    private void OnSurfaceArrived(ViewSurface surface) =>
-        Dispatch.To(DispatchContext.UI, () => ApplySurface(surface));
-
-    private void OnSurfaceLost() =>
-        Dispatch.To(DispatchContext.UI, ClearSurface);
-
-    private void ApplySurface(ViewSurface surface)
-    {
-        if (surface.Handle == 0)
-        {
-            _logger.Warning(
-                "GPU texture sharing is unavailable for this view; the asset viewer will stay empty. "
-                + "See the engine log for the driver/adapter reason.");
-            ClearSurface();
-            return;
-        }
-
-        CurrentSurface = surface;
-        HasFrames = true;
-    }
-
-    private void ClearSurface()
-    {
-        CurrentSurface = null;
-        HasFrames = false;
-    }
-
-    // Starts previewing an asset: opens its engine view (its own preview world + orbit camera) and populates
-    // the preview pickers. Called for an explicit open and again when a restore resolves its remembered asset.
-    private void Show(Asset asset)
+    // Starts previewing an asset: opens its engine view (its own preview world + orbit camera) and seeds the
+    // preview pickers. Called for an explicit open and again when a restore resolves its remembered asset.
+    // The previewed entity is built once the surface gains frames (see OnSurfacePropertyChanged), by which
+    // point the view's world id is known.
+    private void Show(AssetInfo asset)
     {
         _asset = asset;
         IsLoadingTarget = true;             // a frame hasn't arrived yet → the ghost reads "loading"
         OnPropertyChanged(nameof(Title));   // BaseTitle now resolves to the asset's name
 
-        _stream = new ViewportStream(_session, _engine, ViewKind.AssetPreview, asset.Id);
-        _stream.SurfaceArrived += OnSurfaceArrived;
-        _stream.SurfaceLost += OnSurfaceLost;
+        _surface.Prepare(new ViewportStream(_session, _engine, ViewKind.AssetPreview, asset.Id));
 
         // The preview picker: a sky material picks only its projection shape; a model picks a surface
-        // material; a material/texture picks the mesh it shows on. Most also pick a background sky. The
-        // material/sky choices are the engine's built-in assets (sourced from editor.listAssets); meshes/
-        // shapes are engine primitives.
+        // material; a material/texture picks the mesh it shows on.
         PreviewOptionLabel =
             IsSkyMaterial(asset) ? "Shape"
             : IsModelType(asset.Type) ? "Material"

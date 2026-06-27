@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Widgets.Viewport"
              xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
-             xmlns:ghost="using:Toybox.Studio.Widgets.Ghost"
              xmlns:vtb="using:Toybox.Studio.Widgets.Toolbar"
              xmlns:cm="using:Toybox.Studio.Widgets.ContextMenu"
              x:Class="Toybox.Studio.Widgets.Viewport.ViewportView"
@@ -39,22 +38,10 @@
         <!-- ViewportInput captures pointer/keyboard while focused and forwards it to the engine view
              (editor fly camera). An opaque near-black backdrop makes the panel hit-testable AND gives the
              aspect-preserving image its letterbox/pillarbox bars (the engine renders at a fixed resolution and the
-             image is fit Uniform, so a mismatched panel shows bars rather than a stretched, squished frame). The
-             cursor hides while the game requests relative (mouselook) mode; the input behavior re-centres it. -->
+             image is fit Uniform, so a mismatched panel shows bars rather than a stretched, squished frame). -->
         <Panel x:Name="Surface" Background="#FF0A0A0E" Focusable="True" local:ViewportInput.Enabled="True">
-            <!-- The cursor hides only while the game wants mouselook AND this panel is focused, so Alt+Esc
-                 (which drops focus) hands the cursor back even though the game still requests relative mode. -->
-            <Panel.Cursor>
-                <MultiBinding Converter="{x:Static local:RelativeMouseCursorConverter.Instance}">
-                    <Binding Path="RelativeMouse"/>
-                    <Binding Path="IsFocused" ElementName="Surface"/>
-                </MultiBinding>
-            </Panel.Cursor>
-            <!-- Samples the engine view's shared GPU texture directly (zero copy). Reports back to the
-                 view-model if this compositor can't import it, so the ghost shows instead of black. -->
-            <local:CompositionInteropViewport
-                Surface="{Binding CurrentSurface}"
-                InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}"/>
+            <!-- The reusable surface fragment: the zero-copy GPU image plus the loading/empty ghosts. -->
+            <local:ViewportSurfaceView DataContext="{Binding Surface}"/>
 
             <!-- Rubber-band marquee, drawn over the surface during a left-drag. Non-hit-testable so the pointer
                  events keep flowing to the input Panel underneath. -->
@@ -73,13 +60,6 @@
             <Panel IsVisible="{Binding ShowToolbar}">
                 <vtb:ToolbarView DataContext="{Binding Toolbar}"/>
             </Panel>
-
-            <ghost:GhostView Message="No world loaded." IsVisible="{Binding ShowEmptyGhost}"/>
-
-            <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
-            <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding ShowLoadingGhost}">
-                <ghost:LoadingGhostView Message="{Binding LoadingMessage}"/>
-            </Border>
         </Panel>
 
         <!-- Editor-only billboard overlay: a name label + component icon stack per entity, placed at the
@@ -88,7 +68,7 @@
              marquee). Its Bounds drive reprojection on resize. -->
         <ItemsControl ItemsSource="{Binding Billboards}"
                       Bounds="{Binding OverlayBounds, Mode=OneWayToSource}"
-                      IsVisible="{Binding HasFrames}">
+                      IsVisible="{Binding Surface.HasFrames}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <Canvas/>

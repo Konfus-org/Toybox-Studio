@@ -45,7 +45,7 @@ public sealed class HandlePickerPropertyViewModel : PickerPropertyViewModel
         return _catalog?.ResolveName(unchecked((long)id)) ?? $"#{id}";
     }
 
-    protected override (string Title, IReadOnlyList<Asset> Options) BuildChoices()
+    protected override (string Title, IReadOnlyList<AssetInfo> Options) BuildChoices()
     {
         var options = _catalog?.AssetsOfType(_typeFilter) ?? [];
         var title = _typeFilter is { Count: > 0 }

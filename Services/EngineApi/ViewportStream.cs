@@ -23,6 +23,7 @@ public sealed class ViewportStream : IDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private CancellationTokenSource? _cts;
     private volatile string? _viewName;
+    private uint _worldId;
     private bool _disposed;
 
     public ViewportStream(
@@ -84,26 +85,20 @@ public sealed class ViewportStream : IDisposable
                 .FireAndForget();
     }
 
-    /// <summary>
-    /// Rebuilds this asset-preview view with a different presentation (no-op until the view has started
-    /// or for non-preview views). <paramref name="option"/> is a built-in mesh token (or "skybox"/
-    /// "skysphere" for a material); <paramref name="materialId"/> is a built-in surface material id for
-    /// a model (0 = the model's own). Fire-and-forget.
-    /// </summary>
-    public void SetPreviewOption(string option, long materialId)
-    {
-        if (_viewName is { } name && _engine.IsConnected)
-            _engine.SetPreviewOptionAsync(name, option, materialId).FireAndForget();
-    }
+    /// <summary>This asset-preview view's isolated world id (0 until the view has started, or for a
+    /// non-preview view). The editor targets it to build/edit the previewed entity via the world API.</summary>
+    public uint WorldId => _worldId;
 
     /// <summary>
-    /// Changes this asset-preview view's background sky (no-op until the view has started):
-    /// <paramref name="skyboxId"/> is a built-in sky material id, or 0 for no sky.
+    /// Frames this asset-preview view's orbit camera to the previewed entity's bounds (no-op until the
+    /// view has started or for a non-preview view). Called after the editor builds/swaps the previewed
+    /// entity through the world/entity API.
     /// </summary>
-    public void SetPreviewSkybox(long skyboxId)
+    public Task FrameAsync()
     {
-        if (_viewName is { } name && _engine.IsConnected)
-            _engine.SetPreviewSkyboxAsync(name, skyboxId).FireAndForget();
+        if (_viewName is not null && _engine.IsConnected && _worldId != 0)
+            return _engine.FrameAssetPreviewAsync(_worldId, CancellationToken.None);
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -183,6 +178,7 @@ public sealed class ViewportStream : IDisposable
             }
 
             _viewName = view.Name;
+            _worldId = view.WorldId;
             _cts = new CancellationTokenSource();
             // The shared texture follows as a view.surface notification (created on the render lane).
         }

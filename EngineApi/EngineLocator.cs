@@ -1,4 +1,3 @@
-using Toybox.Studio.Settings;
 using Toybox.Studio.Utils;
 namespace Toybox.Studio.EngineApi;
 
@@ -9,13 +8,13 @@ namespace Toybox.Studio.EngineApi;
 /// </summary>
 public sealed class EngineLocator
 {
-    private readonly SettingsManager _settings;
+    private readonly IEngineSettings _settings;
 
     // Serializes the deferred settings writes this service kicks off, so two quick SetEngine calls can't
     // race the shared EditorSettings serialization (a torn write / "collection modified" on the Recent list).
     private readonly SemaphoreSlim _saveGate = new(1, 1);
 
-    public EngineLocator(SettingsManager settings)
+    public EngineLocator(IEngineSettings settings)
     {
         _settings = settings;
     }
@@ -34,7 +33,7 @@ public sealed class EngineLocator
     /// </summary>
     public string ResolveAtStartup()
     {
-        var configured = _settings.Settings.Engine.SourcePath;
+        var configured = _settings.SourcePath;
         if (!string.IsNullOrEmpty(configured) && IsEngineSourceDirectory(configured))
         {
             SetEngine(configured, persist: false);
@@ -69,7 +68,7 @@ public sealed class EngineLocator
         EngineSourcePath = path;
         if (persist && path is not null)
         {
-            _settings.Settings.Engine.SourcePath = path;
+            _settings.SourcePath = path;
             SaveSerializedAsync().FireAndForget();
         }
 

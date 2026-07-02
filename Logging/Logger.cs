@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Toybox.Studio.Theming;
 using Toybox.Studio.Utils;
 using TaskExtensions = Toybox.Studio.Utils.TaskExtensions;
 namespace Toybox.Studio.Logging;
@@ -20,17 +19,17 @@ public sealed class Logger : IDisposable
     private const string StudioCategory = "Studio";
 
     private readonly LogFile _file;
-    private readonly ThemeManager _theme;
+    private readonly ILogTheme _theme;
 
     private Func<string, string, Task>? _engineForwarder;
     private Func<string, string, string, CancellationToken, Task>? _logColorSink;
 
-    public Logger(LogFile file, ThemeManager theme)
+    public Logger(LogFile file, ILogTheme theme)
     {
         _file = file;
         _theme = theme;
         // Re-push colors to the engine whenever the theme changes (a no-op while disconnected).
-        _theme.ThemeChanged += PushLogColors;
+        _theme.Changed += PushLogColors;
         // Unobserved fire-and-forget failures (with no explicit handler) flow into the unified log, with the full
         // exception (type, message, stack) so a background failure can be traced to its source.
         TaskExtensions.SetDefaultErrorHandler(
@@ -47,7 +46,7 @@ public sealed class Logger : IDisposable
     /// list. A no-op for the app's singleton logger, but keeps the wiring symmetric and safe if the logger
     /// ever becomes non-singleton.
     /// </summary>
-    public void Dispose() => _theme.ThemeChanged -= PushLogColors;
+    public void Dispose() => _theme.Changed -= PushLogColors;
 
     public void Info(string message, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
         Emit(LogLevel.Info, message, file, line);
@@ -159,15 +158,10 @@ public sealed class Logger : IDisposable
         // (already off-thread-safe) push so we never read a theme mid-swap from a background thread.
         Dispatch.To(DispatchContext.UI, () =>
         {
-            // The engine console takes a single hex per level; collapse each (usually flat) semantic colour
-            // to its representative hex.
-            var colors = _theme.Active.Colors;
-            PushLogColorsSafelyAsync(
-                    sink,
-                    ColorJsonConverter.ToHex(colors.Info.Representative),
-                    ColorJsonConverter.ToHex(colors.Warning.Representative),
-                    ColorJsonConverter.ToHex(colors.Error.Representative))
-                .FireAndForget();
+            // The engine console takes a single hex per level; the theme source supplies each already
+            // collapsed to its representative hex.
+            var (info, warning, error) = _theme.Colors;
+            PushLogColorsSafelyAsync(sink, info, warning, error).FireAndForget();
         });
     }
 

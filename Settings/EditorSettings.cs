@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using Toybox.Studio.Theming;
 using Toybox.Studio.PropertyGrid;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Settings;
 
@@ -16,8 +17,7 @@ public sealed class EditorSettings
     /// The root .toybox folder under the user profile where all editor data lives (settings,
     /// themes, logs). Use this instead of hard-coding ".toybox" elsewhere.
     /// </summary>
-    public static string BaseDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".toybox");
+    public static string BaseDirectory => AppData.BaseDirectory;
 
     private static readonly string FilePath = Path.Combine(BaseDirectory, "EditorSettings.json");
 

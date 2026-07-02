@@ -2,8 +2,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using Toybox.Studio.Logging;
-using Toybox.Studio.Project;
-using Toybox.Studio.Settings;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.EngineApi;
@@ -44,9 +42,9 @@ public sealed class Session : IAsyncDisposable
     private static readonly TimeSpan PingRetryDelay = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan UnresponsiveThreshold = TimeSpan.FromSeconds(5);
 
-    private readonly EditorSettings _settings;
-    private readonly ProjectManager _projects;
-    private readonly ProjectBuilder _builder;
+    private readonly IEngineSettings _settings;
+    private readonly IEngineProject _project;
+    private readonly INativeBuilder _builder;
     private readonly Logger _log;
     private readonly Engine _engine;
     private readonly object _sync = new();
@@ -80,14 +78,14 @@ public sealed class Session : IAsyncDisposable
     private int _isUnresponsive;
 
     public Session(
-        SettingsManager settings,
-        ProjectManager projects,
-        ProjectBuilder builder,
+        IEngineSettings settings,
+        IEngineProject project,
+        INativeBuilder builder,
         Logger log,
         Engine engine)
     {
-        _settings = settings.Settings;
-        _projects = projects;
+        _settings = settings;
+        _project = project;
         _builder = builder;
         _log = log;
         _engine = engine;
@@ -101,7 +99,7 @@ public sealed class Session : IAsyncDisposable
         _builder.BuildingChanged += OnBuildingChanged;
         // The engine now runs continuously in editor mode, one per open project: switching projects
         // relaunches it so its world matches.
-        _projects.ProjectChanged += OnProjectChanged;
+        _project.Changed += OnProjectChanged;
     }
 
     public event Action<ConnectionState>? StateChanged;
@@ -165,7 +163,7 @@ public sealed class Session : IAsyncDisposable
         if (State != ConnectionState.Disconnected)
             return;
 
-        var project = _projects.CurrentProject;
+        var project = _project.Current;
         if (project is null)
         {
             _log.Error("Open a project to launch.");
@@ -194,8 +192,7 @@ public sealed class Session : IAsyncDisposable
                 return;
             }
 
-            var launcherPath = ProjectBuilder.FindProjectLauncher(
-                project.BuildDirectory, ProjectBuilder.BuildConfiguration);
+            var launcherPath = _builder.FindProjectLauncher(project.BuildDirectory);
             if (launcherPath is null)
             {
                 _log.Error("The project build did not produce a Launcher executable.");
@@ -214,14 +211,14 @@ public sealed class Session : IAsyncDisposable
                 launcherPath,
                 project.ModuleName,
                 project.AppSettingsPath,
-                _settings.Engine.HideEngineWindow,
+                _settings.HideEngineWindow,
                 port,
                 assetViewerDir);
             _log.Info($"Engine process started (pid {_engine.ProcessId}).");
 
             var connect = await _engine.ConnectAsync(
                 port,
-                TimeSpan.FromSeconds(_settings.Engine.ConnectTimeoutSeconds),
+                TimeSpan.FromSeconds(_settings.ConnectTimeoutSeconds),
                 ct).ContinueOnAnyContext();
             if (connect is not { Success: true, Value: { } hello })
             {
@@ -329,7 +326,7 @@ public sealed class Session : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _projects.ProjectChanged -= OnProjectChanged;
+        _project.Changed -= OnProjectChanged;
         _engine.Disconnected -= OnEngineDisconnected;
         _engine.Exited -= OnProcessExited;
         _builder.BuildingChanged -= OnBuildingChanged;
@@ -402,7 +399,7 @@ public sealed class Session : IAsyncDisposable
 
     /// <summary>
     /// Stops and relaunches the current project's engine, recompiling as part of launch (a compiler change
-    /// clean-reconfigures inside <see cref="ProjectBuilder.BuildAsync(CancellationToken)"/>). Used when an editor
+    /// clean-reconfigures inside <see cref="INativeBuilder.BuildAsync(CancellationToken)"/>). Used when an editor
     /// setting that changes the native build — the C++ compiler or the engine source path — was edited and
     /// confirmed. No-op when nothing is running; the change applies on the next launch.
     /// </summary>
@@ -615,7 +612,7 @@ public sealed class Session : IAsyncDisposable
             return;
         }
 
-        if (!_settings.Engine.RestartOnCrash)
+        if (!_settings.RestartOnCrash)
             return;
 
         // A run that lasted past the minimum uptime is treated as a clean crash: reset the rapid-failure
@@ -812,9 +809,9 @@ public sealed class Session : IAsyncDisposable
     // A project switch relaunches the engine in editor mode so its world matches the new project. The
     // very first launch at startup is driven by App startup; this only reacts to later changes while an
     // engine is already live.
-    private void OnProjectChanged(ProjectInfo? project)
+    private void OnProjectChanged()
     {
-        if (project is null || State == ConnectionState.Disconnected)
+        if (_project.Current is null || State == ConnectionState.Disconnected)
             return;
 
         // Coalesce rapid project changes: if a restart is already pending/running, just flag that another

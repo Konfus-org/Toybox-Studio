@@ -1,4 +1,3 @@
-using Toybox.Studio.Dialogs;
 using Toybox.Studio.Logging;
 using Toybox.Studio.Utils;
 
@@ -20,15 +19,17 @@ public sealed class EngineWatchdog
 {
     private readonly Session _session;
     private readonly Logger _log;
+    private readonly IEnginePrompt _prompt;
 
     // Touched only on the UI thread. The CTS, when set, dismisses the open prompt if the engine recovers.
     private bool _prompting;
     private CancellationTokenSource? _recoveredCts;
 
-    public EngineWatchdog(Session session, Logger log)
+    public EngineWatchdog(Session session, Logger log, IEnginePrompt prompt)
     {
         _session = session;
         _log = log;
+        _prompt = prompt;
         _session.Unresponsive += () => Dispatch.To(DispatchContext.UI, OnUnresponsive);
         _session.Responsive += () => Dispatch.To(DispatchContext.UI, OnResponsive);
     }
@@ -54,7 +55,7 @@ public sealed class EngineWatchdog
         _recoveredCts = recovered;
         try
         {
-            var forceRestart = await Popups.ConfirmAsync(
+            var forceRestart = await _prompt.ConfirmAsync(
                 "Engine Not Responding",
                 "The engine has stopped responding and may be frozen. You can force-restart it — any "
                     + "unsaved changes in the running world will be lost — or keep waiting for it to recover.",

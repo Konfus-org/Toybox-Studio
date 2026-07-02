@@ -13,7 +13,7 @@ namespace Toybox.Studio.Project;
 /// its busy state. Failures are reported as studio log lines. The session calls <see cref="BuildAsync(CancellationToken)"/>
 /// as part of launch; the Build menu and script hot-reload call it directly.
 /// </summary>
-public sealed class ProjectBuilder
+public sealed class ProjectBuilder : INativeBuilder
 {
     // The engine is built in-tree with the project, so this also selects the engine binary: a Debug Studio
     // drives a Debug engine; a Release Studio a Release engine.
@@ -23,6 +23,14 @@ public sealed class ProjectBuilder
 #else
         "Release";
 #endif
+
+    // Explicit INativeBuilder surface (the interface lets the core engine session drive the build without
+    // depending on this concrete builder). BuildConfiguration is a const and FindProjectLauncher is static
+    // with an extra parameter, so both are bridged here rather than implemented implicitly.
+    string INativeBuilder.BuildConfiguration => BuildConfiguration;
+
+    string? INativeBuilder.FindProjectLauncher(string buildDirectory) =>
+        FindProjectLauncher(buildDirectory, BuildConfiguration);
 
     private readonly EditorSettings _settings;
     private readonly EngineLocator _locator;

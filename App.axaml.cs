@@ -325,6 +325,14 @@ public partial class App : Application
         services.AddSingleton<FilePicker>();
         services.AddSingleton<CMakeCompiler>();
         services.AddSingleton<ProjectBuilder>();
+        // Dependency-inversion adapters: the core logging/engine layers depend on these interfaces so they
+        // never reference the theme/settings/project layers above them. Each is backed by the concrete
+        // service registered here.
+        services.AddSingleton<ILogTheme, ThemeLogSource>();
+        services.AddSingleton<IEngineSettings, EngineSettingsAdapter>();
+        services.AddSingleton<IEngineProject, EngineProjectAdapter>();
+        services.AddSingleton<INativeBuilder>(sp => sp.GetRequiredService<ProjectBuilder>());
+        services.AddSingleton<IEnginePrompt, EnginePromptAdapter>();
         services.AddSingleton<Engine>();
         // Each viewport/game-view owns its own engine view stream (parameterized by ViewKind), so it's vended
         // by a factory rather than resolved directly — keeping Engine (the transport) out of the view-models.

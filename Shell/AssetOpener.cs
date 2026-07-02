@@ -15,7 +15,7 @@ namespace Toybox.Studio.Project;
 /// Shared by the menu-bar "Open Asset" picker and the Asset Browser so both route identically. Open operations
 /// touch dockables, so call <see cref="OpenAsync"/> on the UI thread.
 /// </summary>
-public sealed class AssetOpener
+public sealed class AssetOpener : IAssetOpener
 {
     // Source extensions that open in the text editor alongside C++ scripts.
     private static readonly HashSet<string> ShaderTypes = new(StringComparer.OrdinalIgnoreCase)

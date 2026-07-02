@@ -3,7 +3,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Dialogs;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Project.Assets;
 using Toybox.Studio.Utils;
@@ -85,7 +84,7 @@ public sealed class AssetFactory(AssetServices services)
     {
         if (services.Projects.CurrentProject is not { } project)
         {
-            await Popups.ShowErrorAsync("Can't create asset", "Open a project first.").ContinueOnAnyContext();
+            await services.Prompt.ShowErrorAsync("Can't create asset", "Open a project first.").ContinueOnAnyContext();
             return;
         }
 
@@ -97,7 +96,7 @@ public sealed class AssetFactory(AssetServices services)
             .SendCommand<JObject>(EngineMethods.AssetCreate, request, CancellationToken.None).ContinueOnAnyContext();
         if (write is not { Success: true })
         {
-            await Popups.ShowErrorAsync($"Couldn't create {label}", write.Error ?? "Unknown error.")
+            await services.Prompt.ShowErrorAsync($"Couldn't create {label}", write.Error ?? "Unknown error.")
                 .ContinueOnAnyContext();
             return;
         }
@@ -148,7 +147,7 @@ public sealed class AssetFactory(AssetServices services)
     {
         if (services.Projects.CurrentProject is not { } project)
         {
-            await Popups.ShowErrorAsync("Can't create script", "Open a project first.").ContinueOnAnyContext();
+            await services.Prompt.ShowErrorAsync("Can't create script", "Open a project first.").ContinueOnAnyContext();
             return;
         }
 
@@ -159,7 +158,7 @@ public sealed class AssetFactory(AssetServices services)
         var headerPath = System.IO.Path.Combine(directory, name + ".h");
         if (File.Exists(headerPath))
         {
-            await Popups.ShowErrorAsync("Can't create script", $"A script named '{name}' already exists.")
+            await services.Prompt.ShowErrorAsync("Can't create script", $"A script named '{name}' already exists.")
                 .ContinueOnAnyContext();
             return;
         }
@@ -167,7 +166,7 @@ public sealed class AssetFactory(AssetServices services)
         var id = await NewAssetIdAsync().ContinueOnAnyContext();
         if (id == 0)
         {
-            await Popups.ShowErrorAsync("Couldn't create script", "The engine could not mint an asset id.")
+            await services.Prompt.ShowErrorAsync("Couldn't create script", "The engine could not mint an asset id.")
                 .ContinueOnAnyContext();
             return;
         }
@@ -184,7 +183,7 @@ public sealed class AssetFactory(AssetServices services)
         }
         catch (Exception exception)
         {
-            await Popups.ShowErrorAsync("Couldn't create script", exception.Message).ContinueOnAnyContext();
+            await services.Prompt.ShowErrorAsync("Couldn't create script", exception.Message).ContinueOnAnyContext();
             return;
         }
 
@@ -203,7 +202,7 @@ public sealed class AssetFactory(AssetServices services)
     {
         if (services.Projects.CurrentProject is not { } project)
         {
-            await Popups.ShowErrorAsync("Can't create shader", "Open a project first.").ContinueOnAnyContext();
+            await services.Prompt.ShowErrorAsync("Can't create shader", "Open a project first.").ContinueOnAnyContext();
             return;
         }
 
@@ -211,7 +210,7 @@ public sealed class AssetFactory(AssetServices services)
         var id = await NewAssetIdAsync().ContinueOnAnyContext();
         if (id == 0)
         {
-            await Popups.ShowErrorAsync("Couldn't create shader", "The engine could not mint an asset id.")
+            await services.Prompt.ShowErrorAsync("Couldn't create shader", "The engine could not mint an asset id.")
                 .ContinueOnAnyContext();
             return;
         }
@@ -224,7 +223,7 @@ public sealed class AssetFactory(AssetServices services)
         }
         catch (Exception exception)
         {
-            await Popups.ShowErrorAsync("Couldn't create shader", exception.Message).ContinueOnAnyContext();
+            await services.Prompt.ShowErrorAsync("Couldn't create shader", exception.Message).ContinueOnAnyContext();
             return;
         }
 

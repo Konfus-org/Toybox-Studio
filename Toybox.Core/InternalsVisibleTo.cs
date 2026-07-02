@@ -6,3 +6,4 @@ using System.Runtime.CompilerServices;
 // this assembly would otherwise hide those internals; grant access rather than widening them to public.
 // Add each consuming assembly as it is extracted from Toybox.Studio.
 [assembly: InternalsVisibleTo("Toybox.Studio")]
+[assembly: InternalsVisibleTo("Toybox.Assets")]

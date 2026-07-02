@@ -416,8 +416,12 @@ public partial class App : Application
         services.AddSingleton<AssetViewerLauncher>();
 
         // Routes "open this asset" by type (code editor / world / asset viewer / OS default); shared by the
-        // menu-bar picker and the Asset Browser.
+        // menu-bar picker and the Asset Browser. Exposed via IAssetOpener so the asset layer (AssetServices)
+        // can drive it without depending on the UI it opens.
         services.AddSingleton<AssetOpener>();
+        services.AddSingleton<IAssetOpener>(sp => sp.GetRequiredService<AssetOpener>());
+        // The user-prompt adapter the asset layer raises errors/confirmations/rename input through.
+        services.AddSingleton<IUserPrompt, UserPromptAdapter>();
 
         // The shared asset (inspection) selection and the project file watcher that auto-refreshes the catalog
         // when assets change on disk.

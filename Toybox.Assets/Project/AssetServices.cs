@@ -14,7 +14,8 @@ public sealed class AssetServices(
     AssetSelection selection,
     ProjectManager projects,
     ProjectBuilder builder,
-    AssetOpener opener,
+    IAssetOpener opener,
+    IUserPrompt prompt,
     Clipboards.Clipboard clipboard)
 {
     public Engine Engine { get; } = engine;
@@ -27,7 +28,10 @@ public sealed class AssetServices(
 
     public ProjectBuilder Builder { get; } = builder;
 
-    public AssetOpener Opener { get; } = opener;
+    public IAssetOpener Opener { get; } = opener;
+
+    /// <summary>User prompts (error / confirm / rename) asset operations raise, via the dialog layer.</summary>
+    public IUserPrompt Prompt { get; } = prompt;
 
     public Clipboards.Clipboard Clipboard { get; } = clipboard;
 }

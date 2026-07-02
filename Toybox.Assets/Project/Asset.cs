@@ -2,7 +2,6 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Linq;
 using System.Reflection;
-using Toybox.Studio.Dialogs;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Project.Assets;
 using Toybox.Studio.Utils;
@@ -136,6 +135,9 @@ public abstract class Asset : EngineSyncedObject
     /// <summary>The native build, for subclasses whose authoring needs a rebuild (a new script's type).</summary>
     protected ProjectBuilder Builder => _services.Builder;
 
+    /// <summary>User prompts (error / confirm / rename) for the operations that surface failures to the user.</summary>
+    protected IUserPrompt Prompt => _services.Prompt;
+
     /// <summary>Loads this handle's editable body (an <c>asset.describe</c> snapshot) into <see cref="Body"/>,
     /// hydrating the typed reflected fields, then returns itself. <see cref="AssetFactory.For(AssetMeta)"/>
     /// mints the (bodyless) handle; loading its body is the asset's own job. A kind whose body isn't the generic
@@ -183,7 +185,7 @@ public abstract class Asset : EngineSyncedObject
         if (Projects.CurrentProject is null)
             return;
 
-        var confirmed = await Popups
+        var confirmed = await Prompt
             .ConfirmAsync("Delete asset", $"Delete '{Name}'? This removes the file from disk.", "Delete", "Cancel")
             .ContinueOnAnyContext();
         if (!confirmed)
@@ -197,7 +199,7 @@ public abstract class Asset : EngineSyncedObject
         }
         catch (Exception exception)
         {
-            await Popups.ShowErrorAsync("Couldn't delete asset", exception.Message).ContinueOnAnyContext();
+            await Prompt.ShowErrorAsync("Couldn't delete asset", exception.Message).ContinueOnAnyContext();
             return;
         }
 
@@ -248,7 +250,7 @@ public abstract class Asset : EngineSyncedObject
     /// and surfaces any failure as a popup.</summary>
     public async Task RenameAsync()
     {
-        var entered = await Popups
+        var entered = await Prompt
             .PromptForTextAsync("Rename asset", "New name", EditableName, confirmText: "Rename")
             .ContinueOnAnyContext();
         if (entered is null)
@@ -256,7 +258,7 @@ public abstract class Asset : EngineSyncedObject
 
         var result = await RenameAsync(entered).ContinueOnAnyContext();
         if (!result.Success)
-            await Popups.ShowErrorAsync("Couldn't rename asset", result.Error ?? "Unknown error.")
+            await Prompt.ShowErrorAsync("Couldn't rename asset", result.Error ?? "Unknown error.")
                 .ContinueOnAnyContext();
     }
 
@@ -283,7 +285,7 @@ public abstract class Asset : EngineSyncedObject
         var id = await NewAssetIdAsync(_services).ContinueOnAnyContext();
         if (id == 0)
         {
-            await Popups.ShowErrorAsync("Couldn't duplicate asset", "The engine could not mint an asset id.")
+            await Prompt.ShowErrorAsync("Couldn't duplicate asset", "The engine could not mint an asset id.")
                 .ContinueOnAnyContext();
             return;
         }
@@ -308,7 +310,7 @@ public abstract class Asset : EngineSyncedObject
         }
         catch (Exception exception)
         {
-            await Popups.ShowErrorAsync("Couldn't duplicate asset", exception.Message).ContinueOnAnyContext();
+            await Prompt.ShowErrorAsync("Couldn't duplicate asset", exception.Message).ContinueOnAnyContext();
             return;
         }
 
@@ -330,7 +332,7 @@ public abstract class Asset : EngineSyncedObject
         if (Projects.CurrentProject is not { } project)
             return;
 
-        var confirmed = await Popups
+        var confirmed = await Prompt
             .ConfirmAsync("Paste over asset",
                 $"Replace the contents of '{Name}' with '{source.Name}'? This can't be undone.",
                 "Paste Over", "Cancel")
@@ -349,7 +351,7 @@ public abstract class Asset : EngineSyncedObject
         }
         catch (Exception exception)
         {
-            await Popups.ShowErrorAsync("Couldn't paste over asset", exception.Message).ContinueOnAnyContext();
+            await Prompt.ShowErrorAsync("Couldn't paste over asset", exception.Message).ContinueOnAnyContext();
             return;
         }
 

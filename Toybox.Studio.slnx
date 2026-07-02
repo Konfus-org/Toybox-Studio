@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="Toybox.Studio.csproj" />
+  <Project Path="Toybox.Core/Toybox.Core.csproj" />
   <Project Path="../Studio.Generators/Toybox.Studio.Generators.csproj" />
 </Solution>

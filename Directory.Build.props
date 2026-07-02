@@ -9,10 +9,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
-  <!-- Keep all build artifacts under build/ alongside screenshots and other outputs. -->
+  <!-- Keep all build artifacts under build/ alongside screenshots and other outputs. Scoped per project
+       (by project name) so the several Toybox.* projects don't collide in a shared bin/obj. -->
   <PropertyGroup>
-    <BaseOutputPath>$(MSBuildThisFileDirectory)build\bin\</BaseOutputPath>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build\obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)build\bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
   </PropertyGroup>
 
 </Project>

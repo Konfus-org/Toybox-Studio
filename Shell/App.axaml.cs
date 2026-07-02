@@ -3,24 +3,26 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Toybox.Studio.CMake;
+using Avalonia.Platform.Storage;
+using Toybox.Studio.AppHosting;
 using Toybox.Studio.Console;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
 using Toybox.Studio.Logging;
+using Toybox.Studio.Projects;
+using Toybox.Studio.Settings;
 using Toybox.Studio.Shell;
 using Toybox.Studio.Status;
-using Toybox.Studio.AppHosting;
+using Toybox.Studio.Themes;
 using Toybox.Studio.Utils;
-using Toybox.Studio.Utils.Extensions;
 using Toybox.Studio.Viewport;
 
 namespace Toybox.Studio;
 
 /// <summary>
 /// The composition root and startup flow, kept deliberately linear: build the services, show the
-/// splash (a loading bar with playful phase lines), locate the engine, compile + launch the example
-/// project, and only then create and show the main window with the 3D viewport.
+/// splash (a loading bar with playful phase lines), prompt for the project to open, compile + launch
+/// it, and only then create and show the main window with the 3D viewport.
 /// </summary>
 public partial class App : Application
 {
@@ -59,21 +61,22 @@ public partial class App : Application
         // Startup touches windows, so every await must resume back on the UI thread.
         try
         {
-            services.Log.Info(services.Locator.ResolveAtStartup());
-
-            if (services.Project.Current is not null)
+            if (await PromptForProjectAsync(splash, services).ContinueOnSameContext() is not { } project)
+            {
+                services.Log.Error("No project was chosen, so there is nothing to launch.");
+                services.Splash.Status = "No project chosen.";
+            }
+            else if (services.Settings.Settings.Engine.AutoLaunchEngine)
             {
                 // Compiles if needed, launches the engine process, and returns once connected (or failed —
                 // failures land in the log). The splash narrates the phases from the dispatched engine
                 // state; the viewport starts streaming on connect by itself.
-                await services.Coordinator.StartEngineAsync().ContinueOnSameContext();
+                await services.Coordinator.StartEngineAsync(project).ContinueOnSameContext();
             }
             else
             {
-                services.Log.Error(
-                    "No engine/example project found. Place the studio next to your Toybox checkout "
-                        + "(Engine + ExampleProject) and restart.");
-                services.Splash.Status = "Engine not found.";
+                services.Log.Info("Engine auto-launch is disabled in the editor settings; not launching.");
+                services.Splash.Status = "Engine auto-launch is off.";
             }
 
             var remaining = SplashMinimumDuration - timer.Elapsed;
@@ -98,6 +101,58 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Asks the user which project folder to open, starting the picker at the last-opened project (there
+    /// is no project-picker UI yet, so every launch asks). Re-prompts while the picked folder isn't a
+    /// project; null once cancelled. A valid pick is remembered in the editor settings.
+    /// </summary>
+    private static async Task<Project?> PromptForProjectAsync(SplashWindow splash, Services services)
+    {
+        var settings = services.Settings.Settings;
+        var lastOpened = settings.Projects.LastOpened;
+        var startLocation = lastOpened.Length > 0
+            ? await splash.StorageProvider.TryGetFolderFromPathAsync(lastOpened).ContinueOnSameContext()
+            : null;
+
+        while (true)
+        {
+            var picks = await splash.StorageProvider.OpenFolderPickerAsync(
+                    new FolderPickerOpenOptions
+                    {
+                        Title = "Open a Toybox project",
+                        AllowMultiple = false,
+                        SuggestedStartLocation = startLocation,
+                    })
+                .ContinueOnSameContext();
+            if (picks.Count == 0 || picks[0].TryGetLocalPath() is not { } root)
+                return null;
+
+            if (Project.IsProjectDirectory(root))
+            {
+                RememberProject(services, root);
+                return new Project(root, settings.Engine.SourcePath, services.Log, services.Events);
+            }
+
+            services.Log.Warning(
+                $"'{root}' is not a Toybox project (it has no {Project.SettingsFileName}); pick another folder.");
+        }
+    }
+
+    /// <summary>Records the opened project as the last-opened and front of the recents (capped) list.</summary>
+    private static void RememberProject(Services services, string root)
+    {
+        const int maxRecent = 10;
+
+        var projects = services.Settings.Settings.Projects;
+        projects.LastOpened = root;
+        projects.Recent.RemoveAll(p => string.Equals(p, root, StringComparison.OrdinalIgnoreCase));
+        projects.Recent.Insert(0, root);
+        if (projects.Recent.Count > maxRecent)
+            projects.Recent.RemoveRange(maxRecent, projects.Recent.Count - maxRecent);
+
+        services.Settings.SaveAsync().FireAndForget();
+    }
+
+    /// <summary>
     /// Every service the app is composed of, wired by hand in dependency order — no DI container, no
     /// registration indirection; what talks to what is exactly what this constructor says.
     /// </summary>
@@ -105,46 +160,60 @@ public partial class App : Application
     {
         public Services()
         {
-            // Logging first, so every later step lands in TbxStudio.log and the console (which the
-            // splash and any console panel both show). Then the event bus every domain signal flows
+            // Settings first — nearly everything below reads them — then the theme, applied before any
+            // window exists so even the splash renders themed. Theme loading runs before the logger, so
+            // its warnings are flushed once the logger exists.
+            Settings = new SettingsManager();
+            Theme = new ThemeManager(Settings);
+            Theme.ApplySavedTheme();
+
+            // Logging next, so every later step lands in TbxStudio.log and the console (which the
+            // splash and any console panel both show); the engine console's colours track the active
+            // theme via the ThemeLogSource adapter. Then the event bus every domain signal flows
             // through — publishers dispatch typed structs, handlers register; nobody holds anybody.
             var logFile = new LogFile();
-            Log = new Logger(logFile, new StaticLogTheme());
+            Log = new Logger(logFile, new ThemeLogSource(Theme));
+            foreach (var warning in Theme.LoadWarnings)
+                Log.Warning(warning);
             Console = new ConsoleViewModel();
             Log.Logged += entry => Console.Append(new ConsoleLine(entry.Message, SeverityOf(entry)));
-            var events = new EventDispatcher();
+            Events = new EventDispatcher();
 
-            // The engine and its host: locate the engine source, expose the example project beside it
-            // (which builds itself via the generic CMake driver), and host the engine process. The
-            // coordinator ties them together — the host itself only ever launches/attaches/stops what
-            // it is handed, and the engine service is what everything talks to (and reads State from).
-            var settings = StudioSettings.Load();
-            Locator = new EngineLocator(settings, events);
-            Project = new ExampleProject(Locator, new CMakeCompiler(new CommandRunner(Log), Log), Log, events);
-            Engine = new Engine(Log, events);
-            Host = new AppHost<Engine>(Engine, Log, events, settings.RestartOnCrash);
+            // The engine and its host: the engine service is what everything talks to (and reads State
+            // from); the host itself only ever launches/attaches/stops what it is handed. Which project
+            // drives the launch is startup's business — it prompts for one and hands it to the coordinator.
+            var engineSettings = Settings.Settings.Engine;
+            Engine = new Engine(Log, Events);
+            Host = new AppHost<Engine>(Engine, Log, Events, engineSettings.RestartOnCrash);
 
             // Generic owned-app supervision: ping the connected engine so a freeze is noticed, and while
             // disconnected watch for an engine that is already running (e.g. launched by a debugger) to
             // attach to instead of launching a second one. The coordinator decides what to do with what
             // it reports.
             _ownedAppWatchdog = new OwnedAppWatchdog(
-                Engine, EngineCommands.EnginePing, EngineApi.Engine.DefaultPort, events);
+                Engine, EngineCommands.EnginePing, EngineApi.Engine.DefaultPort, Events);
             _ownedAppWatchdog.Start();
-            Coordinator = new EngineCoordinator(Project, Host, _ownedAppWatchdog, settings, Log, events);
+            Coordinator = new EngineCoordinator(
+                Host,
+                _ownedAppWatchdog,
+                engineSettings.HideEngineWindow,
+                engineSettings.ConnectTimeoutSeconds,
+                Log,
+                Events);
 
             // The one 3D view: an editor-camera stream into the engine's world, filling the main window.
-            Viewport = new ViewportViewModel(events, Log, ViewKind.Editor);
-            Viewport.Prepare(new ViewportStream(Engine, events, ViewKind.Editor));
+            Viewport = new ViewportViewModel(Events, Log, ViewKind.Editor);
+            Viewport.Prepare(new ViewportStream(Engine, Events, ViewKind.Editor));
 
-            Shell = new ShellViewModel(new StatusViewModel(events), Viewport);
-            Splash = new SplashViewModel(events);
+            Shell = new ShellViewModel(new StatusViewModel(Events), Viewport);
+            Splash = new SplashViewModel(Events);
         }
 
+        public SettingsManager Settings { get; }
+        public ThemeManager Theme { get; }
         public Logger Log { get; }
         public ConsoleViewModel Console { get; }
-        public EngineLocator Locator { get; }
-        public ExampleProject Project { get; }
+        public EventDispatcher Events { get; }
         public Engine Engine { get; }
         public AppHost<Engine> Host { get; }
         public EngineCoordinator Coordinator { get; }

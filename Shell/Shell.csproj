@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The application: composition root, splash + main window, and the concrete engine
-       settings/project/build services the EngineApi session is driven by. -->
+  <!-- The application: the composition root, the splash (which prompts for the project to open),
+       and the main window. Everything engine/project-shaped lives in the layers below. -->
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,16 +11,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="Assets\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
     <ProjectReference Include="..\Logging\Logging.csproj" />
-    <ProjectReference Include="..\CMake\CMake.csproj" />
-    <ProjectReference Include="..\Rpc\Rpc.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\Themes\Themes.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
     <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Projects\Projects.csproj" />
     <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
     <ProjectReference Include="..\Overlays\Overlays.csproj" />
     <ProjectReference Include="..\Console\Console.csproj" />
@@ -34,7 +32,6 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
-    <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 
 </Project>

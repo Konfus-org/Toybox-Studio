@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The editor's persisted configuration: the EditorSettings data (one JSON file in ~/.toybox) and
+       the SettingsManager that loads and owns it. Deliberately near the bottom of the stack — it knows
+       nothing about the features its sections configure; they read the plain values they need. -->
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

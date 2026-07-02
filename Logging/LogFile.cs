@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Toybox.Studio.Utils;
 namespace Toybox.Studio.Logging;
 
 /// <summary>
@@ -14,7 +13,7 @@ public sealed class LogFile : IDisposable
     /// The ~/.toybox/Logs folder that holds the editor's TbxStudio.log files.
     /// </summary>
     public static readonly string LogsDirectory =
-        Path.Combine(AppData.BaseDirectory, "Logs");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".toybox", "Logs");
 
     private const string BaseName = "TbxStudio";
     private const string Extension = ".log";

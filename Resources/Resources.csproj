@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The editor's bundled resources and icon vocabulary. Icons/ is embedded as Avalonia resources
+       (reference via avares://Toybox.Studio.Resources/Icons/...); AssetViewer/ (preview world assets)
+       and Templates/ (real on-disk templates the editor copies, e.g. a new project's starting point)
+       are plain files shipped beside the app. GlobalUsings.cs aliases Icon to the IconPacks Lucide
+       kind enum — the editor's strong icon type. -->
+
+  <ItemGroup>
+    <AvaloniaResource Include="Icons\**" />
+    <None Include="AssetViewer\**;Templates\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+  </ItemGroup>
+
+</Project>

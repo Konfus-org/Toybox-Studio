@@ -10,7 +10,7 @@
         Topmost="True">
 
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" Margin="24">
-        <Image Source="/Assets/Toybox.png" Width="84" Height="84"/>
+        <Image Source="avares://Toybox.Studio.Resources/Icons/Toybox.png" Width="84" Height="84"/>
         <TextBlock Text="Toybox Studio" FontSize="24" FontWeight="SemiBold"
                    HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextBrush}"/>
 

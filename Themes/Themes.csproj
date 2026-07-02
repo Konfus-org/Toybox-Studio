@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The theming system: the Theme data (Theme.json files under ~/.toybox/Themes), the repository +
+       manager that own the catalog and the active selection (persisted via Settings), and the appliers
+       that write a theme onto the live Avalonia resources. ThemeLogSource adapts the active theme to
+       Logging's ILogTheme so the engine console's colours track the editor theme. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

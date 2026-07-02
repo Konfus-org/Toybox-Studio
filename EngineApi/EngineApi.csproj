@@ -2,8 +2,8 @@
 
   <!-- Everything engine-specific, and only that: the launcher command line, the hello handshake,
        play/pause, the derived Engine.State, and viewport streams. The generic hosting (start/attach/
-       stop/restart, crash auto-restart) lives in AppHosting's AppHost<Engine>; projects/builds/settings/
-       prompts are coordinated from outside (Shell's EngineCoordinator) against this public surface. -->
+       stop/restart, crash auto-restart) lives in AppHosting's AppHost<Engine>; projects/builds/prompts
+       are coordinated from outside (the Projects layer's EngineCoordinator) against this public surface. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />

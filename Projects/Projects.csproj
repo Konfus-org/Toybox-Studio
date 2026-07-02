@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The project layer: the opened project (which compiles itself through the generic CMake driver
+       against the engine checkout found beside it) and the coordinator that builds it and drives the
+       engine host from it. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\CMake\CMake.csproj" />
+    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+  </ItemGroup>
+
+</Project>

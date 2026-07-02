@@ -1,5 +1,4 @@
 using Newtonsoft.Json;
-using Toybox.Studio.PropertyGrid;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Settings;
@@ -174,8 +173,8 @@ public sealed class ThemeEditorSettings
 
     /// <summary>
     /// Name of the currently applied theme. There is no light/dark variant — a light/dark pair is just two
-    /// themes named by convention, picked from this single list like any other.
+    /// themes named by convention, picked from this single list like any other. (The Settings panel renders
+    /// the theme selection as its own section, so no [View] tag is needed on the data here.)
     /// </summary>
-    [View("ThemePicker")]
     public string Active { get; set; } = DefaultTheme;
 }

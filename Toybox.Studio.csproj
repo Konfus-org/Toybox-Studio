@@ -38,6 +38,10 @@
     <AvaloniaXaml Remove="Toybox.Settings\**" />
     <EmbeddedResource Remove="Toybox.Settings\**" />
     <None Remove="Toybox.Settings\**" />
+    <Compile Remove="Toybox.Studio.Generators\**" />
+    <AvaloniaXaml Remove="Toybox.Studio.Generators\**" />
+    <EmbeddedResource Remove="Toybox.Studio.Generators\**" />
+    <None Remove="Toybox.Studio.Generators\**" />
     <Compile Update="Logging\LogConsoleView.axaml.cs">
       <DependentUpon>LogConsoleView.axaml</DependentUpon>
       <SubType>Code</SubType>
@@ -78,10 +82,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The RpcReflect source generator (emits engine-synced properties from [RpcReflect] fields). Consumed as
-         an analyzer, not referenced as an assembly; it lives in a sibling dir to escape this project's source
-         globbing and Directory.Build.props (it must target netstandard2.0). -->
-    <ProjectReference Include="..\Studio.Generators\Toybox.Studio.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- The EngineSync source generator (emits engine-synced properties from [EngineSync] fields). Consumed as
+         an analyzer, not referenced as an assembly; its folder is excluded from this project's source globbing
+         above (it must target netstandard2.0). -->
+    <ProjectReference Include="Toybox.Studio.Generators\Toybox.Studio.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="Toybox.Core\Toybox.Core.csproj" />
     <ProjectReference Include="Toybox.Settings\Toybox.Settings.csproj" />
   </ItemGroup>

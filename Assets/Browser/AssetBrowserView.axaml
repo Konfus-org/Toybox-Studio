@@ -123,7 +123,7 @@
              The hover info + live 3D render live in the shared custom card overlay below, not a tooltip. -->
         <DataTemplate x:Key="GridTile" x:DataType="ab:AssetTileViewModel">
             <Button Classes="tile" Classes.selected="{Binding IsSelected}" anim:Pop.Enabled="True"
-                    cm:MenuOpenBehavior.Enabled="True"
+                    util:ContextMenuOpener.Enabled="True"
                     util:PointerEnterCommand.Command="{Binding HoverCommand}"
                     Command="{Binding $parent[ItemsControl].((ab:AssetBrowserViewModel)DataContext).SelectTileCommand}"
                     CommandParameter="{Binding}"
@@ -146,7 +146,7 @@
         <!-- A list row: glyph, name, trailing type pill. -->
         <DataTemplate x:Key="ListRow" x:DataType="ab:AssetTileViewModel">
             <Button Classes="listRow" Classes.selected="{Binding IsSelected}"
-                    cm:MenuOpenBehavior.Enabled="True"
+                    util:ContextMenuOpener.Enabled="True"
                     util:PointerEnterCommand.Command="{Binding HoverCommand}"
                     Command="{Binding $parent[ItemsControl].((ab:AssetBrowserViewModel)DataContext).SelectTileCommand}"
                     CommandParameter="{Binding}"
@@ -234,7 +234,7 @@
             </Border>
 
             <Panel Grid.Column="1" Margin="8,0,0,0" Background="Transparent"
-                   cm:MenuOpenBehavior.Enabled="True"
+                   util:ContextMenuOpener.Enabled="True"
                    util:PointerExitCommand.Command="{Binding ClearHoverCommand}">
                 <ScrollViewer IsVisible="{Binding !IsListView}"
                               HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

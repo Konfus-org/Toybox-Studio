@@ -8,6 +8,7 @@
              xmlns:ghost="using:Toybox.Studio.Ghost"
              xmlns:search="using:Toybox.Studio.Searching"
              xmlns:cm="using:Toybox.Studio.ContextMenu"
+             xmlns:beh="using:Toybox.Studio.Behaviors"
              x:Class="Toybox.Studio.EntityInspector.EntityInspectorView"
              x:DataType="ei:EntityInspectorViewModel">
 
@@ -23,7 +24,7 @@
                     BorderBrush="{DynamicResource ThemeBorderBrush}"
                     BorderThickness="0,0,0,1" Padding="10,7" IsVisible="{Binding HasSelection}">
                 <DockPanel DataContext="{Binding SelectedEntity}" x:DataType="ecs:EntityViewModel"
-                           Background="Transparent" cm:MenuOpenBehavior.Enabled="True">
+                           Background="Transparent" beh:ContextMenuOpener.Enabled="True">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Subtitle}" Opacity="0.55"
                                VerticalAlignment="Center" HorizontalAlignment="Right" Margin="8,0,0,0"/>
                     <!-- Wholesale enable toggle: a disabled entity is skipped by every runtime system but stays
@@ -70,7 +71,7 @@
                                              flow beneath on the same surface. -->
                                         <StackPanel IsVisible="{Binding #ComponentGrid.HasVisibleItems}">
                                             <ToggleButton x:Name="CompToggle" Classes="sectionHeader" IsChecked="True"
-                                                          cm:MenuOpenBehavior.Enabled="True">
+                                                          beh:ContextMenuOpener.Enabled="True">
                                                 <DockPanel>
                                                     <!-- Disclosure chevron on the LEFT, before the icon/label. -->
                                                     <Path DockPanel.Dock="Left" Classes="sectionChevron"

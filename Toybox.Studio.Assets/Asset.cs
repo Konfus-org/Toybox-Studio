@@ -57,7 +57,7 @@ public abstract class Asset : EngineSyncedObject
 
     // The full catalog metadata behind the handle. Always set immediately after construction via Initialize,
     // before the handle is handed out.
-    internal AssetMeta Info { get; private set; } = null!;
+    public AssetMeta Info { get; private set; } = null!;
 
     /// <summary>The loaded editable body (self-describing JSON), or null until a Load populates it (e.g. a
     /// handle from <see cref="AssetFactory.For(AssetMeta)"/> for a lifecycle op carries no body).</summary>

@@ -169,9 +169,11 @@ public partial class App : Application
             // Give the inspector's script cards their inline editor / pop-out / source-resolution service.
             ScriptEditing.Current = _host.Services.GetRequiredService<ScriptEditing>();
 
-            // Publish the context-menu dispatcher so the static MenuOpenBehavior (an attached property) can
-            // route a clicked target to the matching per-surface menu without a per-view hookup.
-            ContextMenuCatalog.Current = _host.Services.GetRequiredService<ContextMenuCatalog>();
+            // Publish the context-menu dispatcher and wire the low ContextMenuOpener attach-behavior to the
+            // app-layer opener so a right-click on any control routes to the matching per-surface menu.
+            var contextMenus = _host.Services.GetRequiredService<ContextMenuCatalog>();
+            ContextMenuCatalog.Current = contextMenus;
+            ContextMenuOpener.Current = new ContextMenuOpenerAdapter(contextMenus);
 
             // The Accessibility ▸ Animation intensity setting renders as a clay slider rather than a numeric
             // field (tagged [View("intensitySlider")] by the settings grid; see SettingsViewModel.TagView).

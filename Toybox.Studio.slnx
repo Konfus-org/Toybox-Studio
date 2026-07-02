@@ -3,5 +3,6 @@
   <Project Path="Toybox.Core/Toybox.Core.csproj" />
   <Project Path="Toybox.Resources/Toybox.Resources.csproj" />
   <Project Path="Toybox.Settings/Toybox.Settings.csproj" />
+  <Project Path="Toybox.Themes/Toybox.Themes.csproj" />
   <Project Path="Toybox.Studio.Generators/Toybox.Studio.Generators.csproj" />
 </Solution>

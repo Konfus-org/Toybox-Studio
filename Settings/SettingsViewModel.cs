@@ -25,6 +25,7 @@ public sealed partial class SettingsViewModel : DataPanel
 
     public SettingsViewModel(
         SettingsManager settings,
+        ProjectSettingsService projectSettings,
         ThemeManager theme,
         ThemeCreator themeCreator,
         FilePicker filePicker,
@@ -35,9 +36,9 @@ public sealed partial class SettingsViewModel : DataPanel
         _session = session;
 
         Editor = new EditorSettingsViewModel(settings, theme, themeCreator, filePicker, locator);
-        // The project tab works entirely through the SettingsManager's project settings asset, which the manager
-        // (re)loads — enriched with the engine schema — on project change / engine connect.
-        Project = new ProjectSettingsViewModel(settings, log);
+        // The project tab works entirely through the project settings service's asset, which it (re)loads —
+        // enriched with the engine schema — on project change / engine connect.
+        Project = new ProjectSettingsViewModel(projectSettings, log);
 
         Editor.DirtyChanged += RecomputeDirty;
         Project.DirtyChanged += RecomputeDirty;

@@ -6,7 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Logging;
-using Toybox.Studio.Settings;
+using Toybox.Studio.Project;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Utils.Extensions;
 using Toybox.Studio.PropertyGrid;
@@ -24,7 +24,7 @@ namespace Toybox.Studio.Settings;
 /// </summary>
 public sealed partial class ProjectSettingsViewModel : ObservableObject
 {
-    private readonly SettingsManager _settings;
+    private readonly ProjectSettingsService _settings;
     private readonly Logger _log;
 
     // The live document the grid edits in place (the asset's Body) and a clone of it at the last save / rebuild.
@@ -32,7 +32,7 @@ public sealed partial class ProjectSettingsViewModel : ObservableObject
     private JObject? _working;
     private JObject? _baseline;
 
-    public ProjectSettingsViewModel(SettingsManager settings, Logger log)
+    public ProjectSettingsViewModel(ProjectSettingsService settings, Logger log)
     {
         _settings = settings;
         _log = log;

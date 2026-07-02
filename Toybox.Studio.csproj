@@ -29,11 +29,15 @@
     <Compile Remove="build\**" />
     <EmbeddedResource Remove="build\**" />
     <None Remove="build\**" />
-    <!-- Toybox.Core is its own project (referenced below); keep its sources out of this project's globs. -->
+    <!-- Extracted Toybox.* projects (referenced below); keep their sources out of this project's globs. -->
     <Compile Remove="Toybox.Core\**" />
     <AvaloniaXaml Remove="Toybox.Core\**" />
     <EmbeddedResource Remove="Toybox.Core\**" />
     <None Remove="Toybox.Core\**" />
+    <Compile Remove="Toybox.Settings\**" />
+    <AvaloniaXaml Remove="Toybox.Settings\**" />
+    <EmbeddedResource Remove="Toybox.Settings\**" />
+    <None Remove="Toybox.Settings\**" />
     <Compile Update="Logging\LogConsoleView.axaml.cs">
       <DependentUpon>LogConsoleView.axaml</DependentUpon>
       <SubType>Code</SubType>
@@ -79,6 +83,7 @@
          globbing and Directory.Build.props (it must target netstandard2.0). -->
     <ProjectReference Include="..\Studio.Generators\Toybox.Studio.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="Toybox.Core\Toybox.Core.csproj" />
+    <ProjectReference Include="Toybox.Settings\Toybox.Settings.csproj" />
   </ItemGroup>
 
   <ItemGroup>

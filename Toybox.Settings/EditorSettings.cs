@@ -1,5 +1,4 @@
 using Newtonsoft.Json;
-using Toybox.Studio.Theming;
 using Toybox.Studio.PropertyGrid;
 using Toybox.Studio.Utils;
 
@@ -169,10 +168,14 @@ public sealed class AccessibilityEditorSettings
 
 public sealed class ThemeEditorSettings
 {
+    // The default theme name. Kept as a literal here (rather than referencing the theming layer's
+    // Theme.ClayName) so the settings layer stays independent of Theming; the theme repository resolves it.
+    private const string DefaultTheme = "Claymorphism";
+
     /// <summary>
     /// Name of the currently applied theme. There is no light/dark variant — a light/dark pair is just two
     /// themes named by convention, picked from this single list like any other.
     /// </summary>
     [View("ThemePicker")]
-    public string Active { get; set; } = Theme.ClayName;
+    public string Active { get; set; } = DefaultTheme;
 }

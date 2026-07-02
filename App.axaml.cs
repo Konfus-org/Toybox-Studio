@@ -224,21 +224,22 @@ public partial class App : Application
             var settings = _host.Services.GetRequiredService<SettingsManager>().Settings;
             var projects = _host.Services.GetRequiredService<ProjectManager>();
 
-            // The settings manager holds the open project's settings asset too; (re)load it when the project
+            // The project settings service holds the open project's settings asset; (re)load it when the project
             // changes or the engine connects (the engine supplies the full settings schema). Wired here rather
-            // than via the manager's ctor because ProjectManager already depends on SettingsManager (a cycle).
+            // than via a ctor because the project manager and the asset system are constructed lazily.
             // On connect also refresh the asset file-pairing rules from the engine (it owns them, not Studio).
             var engineRpc = _host.Services.GetRequiredService<Engine>();
-            projects.ProjectChanged += _ => settingsManager.ReloadProjectAsync().FireAndForget();
+            var projectSettings = _host.Services.GetRequiredService<ProjectSettingsService>();
+            projects.ProjectChanged += _ => projectSettings.ReloadProjectAsync().FireAndForget();
             session.StateChanged += state =>
             {
                 if (state != ConnectionState.Connected)
                     return;
 
                 AssetPairing.RefreshAsync(engineRpc).FireAndForget();
-                settingsManager.ReloadProjectAsync().FireAndForget();
+                projectSettings.ReloadProjectAsync().FireAndForget();
             };
-            settingsManager.ReloadProjectAsync().FireAndForget();
+            projectSettings.ReloadProjectAsync().FireAndForget();
 
             var wantsLaunch = settings.Engine.AutoLaunchEngine
                 || desktop.Args?.Contains("--auto-launch") == true;
@@ -318,6 +319,7 @@ public partial class App : Application
     {
         services.AddSingleton<CommandRunner>();
         services.AddSingleton<SettingsManager>();
+        services.AddSingleton<ProjectSettingsService>();
         services.AddSingleton<ThemeManager>();
         services.AddSingleton<LogFile>();
         services.AddSingleton<Logger>();

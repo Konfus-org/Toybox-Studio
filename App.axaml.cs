@@ -146,6 +146,13 @@ public partial class App : Application
                 (descriptor, accessor) => MaterialInstancePropertyViewModel.CanBuild(descriptor)
                     ? new MaterialInstancePropertyViewModel(descriptor, accessor, 0)
                     : new ObjectPropertyViewModel(descriptor, accessor, 0));
+            // A nested material-instance field on a reflected component (Sky, PostProcessing) tags itself
+            // [View("MaterialInstance")] — a string name (it can't reference the editor type from the ECS
+            // layer) — routing to the same base-aware editor.
+            PropertyViewRegistry.Register("MaterialInstance",
+                (descriptor, accessor) => MaterialInstancePropertyViewModel.CanBuild(descriptor)
+                    ? new MaterialInstancePropertyViewModel(descriptor, accessor, 0)
+                    : new ObjectPropertyViewModel(descriptor, accessor, 0));
 
             // Surface a failed optimistic live-edit push in the log. The world's describe-parser, reflect
             // scheduler and engine transport are now injected into the live World (via GameState), not wired

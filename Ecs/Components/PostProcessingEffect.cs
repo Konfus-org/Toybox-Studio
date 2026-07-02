@@ -10,7 +10,7 @@ namespace Toybox.Studio.Ecs.Components;
 /// </summary>
 public sealed class PostProcessingEffect
 {
-    [ViewModel(typeof(MaterialInstancePropertyViewModel))]
+    [View("MaterialInstance")]
     public MaterialInstance Material { get; set; } = new();
 
     public bool IsEnabled { get; set; } = true;

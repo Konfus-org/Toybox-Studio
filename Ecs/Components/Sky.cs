@@ -23,7 +23,7 @@ public enum SkyType
 [ViewportIcon(Icon.CloudSun, PaletteColor.Cyan)]
 public sealed partial class Sky : Component
 {
-    [ViewModel(typeof(MaterialInstancePropertyViewModel))]
+    [View("MaterialInstance")]
     [EngineSync] private MaterialInstance _material = new();
 
     [EngineSync] private SkyType _type = SkyType.Sphere;

@@ -195,7 +195,9 @@ public static class ReflectionWalk
             Attr<CategoryAttribute>(member)?.Category,
             Attr<DescriptionAttribute>(member)?.Description,
             Attr<OrderAttribute>(member)?.Order ?? 0,
-            Attr<ViewModelAttribute>(member)?.ViewModel.FullName);
+            // A [ViewModel(typeof(X))] routes by the editor type's full name; a [View("name")] routes by a
+            // string name (used by data below the property grid, which can't reference an editor type).
+            Attr<ViewModelAttribute>(member)?.ViewModel.FullName ?? Attr<ViewAttribute>(member)?.Name);
     }
 
     private static IReadOnlyList<string>? Extensions(MemberInfo? member) =>

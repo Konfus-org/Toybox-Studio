@@ -1,0 +1,20 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Avalonia" Version="12.0.4" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.0.4" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.4" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.4" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageVersion Include="StreamJsonRpc" Version="2.25.28" />
+    <!-- Security pin: StreamJsonRpc pulls MessagePack 2.5.198 transitively, which has a high-severity
+         advisory (GHSA-hv8m-jj95-wg3x). Override it with the patched line. -->
+    <PackageVersion Include="MessagePack" Version="3.1.7" />
+  </ItemGroup>
+
+</Project>

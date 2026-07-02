@@ -1,0 +1,20 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="using:Toybox.Studio.Shell"
+        xmlns:status="using:Toybox.Studio.Status"
+        xmlns:viewport="using:Toybox.Studio.Viewport"
+        x:Class="Toybox.Studio.Shell.MainWindow"
+        x:DataType="shell:ShellViewModel"
+        Icon="/Assets/Toybox.png"
+        Title="{Binding Title}"
+        Width="1440" Height="850">
+
+    <DockPanel>
+        <Border Classes="StatusBar" DockPanel.Dock="Bottom">
+            <status:StatusView DataContext="{Binding Status}"/>
+        </Border>
+
+        <!-- The whole window is the 3D view into the engine's world. -->
+        <viewport:ViewportView DataContext="{Binding Viewport}"/>
+    </DockPanel>
+</Window>

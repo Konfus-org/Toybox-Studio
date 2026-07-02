@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The 3D viewport: displays an engine view's shared GPU texture zero-copy via composition
+       interop, and streams typed input snapshots to the engine camera (via the generic
+       input-binding behavior, with the surface view-model as the sink). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Input\Input.csproj" />
+    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Overlays\Overlays.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

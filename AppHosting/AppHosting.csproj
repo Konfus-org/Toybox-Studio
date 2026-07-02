@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The generic app-owner framework: a OwnedApp is a peer process the studio launches (or
+       attaches to) and talks to over a private RPC link. All generic concepts live here — process
+       ownership, connect/disconnect, bounded commands and notifications, and typed input streaming.
+       A concrete owned app (the engine) subclasses this and layers its own vocabulary on top. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Input\Input.csproj" />
+    <ProjectReference Include="..\Rpc\Rpc.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The generic input layer: typed input snapshots, the sink they flow to, and the attached
+       behavior that captures a control's input and forwards it to a bound sink. Knows nothing about
+       who consumes the input. -->
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+  </ItemGroup>
+
+</Project>

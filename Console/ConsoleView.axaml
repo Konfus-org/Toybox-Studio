@@ -1,6 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:controls="using:Toybox.Studio.Searching"
              xmlns:local="using:Toybox.Studio.Console"
              xmlns:ghost="using:Toybox.Studio.Ghost"
              x:Class="Toybox.Studio.Console.ConsoleView"
@@ -42,9 +41,9 @@
                     Margin="6,0,0,0" Command="{Binding ClearCommand}"/>
             <TextBlock DockPanel.Dock="Right" Text="{Binding MatchSummary}"
                        Opacity="0.6" VerticalAlignment="Center" Margin="8,0,0,0"/>
-            <controls:SearchBox Watermark="Search…" MinWidth="280"
-                                HorizontalAlignment="Stretch"
-                                Text="{Binding SearchText, Mode=TwoWay}"/>
+            <TextBox PlaceholderText="Search…" MinWidth="280"
+                     HorizontalAlignment="Stretch"
+                     Text="{Binding SearchText, Mode=TwoWay}"/>
         </DockPanel>
 
         <Panel>

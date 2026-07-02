@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Low-level, reusable UI infrastructure: attached behaviors and animations with no knowledge
+       of the editor's domain. Every attached-property class here (and anywhere) follows the
+       *Behavior naming convention. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The unified logging pipeline: every studio and engine line flows through Logger into
+       subscribers (the console) and the rotated ~/.toybox/Logs/TbxStudio.log. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -23,7 +23,7 @@
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <!-- Nod the header in the direction it just moved when it opens/closes: bound to its own checked
              (expanded) state, so component headers, categories and structs all animate identically. -->
-        <Setter Property="behaviors:ExpandNod.State" Value="{Binding IsChecked, RelativeSource={RelativeSource Self}}"/>
+        <Setter Property="behaviors:ExpandNodBehavior.State" Value="{Binding IsChecked, RelativeSource={RelativeSource Self}}"/>
     </Style>
     <!-- A header band is full-width and flush against its neighbours, so the generic button hover grow reads
          as aggressive and spills over them. Override it with a much milder, near-in-bounds nudge (this style
@@ -75,7 +75,7 @@
 
     <!-- Nested structs/arrays are NOT rendered as section bands at all: they render as ordinary property rows
          (PropertyRow), identical to their sibling leaf rows in gutter, depth tint and alignment, with a tap
-         anywhere toggling them (ToggleOnTap). This is their right-hand disclosure chevron — a plain Path that
+         anywhere toggling them (ToggleOnTapBehavior). This is their right-hand disclosure chevron — a plain Path that
          rotates down when the row is expanded. Only categories and root-level structs keep the accent band. -->
     <Style Selector="Path.pgChevron">
         <Setter Property="Opacity" Value="0.7"/>

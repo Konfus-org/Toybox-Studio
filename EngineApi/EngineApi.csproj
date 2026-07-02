@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Everything engine-specific, and only that: the launcher command line, the hello handshake,
+       play/pause, the derived Engine.State, and viewport streams. The generic hosting (start/attach/
+       stop/restart, crash auto-restart) lives in AppHosting's AppHost<Engine>; projects/builds/settings/
+       prompts are coordinated from outside (Shell's EngineCoordinator) against this public surface. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Input\Input.csproj" />
+    <ProjectReference Include="..\Rpc\Rpc.csproj" />
+    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+  </ItemGroup>
+
+</Project>

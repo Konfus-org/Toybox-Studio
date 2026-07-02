@@ -1,10 +1,10 @@
 # Toybox Studio Agent Guide
 
-Operational guide for AI agents working in the Toybox Studio repository. Studio is the C#/Avalonia (MVVM, .NET 10) editor that drives the C++ Toybox engine over RPC. AI-generated code is held to the **same standards as human-written code** and is reviewed with great care — see [`docs/Contributing.md`](docs/Contributing.md).
+Operational guide for AI agents working in the Toybox Studio repository. Studio is the C#/Avalonia (MVVM, .NET 10) editor that drives the C++ Toybox engine over RPC. AI-generated code is held to the **same standards as human-written code** and is reviewed with great care — see [`Documentation/Contributing.md`](Documentation/Contributing.md).
 
 ## Standards
 
-**Strictly follow [`docs/CodeStandards.md`](docs/CodeStandards.md).** It is the single source of truth for C#/Avalonia engineering policies, MVVM rules, file/class layout, and formatting. Do not restate those rules here — keep `docs/` up to date when making sweeping architectural changes.
+**Strictly follow [`Documentation/CodeStandards.md`](Documentation/CodeStandards.md).** It is the single source of truth for C#/Avalonia engineering policies, MVVM rules, file/class layout, and formatting. Do not restate those rules here — keep `Documentation/` up to date when making sweeping architectural changes.
 
 Most-violated reminders (full rules live in CodeStandards):
 
@@ -51,7 +51,7 @@ App frame & UI (formerly `Shell/` + `Widgets/`):
 - [`EngineApi/Session.cs`](EngineApi/Session.cs) — engine process lifetime (launch/attach/teardown).
 - [`Shell/Workspace/DockableAttribute.cs`](Shell/Workspace/DockableAttribute.cs) — how panels are declared and auto-registered (a `[Dockable]` `XxxView` binds to `XxxViewModel` in the same namespace, or an explicit `ViewModel = typeof(...)`).
 - [`PropertyGrid/Core/PropertyViewModelFactory.cs`](PropertyGrid/Core/PropertyViewModelFactory.cs) — how typed JSON becomes per-type property widgets.
-- [`docs/Architecture.md`](docs/Architecture.md) — the system narrative tying all of the above together.
+- [`Documentation/Architecture.md`](Documentation/Architecture.md) — the system narrative tying all of the above together.
 
 ## Build / Test / Run
 

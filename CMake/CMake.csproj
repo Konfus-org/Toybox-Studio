@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Generic CMake driving: the preset-based configure/build driver (CMakeCompiler) and the
+       command runner it shells out with. Knows nothing about Toybox beyond the preset naming
+       convention; project-specific build policy lives with the project that uses this. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+  </ItemGroup>
+
+</Project>

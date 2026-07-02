@@ -11,7 +11,7 @@
         Topmost="True">
 
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" Margin="24">
-        <Image Source="/Assets/Icons/Toybox.png" Width="84" Height="84"/>
+        <Image Source="/Assets/Toybox.png" Width="84" Height="84"/>
         <TextBlock Text="Toybox Studio" FontSize="24" FontWeight="SemiBold"
                    HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextBrush}"/>
 
@@ -25,7 +25,7 @@
         <Border Width="320" Height="120" CornerRadius="{DynamicResource ControlCornerRadius}" Padding="2"
                 Background="{DynamicResource ThemeSurfaceBrush}"
                 BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1">
-            <console:ConsoleView DataContext="{Binding Console.Console}" ShowToolbar="False"/>
+            <console:ConsoleView DataContext="{Binding Console}" ShowToolbar="False"/>
         </Border>
     </StackPanel>
 </Window>

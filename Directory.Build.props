@@ -1,16 +1,21 @@
 <Project>
 
   <PropertyGroup>
+    <!-- Project files are named by their folder alone (Utils, Shell, …) since the repo IS
+         Toybox.Studio; the produced assemblies and namespaces keep the full Toybox.Studio.* form.
+         (The Shell app overrides both to plain "Toybox.Studio" for the exe.) -->
+    <AssemblyName>Toybox.Studio.$(MSBuildProjectName)</AssemblyName>
+    <RootNamespace>Toybox.Studio.$(MSBuildProjectName)</RootNamespace>
     <TargetFramework>net10.0-windows</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
-  <!-- Keep all build artifacts under build/ alongside screenshots and other outputs. Scoped per project
-       (by project name) so the several Toybox.* projects don't collide in a shared bin/obj. -->
+  <!-- All build artifacts live under build/ at the repo root, scoped per project so the
+       Toybox.Studio.* projects don't collide in a shared bin/obj. -->
   <PropertyGroup>
     <BaseOutputPath>$(MSBuildThisFileDirectory)build\bin\$(MSBuildProjectName)\</BaseOutputPath>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>

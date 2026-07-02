@@ -17,20 +17,14 @@
          WorldTree, …) — only app-wide styling lives here.
          ================================================================================================= -->
 
-    <StyleInclude Source="/Shell/Styles/DesignTokens.axaml"/>
+    <StyleInclude Source="/Styles/DesignTokens.axaml"/>
 
-    <!-- ColorPicker/ColorView templates ship in their own package and are NOT bundled with FluentTheme;
-         without this include the ColorPicker control has no template (e.g. the Theme Creator's pickers). -->
-    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"/>
-    <StyleInclude Source="avares://Dock.Avalonia.Themes.Fluent/DockFluentTheme.axaml"/>
-
-    <StyleInclude Source="/Shell/Styles/WindowStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/ShellStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/ButtonStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/InputStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/SliderStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/MenuStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/DockStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/TabStyle.axaml"/>
-    <StyleInclude Source="/Shell/Styles/SectionStyle.axaml"/>
+    <StyleInclude Source="/Styles/WindowStyle.axaml"/>
+    <StyleInclude Source="/Styles/ShellStyle.axaml"/>
+    <StyleInclude Source="/Styles/ButtonStyle.axaml"/>
+    <StyleInclude Source="/Styles/InputStyle.axaml"/>
+    <StyleInclude Source="/Styles/SliderStyle.axaml"/>
+    <StyleInclude Source="/Styles/MenuStyle.axaml"/>
+    <StyleInclude Source="/Styles/TabStyle.axaml"/>
+    <StyleInclude Source="/Styles/SectionStyle.axaml"/>
 </Styles>

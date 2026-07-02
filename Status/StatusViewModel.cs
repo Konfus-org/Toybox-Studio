@@ -1,25 +1,37 @@
-using Toybox.Studio.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.EngineApi;
+using Toybox.Studio.Events;
+using Toybox.Studio.AppHosting;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Status;
 
-public sealed partial class StatusViewModel : ObservableObject
+/// <summary>
+/// The status bar's state: the engine's <see cref="EngineState"/> and ping round-trip, learned from the
+/// dispatched <see cref="EngineStateChanged"/> / <see cref="AppPinged"/> events — no engine references.
+/// </summary>
+public sealed partial class StatusViewModel :
+    ObservableEventSubscriber,
+    IEventHandler<EngineStateChanged>,
+    IEventHandler<AppPinged>
 {
-    private readonly Session _session;
+    private EngineState _state = EngineState.Off;
 
-    public StatusViewModel(Session session, EngineWatcher watcher)
+    public StatusViewModel(EventDispatcher events) : base(events)
     {
-        _session = session;
-        watcher.StateChanged += state => Dispatch.To(DispatchContext.UI, () => ApplyState(state));
-        session.PingMeasured += roundTrip =>
-            Dispatch.To(DispatchContext.UI, () => PingText = $"{roundTrip.TotalMilliseconds:F0} ms");
     }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsConnected))]
-    [NotifyPropertyChangedFor(nameof(IsLaunching))]
-    public partial EngineState State { get; private set; } = EngineState.Off;
+    public void Handle(in EngineStateChanged evt)
+    {
+        var state = evt.State;
+        Dispatch.To(DispatchContext.UI, () => ApplyState(state));
+    }
+
+    public void Handle(in AppPinged evt)
+    {
+        var roundTrip = evt.RoundTrip;
+        Dispatch.To(DispatchContext.UI, () => PingText = $"{roundTrip.TotalMilliseconds:F0} ms");
+    }
 
     [ObservableProperty]
     public partial string StatusText { get; private set; } = "Engine: not connected";
@@ -27,20 +39,22 @@ public sealed partial class StatusViewModel : ObservableObject
     [ObservableProperty]
     public partial string PingText { get; private set; } = "";
 
-    public bool IsConnected => State is EngineState.Ready or EngineState.Playing;
+    public bool IsConnected => _state.IsConnected;
 
-    public bool IsLaunching => State is EngineState.Compiling or EngineState.Loading;
+    public bool IsLaunching => _state.IsLoading;
 
     private void ApplyState(EngineState state)
     {
-        State = state;
-        StatusText = state switch
+        _state = state;
+        OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(IsLaunching));
+        StatusText = state.Phase switch
         {
-            EngineState.Compiling => "Engine: compiling…",
-            EngineState.Loading => "Engine: loading…",
-            EngineState.Ready or EngineState.Playing => _session.Kind == SessionKind.Attached
-                ? $"Engine: attached"
-                : $"Engine: connected",
+            EnginePhase.Compiling => "Engine: compiling…",
+            EnginePhase.Loading => "Engine: loading…",
+            EnginePhase.Ready or EnginePhase.Playing => state.Kind == HostKind.Attached
+                ? "Engine: attached"
+                : "Engine: connected",
             _ => "Engine: not connected",
         };
 

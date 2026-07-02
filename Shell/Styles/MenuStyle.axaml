@@ -3,9 +3,9 @@
         xmlns:behaviors="using:Toybox.Studio.Behaviors.Animations">
 
     <!-- Opening a menu nods its dropdown in (top-level nods down, a sub-option's submenu nods right),
-         scaled by the animation-intensity setting. See MenuOpenNod. -->
+         scaled by the animation-intensity setting. See MenuOpenNodBehavior. -->
     <Style Selector="MenuItem">
-        <Setter Property="behaviors:MenuOpenNod.Enabled" Value="True"/>
+        <Setter Property="behaviors:MenuOpenNodBehavior.Enabled" Value="True"/>
     </Style>
 
     <!-- DROPDOWNS / MENUS / FLYOUTS — the popup is rounded (OverlayCornerRadius) with a soft drop shadow, and

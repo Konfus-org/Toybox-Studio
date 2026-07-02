@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid"
+             xmlns:colors="using:Toybox.Studio.ColorPickers"
+             x:Class="Toybox.Studio.PropertyGrid.MaterialParameterRowView"
+             x:DataType="local:MaterialParameterRowViewModel">
+    <!-- One parameter definition, laid out compactly on a single row: its editable name, a value-type dropdown,
+         the type-matched default-value editor, and a delete button. The value editor reuses the grid's leaf
+         view-models, but hosted through the value-only templates below so it renders just its control (no nested
+         label/row chrome). -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="local:NumberPropertyViewModel">
+            <NumericUpDown Classes="field" FormatString="{Binding FormatString}" Increment="{Binding Increment}"
+                           local:NumericScrub.Enabled="True" local:NumericScrub.Step="{Binding Increment}"
+                           Value="{Binding Value}"/>
+        </DataTemplate>
+        <DataTemplate DataType="local:BoolPropertyViewModel">
+            <ToggleSwitch IsChecked="{Binding Value}" OnContent="" OffContent="" MinHeight="0" Padding="0"
+                          HorizontalAlignment="Left" VerticalAlignment="Center"/>
+        </DataTemplate>
+        <DataTemplate DataType="local:VectorPropertyViewModel">
+            <ItemsControl ItemsSource="{Binding Components}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="local:VectorComponentViewModel">
+                        <DockPanel Margin="0,0,4,0">
+                            <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" FontSize="11"
+                                       FontWeight="SemiBold" Width="11" TextAlignment="Center"
+                                       Margin="0,0,3,0" VerticalAlignment="Center"
+                                       Foreground="{Binding Label,
+                                           Converter={x:Static local:AxisLabelToBrushConverter.Instance}}"/>
+                            <NumericUpDown Classes="field" ShowButtonSpinner="False" FormatString="0.######"
+                                           MinWidth="0" local:NumericScrub.Enabled="True" Value="{Binding Value}"/>
+                        </DockPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+        <DataTemplate DataType="local:ColorPropertyViewModel">
+            <Border HorizontalAlignment="Left">
+                <colors:ColorGradientView DataContext="{Binding Editor}"/>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Border BorderBrush="{DynamicResource ThemeGrooveBrush}" BorderThickness="0,0,0,1"
+            BoxShadow="0 1 0 0 #2EFFFFFF" Background="Transparent">
+        <Grid Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}"
+              ColumnDefinitions="150,6,88,10,*,Auto" MinHeight="26"
+              Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
+            <TextBox Grid.Column="0" Classes="field" Text="{Binding Name}" VerticalAlignment="Center"
+                     Watermark="name"/>
+            <ComboBox Grid.Column="2" Classes="field" ItemsSource="{Binding Types}"
+                      SelectedItem="{Binding SelectedType}" HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"/>
+            <ContentControl Grid.Column="4" Content="{Binding Editor}" VerticalAlignment="Center"/>
+            <Button Grid.Column="5" Classes="fieldButton" Command="{Binding RemoveCommand}"
+                    VerticalAlignment="Center" Margin="4,0,0,0" ToolTip.Tip="Remove parameter">
+                <local:IconView Width="13" Height="13" IconName="X"
+                                Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+            </Button>
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,7 +1,7 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Toybox.Studio.Services.Favorites;
+using Toybox.Studio.Favorites;
 
 namespace Toybox.Studio.Shell;
 
@@ -21,8 +21,8 @@ public sealed partial class MenuActionViewModel : ObservableObject
     public MenuActionViewModel(
         string id,
         string label,
-        string icon,
-        string? iconColor,
+        Icon icon,
+        Avalonia.Media.Color? iconColor,
         ICommand command,
         FavoritesManager favorites,
         object? parameter = null)
@@ -40,9 +40,9 @@ public sealed partial class MenuActionViewModel : ObservableObject
 
     public string Label { get; }
 
-    public string Icon { get; }
+    public Icon Icon { get; }
 
-    public string? IconColor { get; }
+    public Avalonia.Media.Color? IconColor { get; }
 
     public ICommand Command { get; }
 
@@ -50,8 +50,8 @@ public sealed partial class MenuActionViewModel : ObservableObject
 
     public bool IsFavorite => _favorites.IsFavorite(Host, Id);
 
-    /// <summary>The star glyph's colour token: gold when starred, themed default otherwise.</summary>
-    public string? StarColor => IsFavorite ? "YELLOW" : null;
+    /// <summary>The star glyph's colour: gold when starred, themed default otherwise.</summary>
+    public Avalonia.Media.Color? StarColor => IsFavorite ? Toybox.Studio.Utils.Colors.Yellow : null;
 
     /// <summary>Re-reads the star state after the favorites store changes.</summary>
     public void RefreshFavorite()

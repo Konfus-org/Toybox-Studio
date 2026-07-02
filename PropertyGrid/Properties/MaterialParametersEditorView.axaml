@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid"
+             x:Class="Toybox.Studio.PropertyGrid.MaterialParametersEditorView"
+             x:DataType="local:MaterialParametersEditorViewModel">
+    <!-- The base material's Parameters section: an accent section band (a top-level asset row) with a chevron,
+         the state dot, and an append (+) button, over the editable parameter-definition rows. -->
+    <StackPanel IsVisible="{Binding Visible}">
+        <ToggleButton Classes="sectionHeader" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                      Background="{Binding Depth, Converter={x:Static local:DepthToBrushConverter.Instance}}">
+            <DockPanel Margin="{Binding Depth, Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                <ContentControl DockPanel.Dock="Right" Content="{Binding StateIndicator}"
+                                VerticalAlignment="Center"/>
+                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
+                      Margin="2,0,8,0" VerticalAlignment="Center" Data="M 0,0 L 8,4 L 0,8 Z"/>
+                <Button DockPanel.Dock="Right" Classes="fieldButton" Command="{Binding AddCommand}"
+                        ToolTip.Tip="Add parameter">
+                    <local:IconView Width="13" Height="13" IconName="Plus"
+                                    Foreground="{DynamicResource ThemeSuccessBrush}"/>
+                </Button>
+                <TextBlock Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"/>
+            </DockPanel>
+        </ToggleButton>
+
+        <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding IsExpanded}"/>
+    </StackPanel>
+</UserControl>

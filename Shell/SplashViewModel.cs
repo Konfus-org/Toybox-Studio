@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.Widgets.LogConsole;
+using Toybox.Studio.Console;
+using Toybox.Studio.LogConsole;
 
 namespace Toybox.Studio.Shell;
 

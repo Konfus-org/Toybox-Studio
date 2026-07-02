@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Status"
+             x:Class="Toybox.Studio.Status.StatusView"
+             x:DataType="local:StatusViewModel">
+
+    <UserControl.Styles>
+        <!-- Disconnected / idle (the default, un-classed state) is the LOUDEST: "engine down" must read at a
+             glance, so it uses the error colour rather than a warm neutral that vanishes into the warm status
+             band. Launching steps up to amber, connected to green. -->
+        <Style Selector="Ellipse#StatusDot">
+            <Setter Property="Fill" Value="{DynamicResource ThemeErrorBrush}"/>
+        </Style>
+        <Style Selector="Ellipse#StatusDot.launching">
+            <Setter Property="Fill" Value="{DynamicResource ThemeWarningBrush}"/>
+        </Style>
+        <Style Selector="Ellipse#StatusDot.connected">
+            <Setter Property="Fill" Value="{DynamicResource ThemeSuccessBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Ellipse Name="StatusDot" Width="10" Height="10"
+                 Classes.launching="{Binding IsLaunching}"
+                 Classes.connected="{Binding IsConnected}"/>
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"/>
+        <TextBlock Text="{Binding PingText}" VerticalAlignment="Center" Opacity="0.6"/>
+    </StackPanel>
+</UserControl>

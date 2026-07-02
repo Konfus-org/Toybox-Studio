@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid"
+             x:Class="Toybox.Studio.PropertyGrid.MaterialOverridesView"
+             x:DataType="local:MaterialOverridesViewModel">
+
+    <StackPanel IsVisible="{Binding Visible}">
+        <!-- Textures first, then Parameters — each renders as a nested STRUCT row (MaterialSectionView): a
+             collapsible header with the same indent, hover, nod and a state/reset indicator as a real struct,
+             rather than an accent category band. A section shows only when the base material defines slots of
+             that kind; rows are the material's fixed slots (no add/remove — the shape is the material's). -->
+        <ContentControl Content="{Binding TextureSection}" IsVisible="{Binding HasTextures}"/>
+        <ContentControl Content="{Binding ParameterSection}" IsVisible="{Binding HasParameters}"/>
+
+        <!-- Base material resolved but it exposes nothing to override. -->
+        <TextBlock Text="This material has no editable parameters or textures." FontSize="12" Opacity="0.5"
+                   Margin="10,8" TextWrapping="Wrap" IsVisible="{Binding IsEmpty}"/>
+    </StackPanel>
+</UserControl>

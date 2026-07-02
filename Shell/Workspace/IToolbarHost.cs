@@ -1,4 +1,4 @@
-using Toybox.Studio.Widgets.Toolbar;
+using Toybox.Studio.Toolbar;
 
 namespace Toybox.Studio.Shell.Workspace;
 

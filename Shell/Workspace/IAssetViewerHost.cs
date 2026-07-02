@@ -1,4 +1,4 @@
-using Toybox.Studio.Widgets.AssetViewer;
+using Toybox.Studio.AssetViewer;
 
 namespace Toybox.Studio.Shell.Workspace;
 

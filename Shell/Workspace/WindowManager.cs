@@ -6,7 +6,7 @@ using Dock.Model.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Core.Events;
-using Toybox.Studio.Services.Dialogs;
+using Toybox.Studio.Dialogs;
 using Toybox.Studio.Shell.Panels;
 using Toybox.Studio.Utils;
 
@@ -25,7 +25,7 @@ public sealed class WindowManager : Factory
     private const char InstanceSeparator = '#';
 
     private readonly IReadOnlyList<DockableDescriptor> _dockables;
-    private readonly Dictionary<string, DockableDescriptor> _byId;
+    private readonly Dictionary<string, DockableDescriptor> _byKey;
 
     // Live view-models for spawned (non-singleton) tools, keyed by unique tool id. Each is created on
     // open and disposed when its window closes; the deferred view template binds to it across
@@ -48,7 +48,7 @@ public sealed class WindowManager : Factory
     public WindowManager(DockableCatalog catalog)
     {
         _dockables = catalog.Dockables;
-        _byId = _dockables.ToDictionary(descriptor => descriptor.Id);
+        _byKey = _dockables.ToDictionary(descriptor => descriptor.Key);
 
         // Without a host-window factory Dock has nothing to put a dragged-out panel into, so floating it
         // just makes it vanish. Hand it Dock's themed HostWindow (DockFluentTheme styles it) as the default
@@ -137,6 +137,14 @@ public sealed class WindowManager : Factory
 
         if (dockable is Tool tool && TryResolveDescriptor(tool.Id, out var descriptor))
         {
+            // Re-stamp the header icon: the layout serializer drops it (re-derived from the descriptor), so a
+            // restored tool needs it set again before its tab / chrome header binds.
+            if (tool is WorkspaceTool workspaceTool)
+            {
+                workspaceTool.IconName = descriptor.Icon;
+                workspaceTool.IconColor = descriptor.IconColor;
+            }
+
             var viewModel = ResolveViewModelForTool(tool.Id, descriptor);
             tool.Content = DeferredContent(descriptor, viewModel);
             BindTitle(tool, viewModel);
@@ -173,7 +181,8 @@ public sealed class WindowManager : Factory
     /// </summary>
     public void OpenOrFocus(DockableDescriptor descriptor, IRootDock root, Window owner)
     {
-        if (descriptor.Singleton && TryFindExisting(descriptor.Id, root, out var existing, out var floatingHost))
+        if (descriptor.Singleton
+            && TryFind(root, dockable => dockable.Id == descriptor.Key, out var existing, out var floatingHost))
             Focus(root, existing, floatingHost);
         else
             Open(descriptor, root);
@@ -186,6 +195,20 @@ public sealed class WindowManager : Factory
     /// </summary>
     public void EnsureOpen(DockableDescriptor descriptor, IRootDock root, Window owner) =>
         OpenOrFocus(descriptor, root, owner);
+
+    /// <summary>
+    /// Brings an already-open instance of the descriptor to the front, matched by BASE id so a spawned
+    /// non-singleton ("AssetViewer#3") counts. Returns false when none is open (the caller then opens one).
+    /// Lets the asset-viewer launcher reuse-and-focus the current viewer instead of stacking new tabs.
+    /// </summary>
+    public bool FocusExisting(string baseId, IRootDock root)
+    {
+        if (!TryFind(root, dockable => BaseId(dockable.Id) == baseId, out var found, out var floatingHost))
+            return false;
+
+        Focus(root, found, floatingHost);
+        return true;
+    }
 
     // State queries match by base id so a non-singleton with any open instance (e.g. "Viewport#2")
     // reads as docked/floating for its descriptor id ("Viewport").
@@ -336,7 +359,7 @@ public sealed class WindowManager : Factory
     {
         if (descriptor.Singleton)
         {
-            var tool = NewTool(descriptor, descriptor.Id);
+            var tool = NewTool(descriptor, descriptor.Key);
             // A title-owning (DataPanel) singleton is resolved eagerly so its tab title can track dirty state;
             // every other singleton stays lazily resolved by the deferred template (null), so panels with side
             // effects on construction — e.g. the game view's frame stream — aren't started before they show.
@@ -354,15 +377,17 @@ public sealed class WindowManager : Factory
 
     // A fresh dock tool for a descriptor: a ToolbarTool (carrying a persisted ToolbarLayout) when the
     // dockable's view-model hosts a toolbar, an AssetViewerTool (carrying the persisted previewed asset) when
-    // it previews an asset, otherwise a plain Tool.
+    // it previews an asset, otherwise a plain WorkspaceTool. All three carry the descriptor's header icon.
     private static Tool NewTool(DockableDescriptor descriptor, string id)
     {
-        Tool tool =
+        WorkspaceTool tool =
             typeof(IToolbarHost).IsAssignableFrom(descriptor.ViewModelType) ? new ToolbarTool()
             : typeof(IAssetViewerHost).IsAssignableFrom(descriptor.ViewModelType) ? new AssetViewerTool()
-            : new Tool();
+            : new WorkspaceTool();
         tool.Id = id;
         tool.Title = descriptor.Title;
+        tool.IconName = descriptor.Icon;
+        tool.IconColor = descriptor.IconColor;
         tool.CanClose = true;
         return tool;
     }
@@ -399,7 +424,7 @@ public sealed class WindowManager : Factory
     }
 
     private string NextInstanceId(DockableDescriptor descriptor) =>
-        $"{descriptor.Id}{InstanceSeparator}{++_instanceCounter}";
+        $"{descriptor.Key}{InstanceSeparator}{++_instanceCounter}";
 
     // Hand Dock a deferred-template factory, not a constructed view: Dock rebuilds the content on every
     // dock / theme re-templating. A single live control gets orphaned when re-parented (blanking it); the
@@ -483,9 +508,12 @@ public sealed class WindowManager : Factory
             SetFocusedDockable(root, target);
     }
 
-    private bool TryFindExisting(string id, IRootDock root, out IDockable found, out Window? floatingHost)
+    // Finds an open dockable matching `matches` (by exact id, or by base id so a spawned "Id#N" instance is
+    // found), searching the main layout then every floating window; reports the floating host when it lives in one.
+    private bool TryFind(
+        IRootDock root, Func<IDockable, bool> matches, out IDockable found, out Window? floatingHost)
     {
-        if (FindInDock(root, id, out found))
+        if (FindInDock(root, matches, out found))
         {
             floatingHost = null;
             return true;
@@ -495,7 +523,7 @@ public sealed class WindowManager : Factory
         {
             foreach (var window in windows)
             {
-                if (window.Layout is { } layout && FindInDock(layout, id, out found))
+                if (window.Layout is { } layout && FindInDock(layout, matches, out found))
                 {
                     floatingHost = window.Host as Window;
                     return true;
@@ -508,19 +536,19 @@ public sealed class WindowManager : Factory
         return false;
     }
 
-    private bool FindInDock(IDock dock, string id, out IDockable found)
+    private static bool FindInDock(IDock dock, Func<IDockable, bool> matches, out IDockable found)
     {
         if (dock.VisibleDockables is { } dockables)
         {
             foreach (var dockable in dockables)
             {
-                if (dockable.Id == id)
+                if (matches(dockable))
                 {
                     found = dockable;
                     return true;
                 }
 
-                if (dockable is IDock child && FindInDock(child, id, out found))
+                if (dockable is IDock child && FindInDock(child, matches, out found))
                     return true;
             }
         }
@@ -539,7 +567,7 @@ public sealed class WindowManager : Factory
     private bool TryResolveDescriptor(
         string toolId,
         [MaybeNullWhen(false)] out DockableDescriptor descriptor) =>
-        _byId.TryGetValue(BaseId(toolId), out descriptor);
+        _byKey.TryGetValue(BaseId(toolId), out descriptor);
 
     // The view-model a tool should bind to: null for singletons (resolved from DI by the deferred
     // template); for a spawned tool, its registered instance — created and tracked here on first sight

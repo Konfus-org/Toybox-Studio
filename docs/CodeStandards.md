@@ -4,7 +4,7 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
 
 ## Core Engineering Policies
 
-- **Scope**: Keep changes isolated and highly reusable. Widgets are self-contained — a panel owns its View, ViewModel, and any panel-specific helpers, and reaches the rest of the app only through injected services.
+- **Scope**: Keep changes isolated and highly reusable. Panels are self-contained — each owns its View, ViewModel, and any panel-specific helpers in its own top-level feature folder, and reaches the rest of the app only through injected services.
 - **Duplication**: Avoid redundant patterns; factor a single-use helper rather than copy-pasting, but don't build an abstraction for one caller.
 - **Simplicity**: Prioritize the simplest, most direct solution. Avoid over-engineering, speculative generality, and god classes. Add complexity only when a concrete problem requires it.
 - **Housekeeping**: Permanently delete stale code instead of leaving commented-out placeholders.
@@ -19,12 +19,6 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
 - **Expected failures return `Result`**: Use `Result`/`Result<T>` from `Utils/` for operations that can fail in a foreseeable way (RPC calls, project/file I/O). Reserve exceptions for genuinely exceptional, unrecoverable conditions. `Result` converts implicitly to `bool`, so `if (result)` tests success.
 - **`async`/`await` end to end**: Don't block on async with `.Result`/`.Wait()` on the UI thread. Marshal back to the UI thread explicitly via the `Utils/Dispatch` helpers; use `ContinueOnSameContext()`/`ContinueOnAnyContext()` to make the intended thread obvious at the call site.
 - **Implicit usings** are enabled; don't add redundant `using`s for the implicit set.
-
-## Naming
-
-- **No `Base` suffix.** Name a shared parent for what it *is*, not its role in the hierarchy — `DropdownPropertyViewModel`, not `PropertyViewModelBase`.
-- **MVVM convention**: `XxxView` (UserControl) ↔ `XxxViewModel`, in the same namespace. The docking system relies on this convention to resolve a panel's view model.
-- **Services drop the `Service` suffix** and the redundant `Engine` prefix (`Logger`, `ProjectManager`, `WorldSelection`, not `LoggingService`/`EngineSessionService`).
 
 ## File & Type Layout
 
@@ -48,7 +42,7 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
 
 - **No code-behind routing.** `.axaml.cs` files contain only what the framework requires (`InitializeComponent`) and genuinely view-local visual concerns. No view-model construction, no event-handler wiring that belongs in a command, no business logic. Move that into:
   - **Commands** on the view model (`CommunityToolkit.Mvvm` `[RelayCommand]`).
-  - **Attached behaviors** (`Widgets/Behaviors/`) for reusable input/interaction glue.
+  - **Attached behaviors** (`Behaviors/`) for reusable input/interaction glue.
   - **Control subclasses** for control-specific behavior (e.g. `ConsoleListBox`).
   - **Services** for cross-cutting concerns.
 - **Compiled bindings.** `AvaloniaUseCompiledBindingsByDefault` is on; every binding must be statically resolvable — set `x:DataType` and bind against real members.
@@ -59,7 +53,7 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
 ## Documentation
 
 - Keep `README.md`, `AGENTS.md`, and `docs/` accurate when you make architectural changes.
-- Reusable controls live under `Widgets/` in a themed sub-folder (e.g. `Widgets/Colors`, `Widgets/Searching`) — there is no top-level `Controls/` folder.
+- Reusable controls live in their own top-level feature folder (e.g. `ColorPickers/`, `Searching/`) — there is no top-level `Controls/` or `Widgets/` folder.
 
 ## Formatting
 

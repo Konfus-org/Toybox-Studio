@@ -4,7 +4,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Toybox.Studio.Generators;
+namespace Toybox.Generators;
 
 /// <summary>
 /// Emits the engine-synced public property for every field marked <c>[EngineSync]</c> on a

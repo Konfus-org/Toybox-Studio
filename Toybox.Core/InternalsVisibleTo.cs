@@ -5,5 +5,5 @@ using System.Runtime.CompilerServices;
 // consumed by the synced domain types and the property grid in the projects above. Splitting them into
 // this assembly would otherwise hide those internals; grant access rather than widening them to public.
 // Add each consuming assembly as it is extracted from Toybox.Studio.
-[assembly: InternalsVisibleTo("Toybox.Studio")]
+[assembly: InternalsVisibleTo("Toybox.App")]
 [assembly: InternalsVisibleTo("Toybox.Assets")]

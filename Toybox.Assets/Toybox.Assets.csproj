@@ -16,7 +16,7 @@
     <ProjectReference Include="..\Toybox.Resources\Toybox.Resources.csproj" />
     <ProjectReference Include="..\Toybox.Settings\Toybox.Settings.csproj" />
     <!-- The EngineSync generator emits the wire sync for the typed asset data ([EngineSync] fields). -->
-    <ProjectReference Include="..\Toybox.Studio.Generators\Toybox.Studio.Generators.csproj"
+    <ProjectReference Include="..\Toybox.Generators\Toybox.Generators.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

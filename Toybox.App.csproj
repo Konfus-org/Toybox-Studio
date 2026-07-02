@@ -4,6 +4,9 @@
     <OutputType>WinExe</OutputType>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- The assembly is Toybox.App, but the code/XAML namespaces stay Toybox.Studio.* (shared across all the
+         split projects), so pin the root namespace rather than let it follow the renamed project file. -->
+    <RootNamespace>Toybox.Studio</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,10 +41,10 @@
     <AvaloniaXaml Remove="Toybox.Settings\**" />
     <EmbeddedResource Remove="Toybox.Settings\**" />
     <None Remove="Toybox.Settings\**" />
-    <Compile Remove="Toybox.Studio.Generators\**" />
-    <AvaloniaXaml Remove="Toybox.Studio.Generators\**" />
-    <EmbeddedResource Remove="Toybox.Studio.Generators\**" />
-    <None Remove="Toybox.Studio.Generators\**" />
+    <Compile Remove="Toybox.Generators\**" />
+    <AvaloniaXaml Remove="Toybox.Generators\**" />
+    <EmbeddedResource Remove="Toybox.Generators\**" />
+    <None Remove="Toybox.Generators\**" />
     <Compile Remove="Toybox.Resources\**" />
     <AvaloniaXaml Remove="Toybox.Resources\**" />
     <EmbeddedResource Remove="Toybox.Resources\**" />
@@ -97,7 +100,7 @@
     <!-- The EngineSync source generator (emits engine-synced properties from [EngineSync] fields). Consumed as
          an analyzer, not referenced as an assembly; its folder is excluded from this project's source globbing
          above (it must target netstandard2.0). -->
-    <ProjectReference Include="Toybox.Studio.Generators\Toybox.Studio.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="Toybox.Generators\Toybox.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="Toybox.Core\Toybox.Core.csproj" />
     <ProjectReference Include="Toybox.Resources\Toybox.Resources.csproj" />
     <ProjectReference Include="Toybox.Settings\Toybox.Settings.csproj" />

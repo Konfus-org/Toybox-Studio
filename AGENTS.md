@@ -60,7 +60,7 @@ App frame & UI (formerly `Shell/` + `Widgets/`):
 dotnet build Toybox.Studio.slnx
 
 # Run; a Debug build enables the Avalonia dev tools (F12)
-dotnet run --project Toybox.Studio.csproj
+dotnet run --project Toybox.App.csproj
 ```
 
 Build artifacts go under `build/`. There is no unit-test project yet; verification is by building clean and running the app (see below).

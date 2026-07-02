@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="Toybox.Studio.App.csproj" />
   <Project Path="Toybox.Studio.Core/Toybox.Studio.Core.csproj" />
+  <Project Path="Toybox.Studio.Behaviors/Toybox.Studio.Behaviors.csproj" />
   <Project Path="Toybox.Studio.Assets/Toybox.Studio.Assets.csproj" />
   <Project Path="Toybox.Studio.ECS/Toybox.Studio.ECS.csproj" />
   <Project Path="Toybox.Studio.Generators/Toybox.Studio.Generators.csproj" />

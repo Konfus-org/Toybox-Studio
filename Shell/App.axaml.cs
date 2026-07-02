@@ -19,8 +19,8 @@ namespace Toybox.Studio;
 
 /// <summary>
 /// The composition root and startup flow, kept deliberately linear: build the services, show the
-/// splash, locate the engine, compile + launch the example project (the splash narrates via the
-/// shared console), then close the splash and reveal the main window with the 3D viewport.
+/// splash (a loading bar with playful phase lines), locate the engine, compile + launch the example
+/// project, and only then create and show the main window with the 3D viewport.
 /// </summary>
 public partial class App : Application
 {
@@ -38,6 +38,11 @@ public partial class App : Application
             _services = new Services();
             desktop.Exit += (_, _) => _services.Shutdown();
 
+            // Nothing owns the app's lifetime until the studio window exists (it is only created once
+            // startup finishes), so shutdown stays explicit for now — closing the splash mid-startup
+            // must not end the app. StartupAsync hands the lifetime to the studio window when it opens.
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
             var splash = new SplashWindow { DataContext = _services.Splash };
             splash.Show();
             StartupAsync(desktop, splash).FireAndForget();
@@ -54,22 +59,14 @@ public partial class App : Application
         // Startup touches windows, so every await must resume back on the UI thread.
         try
         {
-            // The main window exists (hidden) from the start so the app's lifetime is tied to it —
-            // closing the splash mid-startup must not end the app.
-            var mainWindow = new MainWindow { DataContext = services.Shell, IsVisible = false };
-            desktop.MainWindow = mainWindow;
-            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-
-            services.Splash.Status = "Locating engine…";
             services.Log.Info(services.Locator.ResolveAtStartup());
 
-            if (services.Project.Current is { } project)
+            if (services.Project.Current is not null)
             {
-                services.Splash.Status = $"Compiling and starting '{project.Name}'…";
                 // Compiles if needed, launches the engine process, and returns once connected (or failed —
-                // failures land in the shared console). The viewport starts streaming on connect by itself.
+                // failures land in the log). The splash narrates the phases from the dispatched engine
+                // state; the viewport starts streaming on connect by itself.
                 await services.Coordinator.StartEngineAsync().ContinueOnSameContext();
-                services.Splash.Status = "Ready.";
             }
             else
             {
@@ -90,13 +87,14 @@ public partial class App : Application
             await Task.Delay(TimeSpan.FromSeconds(3)).ContinueOnSameContext();
         }
 
-        // Fully ready (or failed past the splash): close the splash, then reveal the main window.
+        // Setup is done (or failed past the splash): only now does the studio window come to exist.
+        // Show it, hand it the app's lifetime, then swap the splash out for it.
+        var mainWindow = new MainWindow { DataContext = services.Shell };
+        desktop.MainWindow = mainWindow;
+        mainWindow.Show();
+        desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
         splash.Close();
-        if (desktop.MainWindow is { } window)
-        {
-            window.IsVisible = true;
-            window.Activate();
-        }
+        mainWindow.Activate();
     }
 
     /// <summary>
@@ -140,7 +138,7 @@ public partial class App : Application
             Viewport.Prepare(new ViewportStream(Engine, events, ViewKind.Editor));
 
             Shell = new ShellViewModel(new StatusViewModel(events), Viewport);
-            Splash = new SplashViewModel(Console);
+            Splash = new SplashViewModel(events);
         }
 
         public Logger Log { get; }

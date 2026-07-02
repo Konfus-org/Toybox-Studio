@@ -23,7 +23,7 @@ Most-violated reminders (full rules live in CodeStandards):
 
 Foundation:
 
-- `Utils/` — pure, dependency-free helpers: `Result.cs` (the failure type used everywhere), `Dispatch.cs`/`DispatchContext.cs` (UI-thread marshalling), `Contrast.cs` (WCAG contrast maths), `Colors.cs` (the palette constants, paired with the `PaletteColor` enum), `IListenable.cs` (the change-notification contract). Extension classes live in `Utils/Extensions/`.
+- `Utils/` — pure, dependency-free helpers: `Result.cs` (the failure type used everywhere), `Dispatch.cs`/`DispatchContext.cs` (UI-thread marshalling), `Contrast.cs` (WCAG contrast maths), `IListenable.cs` (the change-notification contract). Extension classes live in `Utils/Extensions/`.
 
 Engine, domain & editor services (formerly `Services/`):
 

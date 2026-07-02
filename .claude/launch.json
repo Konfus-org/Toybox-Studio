@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "studio",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Shell/Shell.csproj"],
+      "port": 17890
+    }
+  ]
+}

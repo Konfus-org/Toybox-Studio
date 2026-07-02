@@ -11,7 +11,6 @@
     <PackageReference Include="StreamJsonRpc" Version="2.25.28" />
     <!-- Security pin: StreamJsonRpc pulls a vulnerable MessagePack transitively; override with the patched line. -->
     <PackageReference Include="MessagePack" Version="3.1.7" />
-    <PackageReference Include="IconPacks.Avalonia" Version="2.0.0" />
   </ItemGroup>
 
 </Project>

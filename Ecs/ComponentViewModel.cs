@@ -245,7 +245,7 @@ public sealed partial class ComponentViewModel : ObservableObject
     {
         // The base-aware editor loads the referenced material's slots through the asset facade (wired at
         // startup alongside the catalog); a missing catalog just means falling back to the generic grid.
-        if (PropertyViewRegistry.Assets is null)
+        if (AssetGridServices.Assets is null)
             return false;
 
         var material = Field(properties, "material");
@@ -292,7 +292,7 @@ public sealed partial class ComponentViewModel : ObservableObject
     private bool TryBuildRenderer(
         IReadOnlyList<(PropertyDescriptor Descriptor, IValueAccessor Accessor)> properties)
     {
-        if (PropertyViewRegistry.Assets is not { } catalog)
+        if (AssetGridServices.Assets is not { } catalog)
             return false;
 
         var model = Field(properties, "model");

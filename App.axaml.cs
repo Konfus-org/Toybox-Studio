@@ -122,10 +122,7 @@ public partial class App : Application
             // need before any inspector or settings grid is built.
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
             var gameState = _host.Services.GetRequiredService<GameState>();
-            PropertyViewRegistry.Configure(
-                catalog,
-                _host.Services.GetRequiredService<AssetFactory>(),
-                gameState);
+            AssetGridServices.Configure(catalog, _host.Services.GetRequiredService<AssetFactory>());
 
             // Register the domain-owned property editors that route by engine type token (asset handle, entity
             // reference, colour, material instance) or by [View] name (script link, theme picker). The generic

@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.Dialogs;
 using Toybox.Studio.EngineApi;
+using Toybox.Studio.Project;
 using Toybox.Studio.Worlds;
 using Toybox.Studio.PropertyGrid;
 
@@ -52,7 +53,7 @@ public sealed partial class ScriptContainerViewModel : ObservableObject
                 ScriptBindingViewModel card = null!;
                 card = new ScriptBindingViewModel(
                     bindingDescriptor, bindingAccessor, CommitScripts, () => RemoveBinding(card),
-                    PropertyViewRegistry.Assets);
+                    AssetGridServices.Assets);
                 card.PropertyChanged += OnBindingChanged;
                 Bindings.Add(card);
             }

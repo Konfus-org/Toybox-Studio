@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
 using Toybox.Studio.EngineApi;
+using Toybox.Studio.Project;
 
 namespace Toybox.Studio.PropertyGrid;
 
@@ -36,7 +37,7 @@ public sealed partial class MaterialTextureRowViewModel : ObservableObject
             Choices = ImageTypes,
         };
         var accessor = new JsonAccessor(new JValue(textureId), EngineTypes.Handle, changed);
-        Picker = new HandlePickerPropertyViewModel(descriptor, accessor, PropertyViewRegistry.Assets)
+        Picker = new HandlePickerPropertyViewModel(descriptor, accessor, AssetGridServices.Assets)
         {
             Depth = depth + 1,
         };

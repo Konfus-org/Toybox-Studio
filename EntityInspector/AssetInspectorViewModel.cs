@@ -207,7 +207,7 @@ public sealed partial class AssetInspectorViewModel : ObservableObject
     // through the typed model via CommitWire, which reconstructs the typed field (ReadBare) and dirties the asset.
     private bool TryBuildMaterialInstance(MaterialInstance data)
     {
-        if (PropertyViewRegistry.Assets is null)
+        if (AssetGridServices.Assets is null)
             return false;
 
         var materialPair = BareField("material", EngineTypes.Handle, data.Material);

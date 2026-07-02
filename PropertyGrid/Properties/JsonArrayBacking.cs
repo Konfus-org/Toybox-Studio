@@ -136,7 +136,7 @@ internal sealed class JsonArrayBacking : IArrayBacking
             return text;
 
         var handleChild = element.Children.FirstOrDefault(child => child.Type == EngineTypes.Handle);
-        if (handleChild is not null && PropertyViewRegistry.Assets is { } assets)
+        if (handleChild is not null && AssetGridServices.Assets is { } assets)
         {
             // Handle ids are unsigned 64-bit, matching the catalog's key.
             var id = (accessor.Member(handleChild).Get() as AssetHandle?)?.Id ?? 0;

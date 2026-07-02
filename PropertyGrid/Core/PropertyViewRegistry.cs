@@ -1,7 +1,3 @@
-using Toybox.Studio.EngineApi;
-using Toybox.Studio.Worlds;
-using Toybox.Studio.Project;
-
 namespace Toybox.Studio.PropertyGrid;
 
 /// <summary>
@@ -9,15 +5,12 @@ namespace Toybox.Studio.PropertyGrid;
 /// <see cref="PropertyDescriptor.View"/>) to its view-model, before the type-driven fallback in
 /// <see cref="PropertyViewModelFactory"/>. View names are matched case-insensitively.
 ///
-/// The custom widgets need app services (the asset catalog, the theme manager) that the static
-/// factory can't inject per call, so <see cref="Configure"/> wires them once at startup and the
-/// registered builders close over them.
+/// Purely a registry: domain projects register their editors (by view name or engine type token) at
+/// startup, so the generic grid core holds no reference to any domain-specific editor or service. The
+/// asset services those editors need live in the asset layer's <c>AssetGridServices</c>, not here.
 /// </summary>
 public static class PropertyViewRegistry
 {
-    private static AssetCatalog? _assets;
-    private static AssetFactory? _factory;
-    private static GameState? _world;
 
     // View name → builder. A C# [ViewModel(typeof(X))] field carries X's full type name (the key for typed
     // registrations, added via Register<T>); the remaining short-string keys are the engine/settings
@@ -32,36 +25,6 @@ public static class PropertyViewRegistry
     // that owns the editor (assets, ecs, theming), so the generic grid never references those editors directly.
     private static readonly Dictionary<string, Func<PropertyDescriptor, IValueAccessor, int, PropertyViewModel>> TypeBuilders =
         new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// The asset catalog the custom widgets read from. Exposed so the type-driven factory can build a
-    /// handle picker directly (handles route by their "handle" type token, not a view name) and so the
-    /// material-instance editor can fetch a base material's slots.
-    /// </summary>
-    public static AssetCatalog? Assets => _assets;
-
-    /// <summary>
-    /// The asset factory the material-instance override editor uses to load a base material's body (it isn't
-    /// DI-constructed — the grid builds it deep in a static factory — so it reaches the factory here).
-    /// </summary>
-    public static AssetFactory? Factory => _factory;
-
-    /// <summary>
-    /// The game state the entity picker chooses from (entity-reference fields route by their "entity" type
-    /// token, listing the active world's entities).
-    /// </summary>
-    public static GameState? World => _world;
-
-    /// <summary>
-    /// Supplies the services the custom widgets depend on. Called once after the app's services are
-    /// built; safe to call again if they are rebuilt.
-    /// </summary>
-    public static void Configure(AssetCatalog assets, AssetFactory factory, GameState world)
-    {
-        _assets = assets;
-        _factory = factory;
-        _world = world;
-    }
 
     /// <summary>
     /// Registers a custom view-model builder for the view-model type <typeparamref name="TViewModel"/>, so a

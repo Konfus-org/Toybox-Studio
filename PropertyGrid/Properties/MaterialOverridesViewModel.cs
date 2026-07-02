@@ -79,7 +79,7 @@ public sealed partial class MaterialOverridesViewModel : PropertyViewModel
         Textures.Clear();
         NotifyCounts();
 
-        if (materialId == 0 || PropertyViewRegistry.Factory is not { } factory)
+        if (materialId == 0 || AssetGridServices.Factory is not { } factory)
             return;
 
         var result = await factory.For(materialId).LoadAsync(CancellationToken.None)

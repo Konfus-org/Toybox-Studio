@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Dialogs;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Project;
 using Toybox.Studio.Utils;
@@ -64,8 +63,11 @@ public abstract partial class PickerPropertyViewModel : PropertyViewModel
     [RelayCommand]
     private async Task PickAsync()
     {
+        if (PropertyViewRegistry.AssetPicker is not { } picker)
+            return;
+
         var (title, options) = BuildChoices();
-        var pick = await AssetPicker
+        var pick = await picker
             .ShowAsync(title, options, CurrentId)
             .ContinueOnSameContext();
         if (!pick.Confirmed)

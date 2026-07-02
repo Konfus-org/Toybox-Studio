@@ -26,6 +26,10 @@ public static class PropertyViewRegistry
     private static readonly Dictionary<string, Func<PropertyDescriptor, IValueAccessor, int, PropertyViewModel>> TypeBuilders =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The asset/entity chooser the picker editors open, supplied by the dialog layer at startup so the
+    /// grid stays free of a dialog dependency. Null until wired.</summary>
+    public static IAssetPicker? AssetPicker { get; set; }
+
     /// <summary>
     /// Registers a custom view-model builder for the view-model type <typeparamref name="TViewModel"/>, so a
     /// member tagged <c>[ViewModel(typeof(TViewModel))]</c> (which carries the type's full name) routes to it.

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Toybox.Studio.Dialogs;
 using Toybox.Studio.Project;
+using Toybox.Studio.PropertyGrid;
 
 namespace Toybox.Studio.Dialogs;
 

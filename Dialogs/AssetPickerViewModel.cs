@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.Dialogs;
 using Toybox.Studio.Project;
+using Toybox.Studio.PropertyGrid;
 
 namespace Toybox.Studio.Dialogs;
 

@@ -3,7 +3,6 @@
              xmlns:local="using:Toybox.Studio.PropertyGrid"
              xmlns:ghost="using:Toybox.Studio.Ghost"
              xmlns:behaviors="using:Toybox.Studio.Behaviors.Animations"
-             xmlns:cm="using:Toybox.Studio.ContextMenu"
              xmlns:beh="using:Toybox.Studio.Behaviors"
              x:Class="Toybox.Studio.PropertyGrid.PropertyGridView"
              x:Name="Root">

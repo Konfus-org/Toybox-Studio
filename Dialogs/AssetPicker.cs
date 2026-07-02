@@ -1,17 +1,10 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Toybox.Studio.Project;
+using Toybox.Studio.PropertyGrid;
 using Toybox.Studio.Utils;
-using Toybox.Studio.Dialogs;
 
 namespace Toybox.Studio.Dialogs;
-
-/// <summary>
-/// Outcome of an <see cref="AssetPicker"/> dialog. <see cref="Confirmed"/> is false when the user
-/// cancels (leave the reference untouched); when true, <see cref="Id"/> is the chosen asset id, or 0
-/// when the user cleared the reference.
-/// </summary>
-public readonly record struct AssetPick(bool Confirmed, ulong Id);
 
 /// <summary>
 /// Opens the modal asset chooser from anywhere, resolving the owner (the main window) so callers don't have

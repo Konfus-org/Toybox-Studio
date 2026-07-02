@@ -153,6 +153,9 @@ public partial class App : Application
                 (descriptor, accessor) => MaterialInstancePropertyViewModel.CanBuild(descriptor)
                     ? new MaterialInstancePropertyViewModel(descriptor, accessor, 0)
                     : new ObjectPropertyViewModel(descriptor, accessor, 0));
+            // The grid's picker editors open the modal asset chooser through this adapter (keeps the grid free
+            // of a dialog-layer dependency).
+            PropertyViewRegistry.AssetPicker = new AssetPickerAdapter();
 
             // Surface a failed optimistic live-edit push in the log. The world's describe-parser, reflect
             // scheduler and engine transport are now injected into the live World (via GameState), not wired

@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:console="using:Toybox.Studio.Console"
+             xmlns:local="using:Toybox.Studio.LogConsole"
+             x:Class="Toybox.Studio.LogConsole.LogConsoleView"
+             x:DataType="local:LogConsoleViewModel">
+    <console:ConsoleView DataContext="{Binding Console}"/>
+</UserControl>

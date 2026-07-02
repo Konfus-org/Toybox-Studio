@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="using:Toybox.Studio.Shell"
-        xmlns:console="using:Toybox.Studio.Widgets.Console"
+        xmlns:console="using:Toybox.Studio.Console"
         x:Class="Toybox.Studio.Shell.SplashWindow"
         x:DataType="shell:SplashViewModel"
         Width="440" Height="360" CanResize="False"

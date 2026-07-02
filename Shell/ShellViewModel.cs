@@ -1,22 +1,21 @@
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
-using Toybox.Studio.Services;
+using Toybox.Studio;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Utils.Extensions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Toybox.Studio.Widgets.Status;
-using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Services.EngineApi;
-using Toybox.Studio.Services.Favorites;
-using Toybox.Studio.Services.Logging;
-using Toybox.Studio.Services.Project;
-using Toybox.Studio.Services.Scripting;
-using Toybox.Studio.Services.World;
+using Toybox.Studio.Status;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.EngineApi;
+using Toybox.Studio.Favorites;
+using Toybox.Studio.Logging;
+using Toybox.Studio.Project;
+using Toybox.Studio.Worlds;
 using Toybox.Studio.Shell.Panels;
 using Toybox.Studio.Shell.Workspace;
-using Toybox.Studio.Widgets.Ecs;
+using Toybox.Studio.Ecs;
+using Toybox.Studio.WorldTree;
 
 namespace Toybox.Studio.Shell;
 
@@ -28,35 +27,36 @@ namespace Toybox.Studio.Shell;
 public sealed partial class ShellViewModel : ObservableObject
 {
     private readonly Session _session;
+    private readonly EngineWatcher _watcher;
     private readonly ProjectBuilder _builder;
     private readonly Logger _log;
     private readonly ProjectManager _projects;
     private readonly FilePicker _filePicker;
     private readonly CommandRunner _commandRunner;
-    private readonly WorldManager _world;
+    private readonly GameState _world;
     private readonly AssetCatalog _assets;
-    private readonly ScriptEditorLauncher _scriptEditor;
-    private readonly AssetViewerLauncher _assetViewer;
+    private readonly AssetOpener _assetOpener;
 
     public ShellViewModel(
         StatusViewModel status,
         WorkspaceViewModel workspace,
         Session session,
+        EngineWatcher watcher,
         ProjectBuilder builder,
         Logger log,
         ProjectManager projects,
         FilePicker filePicker,
         CommandRunner commandRunner,
-        WorldManager world,
+        GameState world,
         AssetCatalog assets,
-        ScriptEditorLauncher scriptEditor,
-        AssetViewerLauncher assetViewer,
+        AssetOpener assetOpener,
         FavoritesManager favorites)
     {
         Status = status;
         Workspace = workspace;
 
         _session = session;
+        _watcher = watcher;
         _builder = builder;
         _log = log;
         _projects = projects;
@@ -64,11 +64,13 @@ public sealed partial class ShellViewModel : ObservableObject
         _commandRunner = commandRunner;
         _world = world;
         _assets = assets;
-        _scriptEditor = scriptEditor;
-        _assetViewer = assetViewer;
+        _assetOpener = assetOpener;
         _favorites = favorites;
 
         BuildMenuActions();
+        // The engine-lifecycle actions enable/disable with the engine state (Start only when off; Stop/Restart
+        // only when something's running). The watcher raises on the UI thread, so re-evaluate there.
+        _watcher.StateChanged += OnEngineStateChanged;
         // Keep the generated Favorites menu in step with the star toggles (fires immediately for the first build).
         favorites.Listen(RefreshFavorites);
 
@@ -93,43 +95,63 @@ public sealed partial class ShellViewModel : ObservableObject
 
     public bool HasFavorites => Favorites.Count > 0;
 
-    /// <summary>The favoritable menu-bar actions (icon + label + command + star), looked up by their id.</summary>
-    public MenuActionViewModel SaveAction => Action("save");
-    public MenuActionViewModel SaveAllAction => Action("saveAll");
-    public MenuActionViewModel OpenProjectAction => Action("openProject");
-    public MenuActionViewModel OpenAssetAction => Action("openAsset");
-    public MenuActionViewModel CompileAction => Action("compile");
-    public MenuActionViewModel ShipDebugAction => Action("shipDebug");
-    public MenuActionViewModel ShipReleaseAction => Action("shipRelease");
-    public MenuActionViewModel AttachAction => Action("attach");
-    public MenuActionViewModel DebugEditorAction => Action("debugEditor");
-    public MenuActionViewModel ResetLayoutAction => Action("resetLayout");
-    public MenuActionViewModel SaveLayoutAction => Action("saveLayout");
-    public MenuActionViewModel LoadLayoutAction => Action("loadLayout");
+    /// <summary>One favoritable action per registered dockable: opens (or focuses) the window by id. Drives the
+    /// Windows menu, so each window carries an icon and a star — and a starred window joins the Favorites menu.</summary>
+    public IReadOnlyList<MenuActionViewModel> WindowActions { get; private set; } = [];
 
-    private MenuActionViewModel Action(string id) => _actions.First(action => action.Id == id);
+    /// <summary>The favoritable menu-bar actions (icon + label + command + star). Each is captured directly from
+    /// its registration in <see cref="BuildMenuActions"/>, so there is no id-string lookup to keep in sync.</summary>
+    public MenuActionViewModel SaveAction { get; private set; } = null!;
+    public MenuActionViewModel SaveAllAction { get; private set; } = null!;
+    public MenuActionViewModel OpenProjectAction { get; private set; } = null!;
+    public MenuActionViewModel OpenAssetAction { get; private set; } = null!;
+    public MenuActionViewModel CompileAction { get; private set; } = null!;
+    public MenuActionViewModel ShipDebugAction { get; private set; } = null!;
+    public MenuActionViewModel ShipReleaseAction { get; private set; } = null!;
+    public MenuActionViewModel StartEngineAction { get; private set; } = null!;
+    public MenuActionViewModel RestartEngineAction { get; private set; } = null!;
+    public MenuActionViewModel StopEngineAction { get; private set; } = null!;
+    public MenuActionViewModel AttachAction { get; private set; } = null!;
+    public MenuActionViewModel DebugEditorAction { get; private set; } = null!;
+    public MenuActionViewModel ResetLayoutAction { get; private set; } = null!;
+    public MenuActionViewModel SaveLayoutAction { get; private set; } = null!;
+    public MenuActionViewModel LoadLayoutAction { get; private set; } = null!;
 
     private void BuildMenuActions()
     {
-        MenuActionViewModel Add(string id, string label, string icon, string? color, System.Windows.Input.ICommand command, object? parameter = null)
+        MenuActionViewModel Add(string id, string label, Icon icon, Avalonia.Media.Color? color, System.Windows.Input.ICommand command, object? parameter = null)
         {
             var action = new MenuActionViewModel(id, label, icon, color, command, _favorites, parameter);
             _actions.Add(action);
             return action;
         }
 
-        Add("save", "Save", "Save", "BLUE", SaveCommand);
-        Add("saveAll", "Save All", "SaveAll", "BLUE", SaveAllCommand);
-        Add("openProject", "Project…", "FolderOpen", "YELLOW", OpenProjectCommand);
-        Add("openAsset", "Asset…", "FileInput", "YELLOW", OpenAssetCommand);
-        Add("compile", "Compile", "Hammer", "GREEN", CompileCommand);
-        Add("shipDebug", "Ship Debug", "Bug", "GREEN", ShipCommand, "Debug");
-        Add("shipRelease", "Ship Release", "Package", "GREEN", ShipCommand, "Release");
-        Add("attach", "Attach to Running Instance", "Plug", "CYAN", AttachCommand);
-        Add("debugEditor", "Avalonia Dev Tools", "Wrench", "GREY", DebugEditorCommand);
-        Add("resetLayout", "Reset Layout", "LayoutDashboard", "MAGENTA", Workspace.ResetLayoutCommand);
-        Add("saveLayout", "Save Layout", "LayoutDashboard", "MAGENTA", Workspace.SaveLayoutCommand);
-        Add("loadLayout", "Load Layout", "LayoutDashboard", "MAGENTA", Workspace.LoadLayoutCommand);
+        SaveAction = Add("save", "Save", Icon.Save, Colors.Blue, SaveCommand);
+        SaveAllAction = Add("saveAll", "Save All", Icon.SaveAll, Colors.Blue, SaveAllCommand);
+        OpenProjectAction = Add("openProject", "Project…", Icon.FolderOpen, Colors.Yellow, OpenProjectCommand);
+        OpenAssetAction = Add("openAsset", "Asset…", Icon.FileInput, Colors.Yellow, OpenAssetCommand);
+        CompileAction = Add("compile", "Compile", Icon.Hammer, Colors.Green, CompileCommand);
+        ShipDebugAction = Add("shipDebug", "Ship Debug", Icon.Bug, Colors.Green, ShipCommand, "Debug");
+        ShipReleaseAction = Add("shipRelease", "Ship Release", Icon.Package, Colors.Green, ShipCommand, "Release");
+        StartEngineAction = Add("startEngine", "Start", Icon.Power, Colors.Green, StartEngineCommand);
+        RestartEngineAction = Add("restartEngine", "Restart", Icon.RotateCcw, Colors.Yellow, RestartEngineCommand);
+        StopEngineAction = Add("stopEngine", "Stop", Icon.PowerOff, Colors.Red, StopEngineCommand);
+        AttachAction = Add("attach", "Attach to Running Instance", Icon.Plug, Colors.Cyan, AttachCommand);
+        DebugEditorAction = Add("debugEditor", "Avalonia Dev Tools", Icon.Wrench, Colors.Grey, DebugEditorCommand);
+        ResetLayoutAction = Add("resetLayout", "Reset Layout", Icon.LayoutDashboard, Colors.Magenta, Workspace.ResetLayoutCommand);
+        SaveLayoutAction = Add("saveLayout", "Save Layout", Icon.LayoutDashboard, Colors.Magenta, Workspace.SaveLayoutCommand);
+        LoadLayoutAction = Add("loadLayout", "Load Layout", Icon.LayoutDashboard, Colors.Magenta, Workspace.LoadLayoutCommand);
+
+        // One favoritable action per dockable, opened (or focused) by passing the descriptor itself. Added to
+        // _actions so they share the Favorites machinery (star indicator + the generated Favorites menu) with the
+        // fixed menu-bar actions; the descriptor's key is the stable favorites id.
+        WindowActions = [.. Workspace.All.Select(descriptor => Add(
+            descriptor.Key,
+            descriptor.Title,
+            descriptor.Icon == Icon.None ? Icon.AppWindow : descriptor.Icon,
+            descriptor.IconColor,
+            Workspace.OpenDockableCommand,
+            descriptor))];
     }
 
     // Rebuilds the Favorites menu from the starred actions and refreshes each action's star indicator.
@@ -196,8 +218,8 @@ public sealed partial class ShellViewModel : ObservableObject
                 unsaved.Add((panel.BaseTitle, panel.SaveAsync));
         }
 
-        if (_world.IsDirty)
-            unsaved.Add(("World", () => _world.SaveAsync()));
+        if (_world.Active.IsDirty)
+            unsaved.Add(("World", () => _world.Active.SaveAsync()));
 
         if (unsaved.Count == 0)
             return true;
@@ -218,7 +240,7 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     private Task SaveWorldAsync() =>
-        _world.IsDirty ? _world.SaveAsync() : Task.CompletedTask;
+        _world.Active.IsDirty ? _world.Active.SaveAsync() : Task.CompletedTask;
 
     // TODO: Make a toolbar VM and widget for these and move the commands there.
     [RelayCommand]
@@ -233,15 +255,15 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Opens an asset chosen from the in-app picker, routing by type: scripts and shaders open in the
-    /// Monaco script editor; worlds/chunks switch the active editing world; textures, models and
-    /// materials open in a new Asset Viewer (an isolated orbit preview).
+    /// Opens an asset chosen from the in-app picker, routing by type through the shared <see cref="AssetOpener"/>
+    /// (scripts/shaders → code editor, worlds → active world, models/materials/textures → Asset Viewer,
+    /// anything else → the OS default program).
     /// </summary>
     [RelayCommand]
     private async Task OpenAssetAsync()
     {
-        // Resume on the UI thread after the dialog: the routing below opens dockables (script editor /
-        // asset viewer), which touch the DockControl and must run on the UI thread.
+        // Resume on the UI thread after the dialog: the routing opens dockables, which touch the DockControl
+        // and must run on the UI thread.
         var pick = await AssetPicker.ShowAsync("Open Asset", _assets.Assets, 0).ContinueOnSameContext();
         if (!pick.Confirmed || pick.Id == 0)
             return;
@@ -252,44 +274,7 @@ public sealed partial class ShellViewModel : ObservableObject
             return;
         }
 
-        if (asset.IsScript || IsShader(asset.Type))
-        {
-            if (_projects.CurrentProject is { } project)
-                _scriptEditor.Open(ResolveAssetPath(project, asset.Path));
-            else
-                _log.Error("Open a project before opening a script.");
-            return;
-        }
-
-        if (asset.Type is "world" or "chunk")
-        {
-            await _world.OpenWorldAsync(asset.Id).ContinueOnAnyContext();
-            return;
-        }
-
-        _assetViewer.Open(asset);
-    }
-
-    // Shader source extensions open in the text editor alongside scripts.
-    private static bool IsShader(string type) =>
-        type is "glsl" or "hlsl" or "vert" or "frag" or "vertex" or "fragment" or "geometry"
-            or "compute" or "comp";
-
-    // Resolves a project-relative asset path to an absolute one (under the project root, else its
-    // Assets folder) so the script editor can open the file. Mirrors App.ResolveAssetPath.
-    private static string ResolveAssetPath(ProjectInfo project, string relativePath)
-    {
-        if (string.IsNullOrEmpty(relativePath))
-            return project.AssetsDirectory;
-        if (Path.IsPathRooted(relativePath))
-            return relativePath;
-
-        var underRoot = Path.Combine(project.RootDirectory, relativePath);
-        if (File.Exists(underRoot))
-            return underRoot;
-
-        var underAssets = Path.Combine(project.AssetsDirectory, relativePath);
-        return File.Exists(underAssets) ? underAssets : underRoot;
+        await _assetOpener.OpenAsync(asset).ContinueOnSameContext();
     }
 
     [RelayCommand]
@@ -302,6 +287,31 @@ public sealed partial class ShellViewModel : ObservableObject
     private Task AttachAsync()
     {
         return _session.AttachAsync(InstanceDetector.DefaultEnginePort);
+    }
+
+    /// <summary>Compiles and launches the engine for the current project. Enabled only while it's fully off.</summary>
+    [RelayCommand(CanExecute = nameof(CanStartEngine))]
+    private Task StartEngineAsync() => _session.StartAsync();
+
+    private bool CanStartEngine => _watcher.State == EngineState.Off;
+
+    /// <summary>Tears down and relaunches the engine. Enabled only while something is running.</summary>
+    [RelayCommand(CanExecute = nameof(CanControlEngine))]
+    private Task RestartEngineAsync() => _session.RestartAsync();
+
+    /// <summary>Stops the running engine (an owned process exits; an attached one is detached). Enabled only
+    /// while something is running.</summary>
+    [RelayCommand(CanExecute = nameof(CanControlEngine))]
+    private Task StopEngineAsync() => _session.StopAsync();
+
+    private bool CanControlEngine => _watcher.State != EngineState.Off;
+
+    // Re-evaluate the engine-lifecycle actions' enabled state whenever the engine state changes.
+    private void OnEngineStateChanged(EngineState state)
+    {
+        StartEngineCommand.NotifyCanExecuteChanged();
+        RestartEngineCommand.NotifyCanExecuteChanged();
+        StopEngineCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]

@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Logging;
 
 namespace Toybox.Studio.Utils;
 

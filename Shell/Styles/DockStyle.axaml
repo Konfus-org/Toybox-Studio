@@ -1,6 +1,11 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:dock="using:Dock.Avalonia.Controls">
+        xmlns:dock="using:Dock.Avalonia.Controls"
+        xmlns:core="using:Dock.Model.Core"
+        xmlns:controls="using:Dock.Model.Controls"
+        xmlns:converters="using:Dock.Avalonia.Converters"
+        xmlns:pg="using:Toybox.Studio.PropertyGrid"
+        xmlns:workspace="using:Toybox.Studio.Shell.Workspace">
 
     <!-- DOCKING CHROME — panels, drop-target selectors, dock tabs and pinned tabs. Soft, puffy toy chrome.
          The KEY to shape-correct shadows: put the shadow as a BoxShadow on the exact rounded template border
@@ -68,19 +73,154 @@
     <Style Selector="dock|ToolChromeControl /template/ Border">
         <Setter Property="BorderThickness" Value="0"/>
     </Style>
-    <!-- The panel's content border (PART_Border wraps the header AND the content) is square and CLIPS its
-         content, so a panel whose content is a square opaque surface (the viewport texture) stays inside the
-         border instead of painting over it — letting the focus outline ring the WHOLE panel, not just the
-         title bar. The drop shadow still renders: it's an Effect on the control (ClipToBounds=False), not on
-         this inner border. -->
+    <!-- Square, content-clipping header border. NOTE: in Dock 12.0.0.2 the ToolChromeControl PART_Border wraps
+         ONLY the title-bar grip (VerticalAlignment=Top, Grid.Row 0); its content (the nested ToolControl) is a
+         SEPARATE PART_ContentPresenter in Grid.Row 1. The focus ring is drawn across the header AND the tool
+         content border (see below), not on PART_Border alone. -->
     <Style Selector="dock|ToolChromeControl /template/ Border#PART_Border">
         <Setter Property="CornerRadius" Value="0"/>
         <Setter Property="ClipToBounds" Value="True"/>
     </Style>
-    <!-- The focused (active) docked panel gets a square primary-accent border ringing the entire panel. -->
+    <!-- The focused (active) docked panel gets a primary-accent ring around the CARD CONTENT whose BOTTOM edge
+         sits ABOVE the tab strip (the tabs sit below it, outside the ring). The card is nested Dock controls:
+
+            ToolChromeControl                          — the :active card; its PART_Border is the purple grip
+              └ PART_ContentPresenter → ToolControl    — whose PART_DockPanel stacks, top→bottom:
+                   ├ PART_Border    (fills above)      — the real content area (cream DockSurfacePanelBrush bg)
+                   └ PART_TabStrip  (Dock=Bottom)      — the Game / Viewport / … tabs
+
+         So the ring is two parts: the chrome header takes top+sides (2,2,2,0), and ToolControl's content
+         Border takes a full 2px box — its TOP covers the thin cream strip that showed between the header and
+         the content, its BOTTOM lands just above the tab strip, and its sides line up beneath the header's.
+         We deliberately do NOT border the chrome's PART_ContentPresenter: it wraps the tab strip too, which is
+         what pushed the bottom edge below the tabs. -->
     <Style Selector="dock|ToolChromeControl:active /template/ Border#PART_Border">
+        <Setter Property="BorderThickness" Value="2,2,2,0"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+    <Style Selector="dock|ToolChromeControl:active dock|ToolControl /template/ Border#PART_Border">
         <Setter Property="BorderThickness" Value="2"/>
         <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+    </Style>
+
+    <!-- PANEL HEADER ICONS. Each dockable advertises a Lucide icon via [Dockable(Icon=…, IconColor=…)]; the
+         window manager stamps it onto the panel's WorkspaceTool, and these two rules render it in the panel's
+         two headers: the bottom tab strip and the top chrome title bar. The icon is read null-safely from the
+         dockable through WorkspaceToolIconConverter, so a dockable without one (or restored from a pre-icon
+         layout) just shows no glyph. -->
+
+    <!-- Tab strip: Dock's ToolTabStripItem has a PART_IconPresenter fed by the tool dock's IconTemplate, which
+         ToolControl pushes down to its tab strip. We replace the stock empty template with the panel's icon. -->
+    <Style Selector="dock|ToolControl">
+        <Setter Property="IconTemplate">
+            <DataTemplate x:DataType="core:IDockable">
+                <pg:IconView Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"
+                             IconName="{Binding Converter={x:Static workspace:WorkspaceToolIconConverter.Name}}"
+                             IconColor="{Binding Converter={x:Static workspace:WorkspaceToolIconConverter.Color}}"/>
+            </DataTemplate>
+        </Setter>
+    </Style>
+
+    <!-- Chrome title bar: Dock's ToolChromeControl has no icon slot, so we override its template (a faithful
+         copy of Dock 12's, with an IconView prepended to PART_Title). PART_ names are preserved so the base
+         control-theme's part styling (button geometries, grip, divider) and our own header rules above still
+         apply. x:DataType matches Dock's own template so the copied {Binding}s compile (including the
+         (core:IDock) capability casts) instead of failing to resolve the cast type at runtime. -->
+    <Style Selector="dock|ToolChromeControl">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid RowDefinitions="Auto,*" x:DataType="controls:IToolDock">
+                    <DeferredContentPresenter x:Name="PART_ContentPresenter"
+                                              Background="{TemplateBinding Background}"
+                                              BorderBrush="{TemplateBinding BorderBrush}"
+                                              BorderThickness="{TemplateBinding BorderThickness}"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              Padding="{TemplateBinding Padding}"
+                                              Grid.Row="1" />
+                    <Border x:Name="PART_Border"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            VerticalAlignment="Top"
+                            ContextFlyout="{TemplateBinding ToolFlyout}"
+                            Grid.Row="{Binding GripMode, Converter={x:Static GripModeConverters.GridRowAutoHideConverter}}">
+                        <Grid x:Name="PART_Grip">
+                            <DockPanel LastChildFill="True" Margin="{DynamicResource DockToolChromeHeaderMargin}">
+                                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                                    <pg:IconView Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                 IconName="{Binding ActiveDockable, Converter={x:Static workspace:WorkspaceToolIconConverter.Name}}"
+                                                 IconColor="{Binding ActiveDockable, Converter={x:Static workspace:WorkspaceToolIconConverter.Color}}"/>
+                                    <TextBlock x:Name="PART_Title"
+                                               Text="{Binding ActiveDockable.Title, FallbackValue=TITLE}" />
+                                </StackPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button x:Name="PART_MenuButton"
+                                            Theme="{TemplateBinding MenuButtonTheme}"
+                                            Flyout="{TemplateBinding ToolFlyout}">
+                                        <Viewbox Margin="{DynamicResource DockToolChromeMenuIconMargin}">
+                                            <Path x:Name="PART_MenuPath" />
+                                        </Viewbox>
+                                    </Button>
+                                    <Button x:Name="PART_PinButton"
+                                            Command="{Binding Owner.Factory.PinDockable}"
+                                            CommandParameter="{Binding ActiveDockable}"
+                                            Theme="{TemplateBinding PinButtonTheme}">
+                                        <Button.IsVisible>
+                                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                <MultiBinding Converter="{x:Static converters:DockCapabilityConverters.CanPinMultiConverter}">
+                                                    <Binding Path="ActiveDockable" />
+                                                    <Binding Path="ActiveDockable.CanPin" />
+                                                    <Binding Path="ActiveDockable.DockCapabilityOverrides.CanPin" />
+                                                    <Binding Path="(core:IDock).DockCapabilityPolicy.CanPin" />
+                                                </MultiBinding>
+                                                <TemplateBinding Property="IsFloating" Converter="{x:Static BoolConverters.Not}" />
+                                            </MultiBinding>
+                                        </Button.IsVisible>
+                                        <Viewbox>
+                                            <Path x:Name="PART_PinPath" />
+                                        </Viewbox>
+                                    </Button>
+                                    <Button x:Name="PART_MaximizeRestoreButton"
+                                            IsVisible="{TemplateBinding IsFloating}"
+                                            Theme="{TemplateBinding MaximizeButtonTheme}">
+                                        <Viewbox>
+                                            <Path x:Name="PART_MaximizeRestorePath" />
+                                        </Viewbox>
+                                    </Button>
+                                    <Button x:Name="PART_CloseButton"
+                                            Command="{Binding Owner.Factory.CloseDockable}"
+                                            CommandParameter="{Binding ActiveDockable}"
+                                            Theme="{TemplateBinding CloseButtonTheme}">
+                                        <Button.IsVisible>
+                                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                <MultiBinding Converter="{x:Static converters:DockCapabilityConverters.CanCloseMultiConverter}">
+                                                    <Binding Path="ActiveDockable" />
+                                                    <Binding Path="ActiveDockable.CanClose" />
+                                                    <Binding Path="ActiveDockable.DockCapabilityOverrides.CanClose" />
+                                                    <Binding Path="(core:IDock).DockCapabilityPolicy.CanClose" />
+                                                </MultiBinding>
+                                                <MultiBinding Converter="{x:Static converters:CanRemoveDockableConverter.Instance}">
+                                                    <Binding Path="(core:IDock).CanCloseLastDockable" FallbackValue="{x:True}" />
+                                                    <Binding Path="(core:IDock).VisibleDockables.Count" FallbackValue="0" />
+                                                </MultiBinding>
+                                            </MultiBinding>
+                                        </Button.IsVisible>
+                                        <Viewbox>
+                                            <Path x:Name="PART_ClosePath" />
+                                        </Viewbox>
+                                    </Button>
+                                </StackPanel>
+                                <Grid x:Name="PART_Grid" />
+                            </DockPanel>
+                        </Grid>
+                    </Border>
+                    <Panel x:Name="PART_Panel"
+                           Background="{TemplateBinding BorderBrush}"
+                           Height="{DynamicResource DockToolChromeDividerThickness}"
+                           VerticalAlignment="Top"
+                           Grid.Row="{Binding GripMode, Converter={x:Static GripModeConverters.GridRowAutoHideConverter}}" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
     </Style>
 
     <!-- Dock panel-chrome buttons (pin / menu / close in a title bar, and a tab's close button) are icon
@@ -110,7 +250,9 @@
     <Style Selector="dock|ToolTabStripItem, dock|DocumentTabStripItem">
         <Setter Property="CornerRadius" Value="10,10,0,0"/>
         <Setter Property="Padding" Value="12,5"/>
-        <Setter Property="Margin" Value="2,2,0,0"/>
+        <!-- Left margin (2) spaces tabs apart; top is 0 so the tab sits FLUSH against the content outline
+             above it (a top margin left a white tab-strip gap between the focus ring's bottom and the tab). -->
+        <Setter Property="Margin" Value="2,0,0,0"/>
     </Style>
     <Style Selector="dock|ToolTabStripItem:pointerover, dock|DocumentTabStripItem:pointerover">
         <Setter Property="Background" Value="{DynamicResource DockTabHoverBackgroundBrush}"/>
@@ -128,6 +270,15 @@
         <!-- Flat purple (a tab is too small for the gradient to read). -->
         <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>
+        <!-- Pin geometry to the UNSELECTED values so focusing a tab never changes its size or position.
+             Dock's stock :selected styles otherwise mutate geometry: ToolTabStripItem:selected adds a
+             1px side/bottom border (BorderThickness="1 0 1 1"), swaps in a different padding
+             (DockToolTabItemSelectedPadding), and zeroes the Margin — together that widened the tab and
+             bumped the text up. We only restyle colour, so re-assert the base 0 border / 12,5 padding /
+             2,0,0,0 margin here to override those setters. -->
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="12,5"/>
+        <Setter Property="Margin" Value="2,0,0,0"/>
     </Style>
     <Style Selector="dock|DocumentTabStripItem:selected:pointerover, dock|ToolTabStripItem:selected:pointerover">
         <Setter Property="Foreground" Value="{DynamicResource ThemeOnColorTextBrush}"/>

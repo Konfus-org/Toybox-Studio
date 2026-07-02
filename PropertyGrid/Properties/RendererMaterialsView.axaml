@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid"
+             xmlns:util="using:Toybox.Studio.Behaviors" xmlns:anim="using:Toybox.Studio.Behaviors.Animations"
+             x:Class="Toybox.Studio.PropertyGrid.RendererMaterialsView"
+             x:DataType="local:RendererMaterialsViewModel">
+    <!-- The Renderer's per-slot material overrides, rendered like a nested struct: a collapsible "Materials"
+         header (disclosure chevron + state/reset from its parts) over one row per the model's material slots.
+         Each slot row is an asset picker labeled with the slot name extracted from the source file at import;
+         an empty pick inherits the model's own slot. The hint shows when no model (or no slots) is bound. -->
+    <StackPanel IsVisible="{Binding Visible}">
+        <local:PropertyRow HeaderText="{Binding Name}" Description="{Binding Description}"
+                           Depth="{Binding Depth}"
+                           anim:ExpandNod.State="{Binding IsExpanded}"
+                           util:ToggleOnTap.Enabled="True"
+                           util:ToggleOnTap.State="{Binding IsExpanded, Mode=TwoWay}"/>
+        <StackPanel IsVisible="{Binding IsExpanded}">
+            <ItemsControl ItemsSource="{Binding Slots}"/>
+            <TextBlock Text="Assign a model to see its material slots." FontSize="12" Opacity="0.5"
+                       Margin="10,8" TextWrapping="Wrap" IsVisible="{Binding IsEmpty}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

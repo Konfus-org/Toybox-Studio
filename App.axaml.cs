@@ -1,5 +1,5 @@
-using Toybox.Studio.Services;
-using Toybox.Studio.Services.World;
+using Toybox.Studio;
+using Toybox.Studio.Worlds;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Utils.Extensions;
 using System;
@@ -12,25 +12,28 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Toybox.Studio.Shell;
-using Toybox.Studio.Widgets.Ecs;
-using Toybox.Studio.Widgets.LogConsole;
-using Toybox.Studio.Widgets.Status;
-using Toybox.Studio.Widgets.PropertyGrid;
-using Toybox.Studio.Widgets.Toolbar;
+using Toybox.Studio.Ecs;
+using Toybox.Studio.EntityInspector;
+using Toybox.Studio.Status;
+using Toybox.Studio.PropertyGrid;
+using Toybox.Studio.Toolbar;
 using Toybox.Studio.Shell.Workspace;
-using Toybox.Studio.Services.Clipboard;
-using Toybox.Studio.Services.Commands;
-using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Services.Favorites;
-using Toybox.Studio.Services.Scripting;
-using Toybox.Studio.Widgets.ContextMenu;
-using Toybox.Studio.Services.EngineApi;
-using Toybox.Studio.Services.Logging;
-using Toybox.Studio.Services.Project;
-using Toybox.Studio.Services.Settings;
-using Toybox.Studio.Services.Theming;
-using Toybox.Studio.Widgets.Behaviors;
-using Toybox.Studio.Widgets.Behaviors.Animations;
+using Toybox.Studio.Clipboards;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.Favorites;
+using Toybox.Studio.Scripting;
+using Toybox.Studio.ContextMenu;
+using Toybox.Studio.EngineApi;
+using Toybox.Studio.Logging;
+using Toybox.Studio.Project;
+using Toybox.Studio.Settings;
+using Toybox.Studio.Theming;
+using Toybox.Studio.Behaviors;
+using Toybox.Studio.Behaviors.Animations;
+using Toybox.Studio.Project.Assets;
+using Toybox.Studio.Console;
+using Toybox.Studio.LogConsole;
+using Toybox.Studio.ScriptEditor;
 
 namespace Toybox.Studio;
 
@@ -120,7 +123,14 @@ public partial class App : Application
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
             PropertyViewRegistry.Configure(
                 catalog,
-                _host.Services.GetRequiredService<WorldManager>());
+                _host.Services.GetRequiredService<AssetFactory>(),
+                _host.Services.GetRequiredService<GameState>());
+
+            // Surface a failed optimistic live-edit push in the log. The world's describe-parser, reflect
+            // scheduler and engine transport are now injected into the live World (via GameState), not wired
+            // statically here; the asset API likewise gets its services through the injected AssetServices.
+            var reflectScheduler = _host.Services.GetRequiredService<EngineSyncScheduler>();
+            reflectScheduler.PushFailed += message => log.Warning($"Live edit didn't sync: {message}");
 
             // Eagerly build the component/script catalogs so they subscribe to the session (and the asset
             // catalog) and are populated by the time the inspector's "Add" pickers open, even if the
@@ -131,14 +141,14 @@ public partial class App : Application
             // Give the inspector's script cards their inline editor / pop-out / source-resolution service.
             ScriptEditing.Current = _host.Services.GetRequiredService<ScriptEditing>();
 
-            // Publish the data-driven context-menu service so the static MenuOpenBehavior (an attached
-            // property) can resolve menus, the favorites store and the selection without a per-view hookup.
-            ContextMenuService.Current = _host.Services.GetRequiredService<ContextMenuService>();
+            // Publish the context-menu dispatcher so the static MenuOpenBehavior (an attached property) can
+            // route a clicked target to the matching per-surface menu without a per-view hookup.
+            ContextMenuCatalog.Current = _host.Services.GetRequiredService<ContextMenuCatalog>();
 
             // The Accessibility ▸ Animation intensity setting renders as a clay slider rather than a numeric
             // field (tagged [View("intensitySlider")] by the settings grid; see SettingsViewModel.TagView).
             PropertyViewRegistry.Register(
-                "intensitySlider", (node, commit) => new SliderPropertyViewModel(node, commit));
+                "intensitySlider", (descriptor, accessor) => new SliderPropertyViewModel(descriptor, accessor));
 
             // Activating an asset link (e.g. a handle hyperlink) reveals the file in the OS explorer.
             catalog.AssetActivated += id =>
@@ -180,6 +190,8 @@ public partial class App : Application
             var session = _host.Services.GetRequiredService<Session>();
             // Resolve the watcher before any launch so it observes the engine from the very first signal.
             _host.Services.GetRequiredService<EngineWatcher>();
+            // Bring the asset file watcher to life so the browser auto-detects assets added/changed on disk.
+            _host.Services.GetRequiredService<AssetWatcher>();
             // Bring the freeze watchdog up too, so an unresponsive engine is caught from the first launch and
             // the editor can offer to force-restart it instead of hanging on the frozen process.
             _host.Services.GetRequiredService<EngineWatchdog>();
@@ -194,8 +206,8 @@ public partial class App : Application
             // Bring the gizmo→toolbar bridge to life so the data-driven toolbar reflects the active gizmo.
             _host.Services.GetRequiredService<GizmoToolbarBridge>();
             // And the pause→toolbar bridge so the game transport's Pause/Resume toggle reflects pause state.
-            _host.Services.GetRequiredService<PlayToolbarBridge>();
-            var locator = _host.Services.GetRequiredService<Locator>();
+            _host.Services.GetRequiredService<PlaySync>();
+            var locator = _host.Services.GetRequiredService<EngineLocator>();
             var locatorReport = locator.ResolveAtStartup();
             log.Info(locatorReport);
             splashViewModel.Status =
@@ -211,6 +223,23 @@ public partial class App : Application
             // runs in the background so the editor opens immediately.
             var settings = _host.Services.GetRequiredService<SettingsManager>().Settings;
             var projects = _host.Services.GetRequiredService<ProjectManager>();
+
+            // The settings manager holds the open project's settings asset too; (re)load it when the project
+            // changes or the engine connects (the engine supplies the full settings schema). Wired here rather
+            // than via the manager's ctor because ProjectManager already depends on SettingsManager (a cycle).
+            // On connect also refresh the asset file-pairing rules from the engine (it owns them, not Studio).
+            var engineRpc = _host.Services.GetRequiredService<Engine>();
+            projects.ProjectChanged += _ => settingsManager.ReloadProjectAsync().FireAndForget();
+            session.StateChanged += state =>
+            {
+                if (state != ConnectionState.Connected)
+                    return;
+
+                AssetPairing.RefreshAsync(engineRpc).FireAndForget();
+                settingsManager.ReloadProjectAsync().FireAndForget();
+            };
+            settingsManager.ReloadProjectAsync().FireAndForget();
+
             var wantsLaunch = settings.Engine.AutoLaunchEngine
                 || desktop.Args?.Contains("--auto-launch") == true;
             if (wantsLaunch && locator.IsLocated)
@@ -296,35 +325,42 @@ public partial class App : Application
         services.AddSingleton<FilePicker>();
         services.AddSingleton<CMakeCompiler>();
         services.AddSingleton<ProjectBuilder>();
-        services.AddSingleton<EngineRpc>();
-        services.AddSingleton<EngineSettings>();
+        services.AddSingleton<Engine>();
         // Each viewport/game-view owns its own engine view stream (parameterized by ViewKind), so it's vended
-        // by a factory rather than resolved directly — keeping EngineRpc (the transport) out of the view-models.
+        // by a factory rather than resolved directly — keeping Engine (the transport) out of the view-models.
         services.AddSingleton<Func<ViewKind, ViewportStream>>(sp =>
             kind => new ViewportStream(
-                sp.GetRequiredService<Session>(), sp.GetRequiredService<EngineRpc>(), kind));
-        services.AddSingleton<JsonParser>();
+                sp.GetRequiredService<Session>(), sp.GetRequiredService<Engine>(), kind));
+        // The single reflect scheduler every typed reflected object's live edits flow through (debounce/stage +
+        // RPC routing). Exposed via its interface for the reflected objects, and concretely for startup wiring.
+        services.AddSingleton<EngineSyncScheduler>();
+        services.AddSingleton<IEngineSyncScheduler>(sp => sp.GetRequiredService<EngineSyncScheduler>());
+        // The wire↔typed-component map (built by reflection over the codegen naming convention); backs the
+        // component catalog's typed-vs-engine drift check and typed wire lookups.
+        services.AddSingleton<EngineSyncedComponentRegistry>();
         services.AddSingleton<WorldSelection>();
         services.AddSingleton<SelectionSync>();
         services.AddSingleton<GizmoTool>();
         services.AddSingleton<GizmoSync>();
         services.AddSingleton<ToolbarState>();
         services.AddSingleton<GizmoToolbarBridge>();
-        services.AddSingleton<PlayToolbarBridge>();
+        services.AddSingleton<PlaySync>();
         services.AddSingleton<Clipboard>();
-        services.AddSingleton<EditorCommands>();
         services.AddSingleton<ToolCommandRunner>();
         services.AddSingleton<FavoritesManager>();
-        services.AddSingleton<ContextMenuService>();
+        // Context menus: every ContextMenu<T> subclass auto-registers (concretely — so the world view can inject
+        // the entity menu for its inline-rename signal — and as IContextMenu) and routes by the right-clicked
+        // view-model's type. Adding a menu is just a new ContextMenu<T> subclass; no wiring here.
+        ContextMenuCatalog.Register(services);
         services.AddSingleton<Session>();
         services.AddSingleton<EngineWatcher>();
         services.AddSingleton<EngineWatchdog>();
         services.AddSingleton<InstanceDetector>();
-        services.AddSingleton<WorldManager>();
+        services.AddSingleton<GameState>();
         services.AddSingleton<AssetCatalog>();
         services.AddSingleton<ComponentCatalog>();
         services.AddSingleton<ScriptCatalog>();
-        services.AddSingleton<Locator>();
+        services.AddSingleton<EngineLocator>();
         services.AddSingleton<ThemeCreator>();
         services.AddSingleton<StatusViewModel>();
         services.AddSingleton<InspectorRefreshCoordinator>();
@@ -333,9 +369,9 @@ public partial class App : Application
         // buffers both editor surfaces (inline strip + popped-out window) bind to. The server is IDisposable
         // and disposed with the host on shutdown.
         services.AddSingleton<MonacoAssetServer>();
-        services.AddSingleton<ScriptDocumentService>();
+        services.AddSingleton<ScriptService>();
         services.AddSingleton<ScriptEditorLauncher>();
-        services.AddSingleton<ScriptHotReload>();
+        services.AddSingleton<ScriptHotReloadViewModel>();
         services.AddSingleton<ScriptEditing>();
 
         // Auto-registers every [Dockable] View's view-model (World, Viewport, Console, Settings, …) and the
@@ -347,6 +383,26 @@ public partial class App : Application
         // Opens a new Asset Viewer panel for a chosen asset (File ▸ Open ▸ Asset), passing the target
         // asset to the freshly-spawned panel.
         services.AddSingleton<AssetViewerLauncher>();
+
+        // Routes "open this asset" by type (code editor / world / asset viewer / OS default); shared by the
+        // menu-bar picker and the Asset Browser.
+        services.AddSingleton<AssetOpener>();
+
+        // The shared asset (inspection) selection and the project file watcher that auto-refreshes the catalog
+        // when assets change on disk.
+        services.AddSingleton<AssetSelection>();
+        services.AddSingleton<AssetWatcher>();
+
+        // The editor services every asset operation routes through (the bundle a handle carries), and the factory
+        // that builds typed asset handles from it — view-models inject the factory and call factory.For/Of.
+        services.AddSingleton<AssetServices>();
+        services.AddSingleton<AssetFactory>();
+        // Lazy AssetServices breaks the SettingsManager → AssetServices → AssetCatalog → Session → SettingsManager
+        // construction cycle (SettingsManager only needs the bundle later, to load the project settings asset).
+        services.AddSingleton(provider => new Lazy<AssetServices>(provider.GetRequiredService<AssetServices>));
+
+        // The Inspector's asset view-model (the host EntityInspectorViewModel is auto-registered from its [Dockable]).
+        services.AddSingleton<AssetInspectorViewModel>();
 
         services.AddSingleton<ShellViewModel>();
     }

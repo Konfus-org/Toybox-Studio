@@ -7,8 +7,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
-using Toybox.Studio.Services.Dialogs;
-using Toybox.Studio.Services.Logging;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.Logging;
 using Toybox.Studio.Shell.Panels;
 using Toybox.Studio.Utils;
 
@@ -25,7 +25,7 @@ public sealed partial class WorkspaceViewModel : ObservableObject
     private readonly WindowManager _windows;
     private readonly LayoutStore _store;
     private readonly Logger _log;
-    private readonly Dictionary<string, DockableDescriptor> _byId;
+    private readonly Dictionary<Type, DockableDescriptor> _byType;
 
     private DockControl? _control;
     private IRootDock? _initialLayout;
@@ -36,7 +36,7 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         _log = log;
         _windows = new WindowManager(catalog);
         All = catalog.Dockables;
-        _byId = All.ToDictionary(descriptor => descriptor.Id);
+        _byType = All.ToDictionary(descriptor => descriptor.ViewModelType);
     }
 
     /// <summary>Every registered dockable. Drives the Windows menu.</summary>
@@ -78,24 +78,32 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         var root = _control?.Layout as IRootDock;
         foreach (var descriptor in All)
         {
-            if (root is not null && _windows.IsDocked(descriptor.Id, root))
+            if (root is not null && _windows.IsDocked(descriptor.Key, root))
                 Docked.Add(descriptor);
-            else if (root is not null && _windows.IsFloating(descriptor.Id, root))
+            else if (root is not null && _windows.IsFloating(descriptor.Key, root))
                 Floating.Add(descriptor);
             else
                 Closed.Add(descriptor);
         }
     }
 
-    /// <summary>Opens (or focuses, if already open) the dockable, opening it as a floating window if closed.</summary>
+    /// <summary>Opens (or focuses, if already open) the given dockable, opening it as a floating window if closed.
+    /// The Windows menu binds this, passing the descriptor it already holds.</summary>
     [RelayCommand]
-    public void OpenDockable(string id)
+    public void OpenDockable(DockableDescriptor descriptor)
     {
-        if (Resolve(id) is not { } descriptor || _control?.Layout is not IRootDock root || Owner is not { } owner)
+        if (_control?.Layout is not IRootDock root || Owner is not { } owner)
             return;
 
         _windows.OpenOrFocus(descriptor, root, owner);
         Refresh();
+    }
+
+    /// <summary>Opens (or focuses) the dockable backed by <typeparamref name="TViewModel"/>.</summary>
+    public void OpenDockable<TViewModel>()
+    {
+        if (_byType.TryGetValue(typeof(TViewModel), out var descriptor))
+            OpenDockable(descriptor);
     }
 
     /// <summary>Discards the current arrangement and rebuilds the built-in default layout.</summary>
@@ -112,10 +120,27 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         Refresh();
     }
 
-    /// <summary>Opens the dockable only if it isn't already open — used by the Play button for the viewport.</summary>
-    public void EnsureOpen(string id)
+    /// <summary>Brings an already-open instance of the <typeparamref name="TViewModel"/> dockable (by base key) to
+    /// the front. Returns false when none is open. Used by the asset-viewer launcher to reuse-and-focus the
+    /// current viewer.</summary>
+    public bool FocusExisting<TViewModel>()
     {
-        if (Resolve(id) is not { } descriptor || _control?.Layout is not IRootDock root || Owner is not { } owner)
+        if (_control?.Layout is not IRootDock root
+            || !_byType.TryGetValue(typeof(TViewModel), out var descriptor))
+            return false;
+
+        var focused = _windows.FocusExisting(descriptor.Key, root);
+        if (focused)
+            Refresh();
+        return focused;
+    }
+
+    /// <summary>Opens the <typeparamref name="TViewModel"/> dockable only if it isn't already open — used by the
+    /// Play button for the viewport.</summary>
+    public void EnsureOpen<TViewModel>()
+    {
+        if (!_byType.TryGetValue(typeof(TViewModel), out var descriptor)
+            || _control?.Layout is not IRootDock root || Owner is not { } owner)
             return;
 
         _windows.EnsureOpen(descriptor, root, owner);
@@ -183,8 +208,6 @@ public sealed partial class WorkspaceViewModel : ObservableObject
 
     /// <summary>Every open data panel (distinct) — the source for File ▸ Save All and the app-close prompt.</summary>
     public IEnumerable<DataPanel> OpenPanels() => _windows.OpenPanels();
-
-    private DockableDescriptor? Resolve(string id) => _byId.GetValueOrDefault(id);
 
     private IRootDock BuildInitialLayout()
     {

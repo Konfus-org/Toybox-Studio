@@ -1,0 +1,328 @@
+using Newtonsoft.Json.Linq;
+using Toybox.Studio.Utils;
+
+namespace Toybox.Studio.EngineApi;
+
+/// <summary>The engine's reply to view.start: the new view's id and pixel format.</summary>
+public sealed record ViewInfo(string Name, string Format, ulong WorldAssetId = 0);
+
+/// <summary>
+/// One entity's projected screen position in a <c>view.projectEntities</c> reply: the entity id plus its
+/// normalized image coordinates (<see cref="U"/>/<see cref="V"/>, top-left origin, in front of the camera)
+/// and world-space distance from the camera (<see cref="Depth"/>, for distance fade). The editor polls for
+/// these and joins them against the world snapshot to draw name labels + component icon stacks.
+/// </summary>
+public sealed record BillboardPosition(ulong Id, double U, double V, double Depth);
+
+/// <summary>
+/// One viewport's link to its engine view. It asks the engine to start a dedicated view (its own
+/// engine camera + shared GPU texture), then surfaces that texture's cross-process handle as it
+/// arrives so the owning control can import and display it directly — no pixels ever cross the
+/// process boundary on the CPU. One of these is owned by each viewport/game-view instance and stops
+/// its engine view on dispose, so multiple viewports stream independently.
+///
+/// This is the viewport concern's owner of the <c>view.*</c> RPC vocabulary: it builds each command and
+/// parses each reply against the engine's single <see cref="Engine.SendCommand"/> entry point, so the engine
+/// facade stays free of viewport-specific methods.
+/// </summary>
+public sealed class ViewportStream : IDisposable
+{
+    private readonly Session _session;
+    private readonly Engine _engine;
+    private readonly ViewKind _kind;
+    private readonly ulong _assetId;
+
+    // Asset-preview options (ignored by other kinds): auto-orbit turntable + a render-resolution scale (0..1]
+    // for a cheaper small preview such as the browser's hover card.
+    private readonly bool _turntable;
+    private readonly double _renderScale;
+
+    // Serializes start/stop so overlapping StartViewAsync calls (e.g. a reconnect racing the mid-session
+    // open) can't both run StartView and leak an engine view, and so _viewName/_cts are never written
+    // concurrently. A start always stops the previous view (and awaits its view.stop) before switching.
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private CancellationTokenSource? _cts;
+    private volatile string? _viewName;
+    private ulong _worldAssetId;
+    private bool _disposed;
+
+    public ViewportStream(
+        Session session, Engine engine, ViewKind kind = ViewKind.Editor, ulong assetId = 0,
+        bool turntable = false, double renderScale = 1.0)
+    {
+        _session = session;
+        _engine = engine;
+        _kind = kind;
+        _assetId = assetId;
+        _turntable = turntable;
+        _renderScale = renderScale;
+        session.StateChanged += OnSessionStateChanged;
+        engine.SurfaceReceived += OnSurfaceReceived;
+        engine.MouseLockModeChanged += OnMouseLockModeChanged;
+
+        // Opened mid-session (e.g. a new viewport while the engine is already running): start
+        // right away rather than waiting for the next connect.
+        if (session.State == ConnectionState.Connected)
+            StartViewAsync().FireAndForget();
+    }
+
+    /// <summary>
+    /// Raised (on a background thread) when this view's shared GPU texture is ready. A surface with a
+    /// zero <see cref="ViewSurface.Handle"/> means GPU sharing was unavailable for this view.
+    /// </summary>
+    public event Action<ViewSurface>? SurfaceArrived;
+
+    /// <summary>Raised when this view's surface is gone (disconnect or stop) so the control drops it.</summary>
+    public event Action? SurfaceLost;
+
+    /// <summary>
+    /// Raised when the playing game's mouse-lock mode changes ("unlocked", "relative", or "grabbed"),
+    /// forwarded from the engine. Lets the game viewport capture the cursor for mouselook without holding the
+    /// engine transport itself.
+    /// </summary>
+    public event Action<string>? MouseLockModeChanged;
+
+    public void Dispose()
+    {
+        // The session and engine outlive the stream, so drop subscriptions or their events would keep
+        // this (disposed) instance alive.
+        _session.StateChanged -= OnSessionStateChanged;
+        _engine.SurfaceReceived -= OnSurfaceReceived;
+        _engine.MouseLockModeChanged -= OnMouseLockModeChanged;
+        _disposed = true;
+        StopViewAsync().FireAndForget();
+    }
+
+    /// <summary>
+    /// Forwards the owning viewport's input to this stream's engine view (no-op until the view has
+    /// started). Mouse/wheel values are deltas since the last call. Buttons: bit0 left, bit1 right,
+    /// bit2 middle. MoveKeys: bit0 fwd, 1 back, 2 left, 3 right, 4 up, 5 down.
+    /// </summary>
+    public void SendInput(
+        bool focused, int buttons, int moveKeys,
+        IReadOnlyList<InputKey> keys, double mouseX, double mouseY, double dx, double dy, double wheel,
+        double cursorU, double cursorV)
+    {
+        if (_viewName is { } name && _engine.IsConnected)
+            _engine.SendNotification(
+                EngineMethods.ViewInput,
+                new
+                {
+                    View = name,
+                    Focused = focused,
+                    Buttons = buttons,
+                    MoveKeys = moveKeys,
+                    Keys = keys,
+                    MouseX = mouseX,
+                    MouseY = mouseY,
+                    Dx = dx,
+                    Dy = dy,
+                    Wheel = wheel,
+                    CursorU = cursorU,
+                    CursorV = cursorV,
+                });
+    }
+
+    /// <summary>This asset-preview view's isolated preview-world asset id (0 until the view has started, or
+    /// for a non-preview view). The editor targets it to build/edit the previewed entity via the world API.</summary>
+    public ulong WorldAssetId => _worldAssetId;
+
+    /// <summary>
+    /// Frames this asset-preview view's orbit camera to the previewed entity's bounds (no-op until the
+    /// view has started or for a non-preview view). Called after the editor builds/swaps the previewed
+    /// entity through the world/entity API.
+    /// </summary>
+    public Task FrameAsync()
+    {
+        if (_viewName is not null && _engine.IsConnected && _worldAssetId != 0)
+            return _engine.SendCommand(
+                EngineMethods.ViewFrameAssetPreview, new { WorldAssetId = _worldAssetId });
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Picks the entity under a normalized viewport coordinate (top-left origin) on this stream's engine view.
+    /// Fails (without changing selection) when the view hasn't started or the engine is gone.
+    /// </summary>
+    public async Task<Result<ulong?>> PickAsync(double u, double v)
+    {
+        if (_viewName is not { } name || !_engine.IsConnected)
+            return Result<ulong?>.Fail("The view has not started.");
+
+        var result = await _engine
+            .SendCommand<JToken>(EngineMethods.ViewPick, new { View = name, U = u, V = v })
+            .ContinueOnAnyContext();
+        return result is { Success: true, Value: { } reply }
+            ? Result<ulong?>.Ok(reply.Value<ulong?>("id"))
+            : Result<ulong?>.Fail(result.Error ?? "The engine returned no result.");
+    }
+
+    /// <summary>
+    /// Box-selects entities inside a normalized marquee rect (top-left origin) on this stream's view.
+    /// Fails (selection unchanged) when the view hasn't started or the engine is gone.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<ulong>>> PickRectAsync(double u0, double v0, double u1, double v1)
+    {
+        if (_viewName is not { } name || !_engine.IsConnected)
+            return Result<IReadOnlyList<ulong>>.Fail("The view has not started.");
+
+        var result = await _engine
+            .SendCommand<JToken>(
+                EngineMethods.ViewPickRect, new { View = name, U0 = u0, V0 = v0, U1 = u1, V1 = v1 })
+            .ContinueOnAnyContext();
+        if (result is not { Success: true, Value: { } reply })
+            return Result<IReadOnlyList<ulong>>.Fail(result.Error ?? "The engine returned no result.");
+
+        var ids = new List<ulong>();
+        if (reply["ids"] is JArray array)
+            foreach (var token in array)
+                ids.Add(token.Value<ulong>());
+        return Result<IReadOnlyList<ulong>>.Ok(ids);
+    }
+
+    /// <summary>
+    /// Which of the given entities are occluded from this stream's view (billboard overlay visibility).
+    /// Fails when the view hasn't started or the engine is gone, leaving icons at their last visibility.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<bool>>> QueryOcclusionAsync(IReadOnlyList<ulong> ids)
+    {
+        if (_viewName is not { } name || !_engine.IsConnected)
+            return Result<IReadOnlyList<bool>>.Fail("The view has not started.");
+
+        var result = await _engine
+            .SendCommand<JToken>(EngineMethods.ViewQueryOcclusion, new { View = name, Ids = ids })
+            .ContinueOnAnyContext();
+        if (result is not { Success: true, Value: { } reply })
+            return Result<IReadOnlyList<bool>>.Fail(result.Error ?? "The engine returned no result.");
+
+        var occluded = new List<bool>();
+        if (reply["occluded"] is JArray array)
+            foreach (var token in array)
+                occluded.Add(token.Value<bool>());
+        return Result<IReadOnlyList<bool>>.Ok(occluded);
+    }
+
+    /// <summary>
+    /// Projects this stream's view entities to normalized screen space (top-left origin) for the
+    /// billboard overlay. The viewport polls this; fails (positions unchanged) when the view hasn't
+    /// started or the engine is gone.
+    /// </summary>
+    public async Task<Result<IReadOnlyList<BillboardPosition>>> ProjectEntitiesAsync()
+    {
+        if (_viewName is not { } name || !_engine.IsConnected)
+            return Result<IReadOnlyList<BillboardPosition>>.Fail("The view has not started.");
+
+        var result = await _engine
+            .SendCommand<JToken>(EngineMethods.ViewProjectEntities, new { View = name })
+            .ContinueOnAnyContext();
+        if (result is not { Success: true, Value: { } reply })
+            return Result<IReadOnlyList<BillboardPosition>>.Fail(result.Error ?? "The engine returned no result.");
+
+        var positions = new List<BillboardPosition>();
+        if (reply["items"] is JArray array)
+            foreach (var token in array)
+                positions.Add(new BillboardPosition(
+                    token.Value<ulong>("id"),
+                    token.Value<double>("u"),
+                    token.Value<double>("v"),
+                    token.Value<double>("depth")));
+        return Result<IReadOnlyList<BillboardPosition>>.Ok(positions);
+    }
+
+    private void OnMouseLockModeChanged(string mode) => MouseLockModeChanged?.Invoke(mode);
+
+    private void OnSessionStateChanged(ConnectionState state)
+    {
+        if (state == ConnectionState.Connected)
+            StartViewAsync().FireAndForget();
+        else
+            StopViewAsync().FireAndForget();
+    }
+
+    private void OnSurfaceReceived(ViewSurface surface)
+    {
+        // The engine broadcasts every view's surface; take only this stream's.
+        if (surface.Name == _viewName)
+            SurfaceArrived?.Invoke(surface);
+    }
+
+    private async Task StartViewAsync()
+    {
+        await _gate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            if (_disposed)
+                return;
+
+            // Stop (and await) any previous view first, so a re-entrant start can't leak the old engine
+            // view/camera before this stream switches to the new one.
+            await StopViewLockedAsync().ContinueOnAnyContext();
+
+            // Turntable + render scale only apply to an asset-preview view (the engine ignores them otherwise).
+            var kindToken = _kind switch
+            {
+                ViewKind.Game => "game",
+                ViewKind.AssetPreview => "asset",
+                _ => "editor",
+            };
+
+            // The engine may have no rendering service or have gone away; the viewport just stays empty.
+            var result = await _engine
+                .SendCommand<ViewInfo>(
+                    EngineMethods.ViewStart,
+                    new { Kind = kindToken, AssetId = _assetId, Turntable = _turntable, RenderScale = _renderScale })
+                .ContinueOnAnyContext();
+            if (_disposed || result is not { Success: true, Value: { } view })
+            {
+                // Disposed (or torn down) while the call was in flight: don't keep an orphaned engine view.
+                if (result is { Success: true, Value: { } orphan } && _engine.IsConnected)
+                    await _engine
+                        .SendCommand(EngineMethods.ViewStop, new { Name = orphan.Name })
+                        .ContinueOnAnyContext();
+                return;
+            }
+
+            _viewName = view.Name;
+            _worldAssetId = view.WorldAssetId;
+            _cts = new CancellationTokenSource();
+            // The shared texture follows as a view.surface notification (created on the render lane).
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task StopViewAsync()
+    {
+        await _gate.WaitAsync().ContinueOnAnyContext();
+        try
+        {
+            await StopViewLockedAsync().ContinueOnAnyContext();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // Tears the current view down; the caller must hold _gate.
+    private async Task StopViewLockedAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+
+        // Free the engine-side view (camera + shared texture) for this stream. Awaited (not fire-and-forget)
+        // so the old view.stop is actually sent before a following StartView, preventing a leaked view.
+        // Best-effort: if the connection is already gone the engine tore its views down on disconnect anyway.
+        if (_viewName is { } name)
+        {
+            _viewName = null;
+            if (_engine.IsConnected)
+                await _engine.SendCommand(EngineMethods.ViewStop, new { Name = name }).ContinueOnAnyContext();
+        }
+
+        SurfaceLost?.Invoke();
+    }
+}

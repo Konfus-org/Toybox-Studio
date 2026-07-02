@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="using:Toybox.Studio.Settings"
+             xmlns:pg="using:Toybox.Studio.PropertyGrid"
+             xmlns:theming="using:Toybox.Studio.Theming"
+             xmlns:search="using:Toybox.Studio.Searching"
+             xmlns:panels="using:Toybox.Studio.Shell.Panels"
+             x:Class="Toybox.Studio.Settings.SettingsView"
+             x:DataType="shell:SettingsViewModel">
+
+    <!-- The Themes list property is injected into the editor grid (see SettingsViewModel.BuildEditorSettings),
+         so its widget template is registered here at the host level — the grid's row ItemsControl resolves it
+         up the tree, keeping the generic PropertyGrid decoupled from theming. -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="theming:ThemePropertyViewModel">
+            <theming:ThemePropertyView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <DockPanel Margin="{DynamicResource ThemePanelPadding}">
+        <!-- One search for the settings panel: filters both the Editor and Project grids by header or value. -->
+        <search:SearchBox DockPanel.Dock="Top" Margin="0,0,0,10"
+                          Text="{Binding Search, Mode=TwoWay}" Watermark="Search settings…"/>
+
+        <!-- Save/Cancel for the buffered settings panel; docked below the grids so edits are explicit. -->
+        <panels:DataPanelFooterView DockPanel.Dock="Bottom" Margin="0,8,0,0"/>
+
+        <!-- Folder-style tabs fade into the cohesive content panel; the grids embed (flat) so they read as
+             sections of that one panel rather than separate cards. -->
+        <TabControl>
+            <TabItem Header="Editor">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <!-- Engine, Build and Themes are all sections of this one grid; Themes is appended as a
+                         list property in the view-model rather than drawn as a separate panel. -->
+                    <pg:PropertyGridView Embedded="True"
+                                         Items="{Binding Editor.Properties}"
+                                         Filter="{Binding Search}"/>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Project">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Text="Open a project to edit its settings." Margin="10,8"
+                                   IsVisible="{Binding !Project.HasProject}" Opacity="0.6"/>
+                        <pg:PropertyGridView Embedded="True"
+                                             Items="{Binding Project.Properties}"
+                                             Filter="{Binding Search}"
+                                             IsVisible="{Binding Project.HasProject}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</UserControl>

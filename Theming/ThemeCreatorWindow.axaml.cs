@@ -1,0 +1,29 @@
+using Avalonia.Controls;
+using Toybox.Studio.Dialogs;
+using Toybox.Studio.Theming;
+
+namespace Toybox.Studio.Theming;
+
+/// <summary>
+/// Modal dialog for authoring a new theme. Follows the same view-model/CloseRequested ShowDialog pattern as
+/// the dialogs in <c>Dialogs</c>.
+/// </summary>
+public partial class ThemeCreatorWindow : Window
+{
+    public ThemeCreatorWindow()
+    {
+        InitializeComponent();
+    }
+
+    public static Task ShowAsync(Window owner, ThemeManager themes)
+    {
+        var viewModel = new ThemeCreatorViewModel(themes);
+        var window = new ThemeCreatorWindow { DataContext = viewModel };
+        // Own the switch prompt under this dialog so it nests correctly over the editor.
+        viewModel.Confirm = (title, message) => Popups.ConfirmAsync(title, message, owner: window);
+        viewModel.CloseRequested += window.Close;
+        // Reverts the live preview if the user didn't switch — also covers closing via the title-bar button.
+        window.Closed += (_, _) => viewModel.OnClosed();
+        return window.ShowDialog(owner);
+    }
+}

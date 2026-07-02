@@ -5,6 +5,7 @@ using System.Reflection;
 using Avalonia.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Shell.Workspace;
 
@@ -91,9 +92,12 @@ public sealed class DockableCatalog
         var (viewType, attribute, viewModelType) = entry;
         return new DockableDescriptor
         {
-            Id = attribute.Id,
-            Title = string.IsNullOrEmpty(attribute.Title) ? attribute.Id : attribute.Title,
+            // The view-model type is the dockable's identity; its (namespace-independent) name is the stable
+            // Dock-persistence key, so moving a panel between folders never invalidates saved layouts.
+            Key = viewModelType.Name,
+            Title = string.IsNullOrEmpty(attribute.Title) ? viewModelType.Name : attribute.Title,
             Icon = attribute.Icon,
+            IconColor = attribute.IconColor.ToColor(),
             FloatSize = (attribute.Width, attribute.Height),
             Slot = attribute.Slot,
             Proportion = attribute.Proportion,

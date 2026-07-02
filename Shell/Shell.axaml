@@ -1,10 +1,10 @@
 <Window xmlns="https://github.com/avaloniaui"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:shell="using:Toybox.Studio.Shell"
-                 xmlns:status="using:Toybox.Studio.Widgets.Status"
-                 xmlns:searching="using:Toybox.Studio.Widgets.Searching"
-                 xmlns:pg="using:Toybox.Studio.Widgets.PropertyGrid"
-                 xmlns:workspace="using:Toybox.Studio.Shell.Workspace"
+                 xmlns:status="using:Toybox.Studio.Status"
+                 xmlns:searching="using:Toybox.Studio.Searching"
+                 xmlns:pg="using:Toybox.Studio.PropertyGrid"
+                 xmlns:u="using:Toybox.Studio.Utils"
                  xmlns:dock="using:Dock.Avalonia.Controls"
                  xmlns:dockModel="using:Dock.Model.Avalonia.Controls"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -100,21 +100,35 @@
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="Debug">
+                    <!-- Engine lifecycle: start/restart/stop the owned engine, plus attach to an external one. -->
+                    <MenuItem Header="Engine">
+                        <MenuItem.Icon>
+                            <pg:IconView IconName="Cpu" IconColor="{x:Static u:Colors.Cyan}" Width="14" Height="14"/>
+                        </MenuItem.Icon>
+                        <MenuItem Header="{Binding StartEngineAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                                  Command="{Binding StartEngineAction.Command}"/>
+                        <MenuItem Header="{Binding RestartEngineAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                                  Command="{Binding RestartEngineAction.Command}"/>
+                        <MenuItem Header="{Binding StopEngineAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                                  Command="{Binding StopEngineAction.Command}"/>
+                        <Separator/>
+                        <MenuItem Header="{Binding AttachAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                                  Command="{Binding AttachAction.Command}"/>
+                    </MenuItem>
                     <MenuItem Header="{Binding DebugEditorAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
                               Command="{Binding DebugEditorAction.Command}"/>
-                    <MenuItem Header="{Binding AttachAction}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
-                              Command="{Binding AttachAction.Command}"/>
                 </MenuItem>
                 <Separator/>
-                <!-- Data-driven: one item per registered [Dockable], opened (or focused) by Id. -->
-                <MenuItem Header="Windows" ItemsSource="{Binding Workspace.All}">
+                <!-- Data-driven: one favoritable item per registered [Dockable] (icon + label + star); its
+                     descriptor is the command parameter. Starring one surfaces it in the Favorites menu below. -->
+                <MenuItem Header="Windows" ItemsSource="{Binding WindowActions}">
                     <MenuItem.ItemContainerTheme>
-                        <ControlTheme TargetType="MenuItem" x:DataType="workspace:DockableDescriptor"
+                        <ControlTheme TargetType="MenuItem" x:DataType="shell:MenuActionViewModel"
                                       BasedOn="{StaticResource {x:Type MenuItem}}">
-                            <Setter Property="Header" Value="{Binding Title}"/>
-                            <Setter Property="Command"
-                                    Value="{Binding #RootWindow.((shell:ShellViewModel)DataContext).Workspace.OpenDockableCommand}"/>
-                            <Setter Property="CommandParameter" Value="{Binding Id}"/>
+                            <Setter Property="Header" Value="{Binding}"/>
+                            <Setter Property="HeaderTemplate" Value="{StaticResource FavoritableMenuHeader}"/>
+                            <Setter Property="Command" Value="{Binding Command}"/>
+                            <Setter Property="CommandParameter" Value="{Binding Parameter}"/>
                         </ControlTheme>
                     </MenuItem.ItemContainerTheme>
                 </MenuItem>
@@ -133,7 +147,7 @@
                 <MenuItem Header="Favorites" IsVisible="{Binding HasFavorites}"
                           ItemsSource="{Binding Favorites}">
                     <MenuItem.Icon>
-                        <pg:IconView IconName="Star" IconColor="YELLOW" Width="14" Height="14"/>
+                        <pg:IconView IconName="Star" IconColor="{x:Static u:Colors.Yellow}" Width="14" Height="14"/>
                     </MenuItem.Icon>
                     <MenuItem.ItemContainerTheme>
                         <ControlTheme TargetType="MenuItem" x:DataType="shell:MenuActionViewModel"

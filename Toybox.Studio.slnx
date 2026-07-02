@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="Toybox.Studio.csproj" />
+  <Project Path="../Studio.Generators/Toybox.Studio.Generators.csproj" />
 </Solution>

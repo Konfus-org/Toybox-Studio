@@ -1,4 +1,5 @@
 using System;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Shell.Workspace;
 
@@ -6,19 +7,23 @@ namespace Toybox.Studio.Shell.Workspace;
 /// Marks a View (a UserControl) as a dockable panel. The <see cref="DockableCatalog"/> reflection-scans
 /// the assembly for these at startup and turns each into a <see cref="DockableDescriptor"/>, so a panel
 /// is declared in exactly one place — on its own View — and auto-registers into DI, the Windows menu,
-/// and the dock. Adding a new dockable is: create the widget, add this attribute.
+/// and the dock. A dockable is identified by its view-model type (the catalog derives the layout-persistence
+/// key from it), so there is no id to author. Adding a new dockable is: create the widget, add this attribute.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-public sealed class DockableAttribute(string id) : Attribute
+public sealed class DockableAttribute : Attribute
 {
-    /// <summary>Stable identity, persisted in saved layouts and used to focus/dedupe an open dockable.</summary>
-    public string Id { get; } = id;
-
-    /// <summary>Tab/window title. Falls back to <see cref="Id"/> when unset.</summary>
+    /// <summary>Tab/window title. Falls back to the view-model type's name when unset.</summary>
     public string Title { get; init; } = "";
 
-    /// <summary>Optional Lucide icon name shown in the Windows menu.</summary>
-    public string? Icon { get; init; }
+    /// <summary>Lucide icon shown in the Windows menu and on the panel's tab/title-bar header
+    /// (<see cref="Icon.None"/> for none).</summary>
+    public Icon Icon { get; init; }
+
+    /// <summary>Palette colour tinting <see cref="Icon"/>, as a strongly-typed <see cref="PaletteColor"/> token
+    /// (e.g. <c>PaletteColor.Cyan</c>); <see cref="PaletteColor.None"/> inherits. A C# attribute can't carry a
+    /// <c>Color</c> value, so the token names the colour and <c>Colors.ToColor</c> resolves it.</summary>
+    public PaletteColor IconColor { get; init; }
 
     /// <summary>Width of the floating window when the dockable is opened standalone.</summary>
     public double Width { get; init; } = 800;

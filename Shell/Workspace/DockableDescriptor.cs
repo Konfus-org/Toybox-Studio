@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Media;
 
 namespace Toybox.Studio.Shell.Workspace;
 
@@ -10,11 +11,18 @@ namespace Toybox.Studio.Shell.Workspace;
 /// </summary>
 public sealed class DockableDescriptor
 {
-    public required string Id { get; init; }
+    /// <summary>
+    /// The stable string key derived from <see cref="ViewModelType"/> — used as the Dock tool id in persisted
+    /// layouts and for dedupe/focus matching. Not authored: a dockable is identified by its view-model type
+    /// (<see cref="ViewModelType"/>); this is the internal persistence form Dock needs.
+    /// </summary>
+    public required string Key { get; init; }
 
     public required string Title { get; init; }
 
-    public string? Icon { get; init; }
+    public Icon Icon { get; init; }
+
+    public Color? IconColor { get; init; }
 
     public (double Width, double Height) FloatSize { get; init; }
 

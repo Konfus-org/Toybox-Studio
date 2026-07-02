@@ -57,6 +57,10 @@
     <AvaloniaXaml Remove="Toybox.Assets\**" />
     <EmbeddedResource Remove="Toybox.Assets\**" />
     <None Remove="Toybox.Assets\**" />
+    <Compile Remove="Toybox.ECS\**" />
+    <AvaloniaXaml Remove="Toybox.ECS\**" />
+    <EmbeddedResource Remove="Toybox.ECS\**" />
+    <None Remove="Toybox.ECS\**" />
     <Compile Update="Logging\LogConsoleView.axaml.cs">
       <DependentUpon>LogConsoleView.axaml</DependentUpon>
       <SubType>Code</SubType>
@@ -106,6 +110,7 @@
     <ProjectReference Include="Toybox.Settings\Toybox.Settings.csproj" />
     <ProjectReference Include="Toybox.Themes\Toybox.Themes.csproj" />
     <ProjectReference Include="Toybox.Assets\Toybox.Assets.csproj" />
+    <ProjectReference Include="Toybox.ECS\Toybox.ECS.csproj" />
   </ItemGroup>
 
   <ItemGroup>

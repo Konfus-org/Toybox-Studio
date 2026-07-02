@@ -7,3 +7,4 @@ using System.Runtime.CompilerServices;
 // Add each consuming assembly as it is extracted from Toybox.Studio.
 [assembly: InternalsVisibleTo("Toybox.App")]
 [assembly: InternalsVisibleTo("Toybox.Assets")]
+[assembly: InternalsVisibleTo("Toybox.ECS")]

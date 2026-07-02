@@ -4,6 +4,7 @@
   <Project Path="Toybox.Studio.Behaviors/Toybox.Studio.Behaviors.csproj" />
   <Project Path="Toybox.Studio.Assets/Toybox.Studio.Assets.csproj" />
   <Project Path="Toybox.Studio.ECS/Toybox.Studio.ECS.csproj" />
+  <Project Path="Toybox.Studio.PropertyGrid/Toybox.Studio.PropertyGrid.csproj" />
   <Project Path="Toybox.Studio.Generators/Toybox.Studio.Generators.csproj" />
   <Project Path="Toybox.Studio.Resources/Toybox.Studio.Resources.csproj" />
   <Project Path="Toybox.Studio.Settings/Toybox.Studio.Settings.csproj" />

@@ -8,3 +8,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Toybox.Studio.App")]
 [assembly: InternalsVisibleTo("Toybox.Studio.Assets")]
 [assembly: InternalsVisibleTo("Toybox.Studio.ECS")]
+[assembly: InternalsVisibleTo("Toybox.Studio.PropertyGrid")]

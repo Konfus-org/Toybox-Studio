@@ -65,6 +65,10 @@
     <AvaloniaXaml Remove="Toybox.Studio.Behaviors\**" />
     <EmbeddedResource Remove="Toybox.Studio.Behaviors\**" />
     <None Remove="Toybox.Studio.Behaviors\**" />
+    <Compile Remove="Toybox.Studio.PropertyGrid\**" />
+    <AvaloniaXaml Remove="Toybox.Studio.PropertyGrid\**" />
+    <EmbeddedResource Remove="Toybox.Studio.PropertyGrid\**" />
+    <None Remove="Toybox.Studio.PropertyGrid\**" />
     <Compile Update="Logging\LogConsoleView.axaml.cs">
       <DependentUpon>LogConsoleView.axaml</DependentUpon>
       <SubType>Code</SubType>
@@ -116,6 +120,7 @@
     <ProjectReference Include="Toybox.Studio.Themes\Toybox.Studio.Themes.csproj" />
     <ProjectReference Include="Toybox.Studio.Assets\Toybox.Studio.Assets.csproj" />
     <ProjectReference Include="Toybox.Studio.ECS\Toybox.Studio.ECS.csproj" />
+    <ProjectReference Include="Toybox.Studio.PropertyGrid\Toybox.Studio.PropertyGrid.csproj" />
   </ItemGroup>
 
   <ItemGroup>

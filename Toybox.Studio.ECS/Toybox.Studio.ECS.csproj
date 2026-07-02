@@ -15,7 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Toybox.Studio.Core\Toybox.Studio.Core.csproj" />
     <ProjectReference Include="..\Toybox.Studio.Resources\Toybox.Studio.Resources.csproj" />
-    <ProjectReference Include="..\Toybox.Studio.Assets\Toybox.Studio.Assets.csproj" />
+    <ProjectReference Include="..\Toybox.Studio.Project\Toybox.Studio.Project.csproj" />
     <ProjectReference Include="..\Toybox.Studio.Generators\Toybox.Studio.Generators.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

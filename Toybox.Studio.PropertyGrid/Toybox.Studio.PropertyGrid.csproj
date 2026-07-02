@@ -22,7 +22,7 @@
     <ProjectReference Include="..\Toybox.Studio.Behaviors\Toybox.Studio.Behaviors.csproj" />
     <ProjectReference Include="..\Toybox.Studio.Resources\Toybox.Studio.Resources.csproj" />
     <ProjectReference Include="..\Toybox.Studio.Themes\Toybox.Studio.Themes.csproj" />
-    <ProjectReference Include="..\Toybox.Studio.Assets\Toybox.Studio.Assets.csproj" />
+    <ProjectReference Include="..\Toybox.Studio.Project\Toybox.Studio.Project.csproj" />
     <ProjectReference Include="..\Toybox.Studio.ECS\Toybox.Studio.ECS.csproj" />
   </ItemGroup>
 

@@ -53,10 +53,10 @@
     <AvaloniaXaml Remove="Toybox.Studio.Themes\**" />
     <EmbeddedResource Remove="Toybox.Studio.Themes\**" />
     <None Remove="Toybox.Studio.Themes\**" />
-    <Compile Remove="Toybox.Studio.Assets\**" />
-    <AvaloniaXaml Remove="Toybox.Studio.Assets\**" />
-    <EmbeddedResource Remove="Toybox.Studio.Assets\**" />
-    <None Remove="Toybox.Studio.Assets\**" />
+    <Compile Remove="Toybox.Studio.Project\**" />
+    <AvaloniaXaml Remove="Toybox.Studio.Project\**" />
+    <EmbeddedResource Remove="Toybox.Studio.Project\**" />
+    <None Remove="Toybox.Studio.Project\**" />
     <Compile Remove="Toybox.Studio.ECS\**" />
     <AvaloniaXaml Remove="Toybox.Studio.ECS\**" />
     <EmbeddedResource Remove="Toybox.Studio.ECS\**" />
@@ -118,7 +118,7 @@
     <ProjectReference Include="Toybox.Studio.Resources\Toybox.Studio.Resources.csproj" />
     <ProjectReference Include="Toybox.Studio.Settings\Toybox.Studio.Settings.csproj" />
     <ProjectReference Include="Toybox.Studio.Themes\Toybox.Studio.Themes.csproj" />
-    <ProjectReference Include="Toybox.Studio.Assets\Toybox.Studio.Assets.csproj" />
+    <ProjectReference Include="Toybox.Studio.Project\Toybox.Studio.Project.csproj" />
     <ProjectReference Include="Toybox.Studio.ECS\Toybox.Studio.ECS.csproj" />
     <ProjectReference Include="Toybox.Studio.PropertyGrid\Toybox.Studio.PropertyGrid.csproj" />
   </ItemGroup>

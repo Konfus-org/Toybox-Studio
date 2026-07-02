@@ -16,18 +16,15 @@ public static class PropertyViewModelFactory
         // additionally disable their control via IsReadOnly.
         var effectiveAccessor = descriptor.ReadOnly ? new ReadOnlyAccessor(accessor) : accessor;
 
-        // A material instance is edited against its base material's slots (fetched live), so it gets the
-        // dedicated base-aware editor instead of a generic sub-grid — anywhere it nests (a field, a list
-        // element), provided the engine RPC is wired in to fetch those slots. The top-level material_instance
-        // component takes the same path through ComponentViewModel before the grid is ever built.
-        if (descriptor.Type == MaterialInstancePropertyViewModel.TypeToken
-            && PropertyViewRegistry.Assets is not null
-            && MaterialInstancePropertyViewModel.CanBuild(descriptor))
-            return Tag(new MaterialInstancePropertyViewModel(descriptor, effectiveAccessor, depth), depth);
+        // A field whose engine type token has a domain-registered editor (an asset handle, an entity reference,
+        // a colour, a material instance) routes to it before any generic widget — including the sub-grid below,
+        // so a composite value like a material instance reaches its bespoke editor rather than a plain sub-grid.
+        // The editors are registered at startup by the domains that own them (assets, ecs, theming).
+        if (PropertyViewRegistry.TryCreateForType(descriptor.Type, descriptor, effectiveAccessor, depth, out var typed))
+            return Tag(typed, depth);
 
-        // A custom view ([[editor::view]] / [View] / [ViewModel]) wins over the type-driven widget — and over the
-        // generic sub-grid below — when registered, so a typed field can route a composite value (a nested
-        // material instance) to its bespoke editor rather than a plain object sub-grid.
+        // A custom view ([[editor::view]] / [View] / [ViewModel]) wins over the generic sub-grid below when
+        // registered, so a typed field can route a composite value to its bespoke editor rather than a sub-grid.
         if (PropertyViewRegistry.TryCreate(descriptor, effectiveAccessor, out var custom))
             return Tag(custom, depth);
 
@@ -40,14 +37,6 @@ public static class PropertyViewModelFactory
             // An enum with declared choices gets a dropdown; without them it falls back to its raw value.
             EngineTypes.Enum when descriptor.Choices is { Count: > 0 } =>
                 new EnumPropertyViewModel(descriptor, effectiveAccessor),
-            // A handle references an asset, so it's known to be pickable purely from its type token —
-            // no [[editor::view]] tag needed. (uuid stays a number: it identifies ids, not assets.)
-            EngineTypes.Handle =>
-                new HandlePickerPropertyViewModel(descriptor, effectiveAccessor, PropertyViewRegistry.Assets),
-            // An entity-reference field (tbx::Entity) carries the "entity" token; it picks from the world's
-            // entities rather than the asset database.
-            EngineTypes.Entity =>
-                new EntityPickerPropertyViewModel(descriptor, effectiveAccessor, PropertyViewRegistry.World),
             EngineTypes.Int or EngineTypes.Uuid or EngineTypes.Enum =>
                 new NumberPropertyViewModel(descriptor, effectiveAccessor, integer: true),
             EngineTypes.Float or EngineTypes.Double =>
@@ -58,7 +47,6 @@ public static class PropertyViewModelFactory
             EngineTypes.Quat => new RotationPropertyViewModel(descriptor, effectiveAccessor),
             EngineTypes.Vec2 or EngineTypes.Vec3 or EngineTypes.Vec4 =>
                 new VectorPropertyViewModel(descriptor, effectiveAccessor),
-            EngineTypes.Color => new ColorPropertyViewModel(descriptor, effectiveAccessor),
             EngineTypes.Array => new ArrayPropertyViewModel(descriptor, effectiveAccessor, depth),
             _ => new UnknownPropertyViewModel(descriptor, effectiveAccessor),
         };

@@ -121,10 +121,34 @@ public partial class App : Application
             // Give the property grid's custom widgets (asset pickers, script links) the services they
             // need before any inspector or settings grid is built.
             var catalog = _host.Services.GetRequiredService<AssetCatalog>();
+            var gameState = _host.Services.GetRequiredService<GameState>();
             PropertyViewRegistry.Configure(
                 catalog,
                 _host.Services.GetRequiredService<AssetFactory>(),
-                _host.Services.GetRequiredService<GameState>());
+                gameState);
+
+            // Register the domain-owned property editors that route by engine type token (asset handle, entity
+            // reference, colour, material instance) or by [View] name (script link, theme picker). The generic
+            // grid core no longer references these directly; the registrations live here in the composition
+            // root (which references every domain) until each domain project registers its own.
+            PropertyViewRegistry.RegisterType(EngineTypes.Handle,
+                (descriptor, accessor, _) => new HandlePickerPropertyViewModel(descriptor, accessor, catalog));
+            PropertyViewRegistry.RegisterType(EngineTypes.Entity,
+                (descriptor, accessor, _) => new EntityPickerPropertyViewModel(descriptor, accessor, gameState));
+            PropertyViewRegistry.RegisterType(EngineTypes.Color,
+                (descriptor, accessor, _) => new ColorPropertyViewModel(descriptor, accessor));
+            PropertyViewRegistry.RegisterType(MaterialInstancePropertyViewModel.TypeToken,
+                (descriptor, accessor, depth) => MaterialInstancePropertyViewModel.CanBuild(descriptor)
+                    ? new MaterialInstancePropertyViewModel(descriptor, accessor, depth)
+                    : new ObjectPropertyViewModel(descriptor, accessor, depth));
+            PropertyViewRegistry.Register("script",
+                (descriptor, accessor) => new ScriptLinkPropertyViewModel(descriptor, accessor, catalog));
+            PropertyViewRegistry.Register("themePicker",
+                (descriptor, accessor) => new ThemePickerPropertyViewModel(descriptor, accessor));
+            PropertyViewRegistry.Register<MaterialInstancePropertyViewModel>(
+                (descriptor, accessor) => MaterialInstancePropertyViewModel.CanBuild(descriptor)
+                    ? new MaterialInstancePropertyViewModel(descriptor, accessor, 0)
+                    : new ObjectPropertyViewModel(descriptor, accessor, 0));
 
             // Surface a failed optimistic live-edit push in the log. The world's describe-parser, reflect
             // scheduler and engine transport are now injected into the live World (via GameState), not wired

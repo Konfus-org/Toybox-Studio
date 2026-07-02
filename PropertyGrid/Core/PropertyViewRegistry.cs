@@ -22,21 +22,16 @@ public static class PropertyViewRegistry
     // View name → builder. A C# [ViewModel(typeof(X))] field carries X's full type name (the key for typed
     // registrations, added via Register<T>); the remaining short-string keys are the engine/settings
     // [[tbx::view]] names that have no C# attribute to type against (kept until that path is retired). Matched
-    // case-insensitively, which is harmless for the exact full names.
+    // case-insensitively, which is harmless for the exact full names. Populated at startup by the owning domain
+    // projects (nothing is hard-coded here, so the grid core stays free of domain-editor references).
     private static readonly Dictionary<string, Func<PropertyDescriptor, IValueAccessor, PropertyViewModel>> Builders =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["script"] = (descriptor, accessor) => new ScriptLinkPropertyViewModel(descriptor, accessor, _assets),
-            ["themePicker"] = (descriptor, accessor) => new ThemePickerPropertyViewModel(descriptor, accessor),
-            // A material-instance field ([ViewModel(typeof(MaterialInstancePropertyViewModel))]) gets the
-            // base-aware override editor when shaped right (material + overrides); otherwise it falls back to a
-            // plain sub-grid. Lets a typed component's nested material instance (Sky, PostProcessing) reuse the
-            // same editor the describe path's type-token routing gives the top-level material_instance component.
-            [typeof(MaterialInstancePropertyViewModel).FullName!] = (descriptor, accessor) =>
-                MaterialInstancePropertyViewModel.CanBuild(descriptor)
-                    ? new MaterialInstancePropertyViewModel(descriptor, accessor, 0)
-                    : new ObjectPropertyViewModel(descriptor, accessor, 0),
-        };
+        new(StringComparer.OrdinalIgnoreCase);
+
+    // Engine type token (EngineTypes.Handle/Entity/Color, a component's material_instance token, …) → builder.
+    // These route purely by a field's type — no [View] tag needed — and are registered at startup by the domain
+    // that owns the editor (assets, ecs, theming), so the generic grid never references those editors directly.
+    private static readonly Dictionary<string, Func<PropertyDescriptor, IValueAccessor, int, PropertyViewModel>> TypeBuilders =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The asset catalog the custom widgets read from. Exposed so the type-driven factory can build a
@@ -85,6 +80,34 @@ public static class PropertyViewRegistry
     /// </summary>
     public static void Register(string view, Func<PropertyDescriptor, IValueAccessor, PropertyViewModel> builder) =>
         Builders[view] = builder;
+
+    /// <summary>
+    /// Registers a builder for an engine type token (e.g. <c>EngineTypes.Handle</c>, <c>EngineTypes.Entity</c>,
+    /// a component's <c>material_instance</c> token). Fields of that type route to this editor before the generic
+    /// type-driven widgets, without needing a <c>[View]</c> tag. Called at startup by the domain that owns the
+    /// editor, so the grid core never references it. The builder receives the nesting depth.
+    /// </summary>
+    public static void RegisterType(
+        string typeToken, Func<PropertyDescriptor, IValueAccessor, int, PropertyViewModel> builder) =>
+        TypeBuilders[typeToken] = builder;
+
+    /// <summary>
+    /// Builds the editor a registered <see cref="RegisterType"/> token maps to, or returns false when the
+    /// descriptor's type has no registered editor so the caller falls back to the generic type-driven widget.
+    /// </summary>
+    public static bool TryCreateForType(
+        string typeToken, PropertyDescriptor descriptor, IValueAccessor accessor, int depth,
+        out PropertyViewModel viewModel)
+    {
+        if (TypeBuilders.TryGetValue(typeToken, out var builder))
+        {
+            viewModel = builder(descriptor, accessor, depth);
+            return true;
+        }
+
+        viewModel = null!;
+        return false;
+    }
 
     /// <summary>
     /// Builds the view-model for <paramref name="descriptor"/>'s custom view, or returns false when it

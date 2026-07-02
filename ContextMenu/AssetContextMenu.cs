@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Toybox.Assets;
 using Toybox.Studio.Favorites;
 using Toybox.Studio.Project;
 using Toybox.Studio.Utils;

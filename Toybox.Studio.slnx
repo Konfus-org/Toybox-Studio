@@ -1,10 +1,10 @@
 <Solution>
-  <Project Path="Toybox.App.csproj" />
-  <Project Path="Toybox.Core/Toybox.Core.csproj" />
-  <Project Path="Toybox.Resources/Toybox.Resources.csproj" />
-  <Project Path="Toybox.Settings/Toybox.Settings.csproj" />
-  <Project Path="Toybox.Themes/Toybox.Themes.csproj" />
-  <Project Path="Toybox.Assets/Toybox.Assets.csproj" />
-  <Project Path="Toybox.ECS/Toybox.ECS.csproj" />
-  <Project Path="Toybox.Generators/Toybox.Generators.csproj" />
+  <Project Path="Toybox.Studio.App.csproj" />
+  <Project Path="Toybox.Studio.Core/Toybox.Studio.Core.csproj" />
+  <Project Path="Toybox.Studio.Assets/Toybox.Studio.Assets.csproj" />
+  <Project Path="Toybox.Studio.ECS/Toybox.Studio.ECS.csproj" />
+  <Project Path="Toybox.Studio.Generators/Toybox.Studio.Generators.csproj" />
+  <Project Path="Toybox.Studio.Resources/Toybox.Studio.Resources.csproj" />
+  <Project Path="Toybox.Studio.Settings/Toybox.Studio.Settings.csproj" />
+  <Project Path="Toybox.Studio.Themes/Toybox.Studio.Themes.csproj" />
 </Solution>

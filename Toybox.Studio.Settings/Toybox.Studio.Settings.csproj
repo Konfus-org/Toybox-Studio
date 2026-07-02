@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Toybox.Settings: the editor's persisted-configuration service + data (no UI panel; the Settings panel
+       lives in the app layer). Sits just above Toybox.Core. -->
+
+  <PropertyGroup>
+    <RootNamespace>Toybox.Settings</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="IconPacks.Avalonia" Version="2.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Toybox.Studio.Core\Toybox.Studio.Core.csproj" />
+    <ProjectReference Include="..\Toybox.Studio.Resources\Toybox.Studio.Resources.csproj" />
+  </ItemGroup>
+
+</Project>

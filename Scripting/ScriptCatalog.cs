@@ -1,4 +1,5 @@
 using System.Linq;
+using Toybox.Assets;
 using Toybox.Studio.Project;
 
 namespace Toybox.Studio.Scripting;

@@ -45,7 +45,7 @@ App frame & UI (formerly `Shell/` + `Widgets/`):
 
 ### Key files to read first
 
-- [`App.axaml.cs`](App.axaml.cs) — startup sequence and the DI composition root (`ConfigureServices`).
+- [`Launcher/Launcher.cs`](Launcher/Launcher.cs) — the entry point and DI composition root: `Launcher.LaunchAsync` boots Avalonia, configures the service provider, and runs the startup flow (project picker → splash → main window).
 - [`Rpc/RpcClient.cs`](Rpc/RpcClient.cs) — the generic JSON-RPC transport (connection, retry, request/notification primitives); peer-agnostic.
 - [`EngineApi/EngineRpc.cs`](EngineApi/EngineRpc.cs) — the engine connection: the engine-specific facade over `RpcClient` (handshake + typed notifications). The domain API surface lives on the `Entity`/`Component`/`AssetCatalog` constructs and the static `Asset` API that call its primitives.
 - [`EngineApi/Session.cs`](EngineApi/Session.cs) — engine process lifetime (launch/attach/teardown).
@@ -60,7 +60,7 @@ App frame & UI (formerly `Shell/` + `Widgets/`):
 dotnet build Toybox.Studio.slnx
 
 # Run; a Debug build enables the Avalonia dev tools (F12)
-dotnet run --project Toybox.App.csproj
+dotnet run --project Launcher/Launcher.csproj
 ```
 
 Build artifacts go under `build/`. There is no unit-test project yet; verification is by building clean and running the app (see below).

@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace Toybox.Studio.Shell;
+namespace Toybox.Studio;
 
 /// <summary>
 /// Startup splash: a loading bar plus a playful line per startup phase (the real diagnostics go to the

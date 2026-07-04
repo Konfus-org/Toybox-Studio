@@ -1,0 +1,79 @@
+using Avalonia.Media.Imaging;
+using Newtonsoft.Json.Linq;
+
+namespace Toybox.Studio.Projects;
+
+/// <summary>
+/// Reads a project's info off the disk: point it at a root folder and it fills a <see cref="Project"/>
+/// with the name, normalized root path, and icon — either a fresh instance (listing recents in the
+/// picker) or the active project the container holds (opening one). Loading never throws: a broken
+/// settings or meta file just means no icon; this must never keep the picker from listing a project.
+/// </summary>
+public sealed class ProjectLoader
+{
+    /// <summary>The settings file every project carries; its presence is what makes a folder a project.</summary>
+    public const string SettingsFileName = "AppSettings.json";
+
+    /// <summary>Whether the folder is a Toybox project (it carries the project settings file).</summary>
+    public static bool IsProjectDirectory(string path) => File.Exists(Path.Combine(path, SettingsFileName));
+
+    /// <summary>Loads the project at <paramref name="root"/> into a new <see cref="Project"/>.</summary>
+    public Project Load(string root)
+    {
+        var project = new Project();
+        Load(root, project);
+        return project;
+    }
+
+    /// <summary>Loads the project at <paramref name="root"/> into the given instance — how the launch
+    /// flow configures the container's active project once the user has picked one.</summary>
+    public void Load(string root, Project project)
+    {
+        root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        project.Path = root;
+        project.Name = Path.GetFileName(root);
+        project.Module = project.Name;
+        project.Icon = LoadIcon(root);
+    }
+
+    /// <summary>The icon the project's settings point at, decoded; null when the project doesn't set
+    /// one, the asset can't be found, or it isn't an image Avalonia can decode.</summary>
+    private static Bitmap? LoadIcon(string root)
+    {
+        try
+        {
+            return FindIconFile(root) is { } file ? new Bitmap(file) : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A quick peek into a project's settings for its icon, without the engine: reads the icon asset
+    /// handle's id out of the settings file and finds the asset carrying that id in its .meta file
+    /// under Assets/.
+    /// </summary>
+    private static string? FindIconFile(string root)
+    {
+        var settings = JObject.Parse(File.ReadAllText(Path.Combine(root, SettingsFileName)));
+        // A handle serializes as its bare id, but tolerate the expanded { "id": … } object form too.
+        var icon = settings["icon"]?["value"];
+        var iconId = (icon is JObject expanded ? expanded["id"] : icon)?.Value<ulong?>();
+        var assetsDirectory = Path.Combine(root, "Assets");
+        if (iconId is null or 0 || !Directory.Exists(assetsDirectory))
+            return null;
+
+        foreach (var meta in Directory.EnumerateFiles(assetsDirectory, "*.meta", SearchOption.AllDirectories))
+        {
+            if (JObject.Parse(File.ReadAllText(meta))["id"]?.Value<ulong?>() != iconId)
+                continue;
+
+            var asset = meta[..^".meta".Length];
+            return File.Exists(asset) ? asset : null;
+        }
+
+        return null;
+    }
+}

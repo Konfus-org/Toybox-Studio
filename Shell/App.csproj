@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The UI shell library: the Avalonia Application (which carries all app styling) and the studio's
+       main window. The executable and composition root is the Launcher project, which boots this app
+       and creates the window once launch finishes. -->
+
+  <PropertyGroup>
+    <AssemblyName>Toybox.Studio.Shell</AssemblyName>
+    <RootNamespace>Toybox.Studio</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Status\Status.csproj" />
+    <ProjectReference Include="..\Viewport\Viewport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="MainWindow.axaml.cs">
+      <DependentUpon>MainWindow.axaml</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>

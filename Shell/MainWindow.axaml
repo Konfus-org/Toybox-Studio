@@ -4,7 +4,7 @@
         xmlns:status="using:Toybox.Studio.Status"
         xmlns:viewport="using:Toybox.Studio.Viewport"
         x:Class="Toybox.Studio.Shell.MainWindow"
-        x:DataType="shell:ShellViewModel"
+        x:DataType="shell:MainWindowViewModel"
         Icon="avares://Toybox.Studio.Resources/Icons/Toybox.png"
         Title="{Binding Title}"
         Width="1440" Height="850">

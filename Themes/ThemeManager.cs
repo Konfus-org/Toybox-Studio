@@ -53,7 +53,7 @@ public sealed class ThemeManager
     /// <summary>
     /// Applies the saved active theme, falling back to any loaded theme and finally the clay default.
     /// </summary>
-    public void ApplySavedTheme() => _applier.Apply(_repository.ResolveSaved(_settings.Settings.Theme.Active));
+    public void ApplySavedTheme() => _applier.Apply(_repository.ResolveSaved(_settings.Editor.Theme.Active));
 
     /// <summary>Selects the active theme by name and applies it.</summary>
     public void SetActiveTheme(string name)
@@ -62,7 +62,7 @@ public sealed class ThemeManager
         if (theme is null)
             return;
 
-        _settings.Settings.Theme.Active = theme.Name;
+        _settings.Editor.Theme.Active = theme.Name;
         // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
         _settings.SaveAsync().FireAndForget();
         _applier.Apply(theme);

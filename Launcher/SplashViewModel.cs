@@ -3,7 +3,7 @@ using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
 using Toybox.Studio.Utils;
 
-namespace Toybox.Studio.Shell;
+namespace Toybox.Studio;
 
 /// <summary>
 /// Backs the splash screen with a loading bar and a fun, toy-themed line per startup phase, derived

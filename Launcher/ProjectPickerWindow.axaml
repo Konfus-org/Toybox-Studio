@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:behaviors="using:Toybox.Studio.Behaviors"
+        xmlns:studio="using:Toybox.Studio"
+        x:Class="Toybox.Studio.ProjectPickerWindow"
+        x:DataType="studio:ProjectPickerViewModel"
+        Title="Open a Toybox project"
+        Icon="avares://Toybox.Studio.Resources/Icons/Toybox.png"
+        Width="720" Height="460" CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource ThemeBackgroundBrush}">
+
+    <Grid ColumnDefinitions="*,24,240" RowDefinitions="Auto,*,Auto" Margin="24">
+
+        <!-- Recent projects: double-tap a row (or select and Open) to reopen it. -->
+        <TextBlock Grid.Column="0" Grid.Row="0" Text="Open recent" FontSize="{DynamicResource ThemeFontSizeLarge}"
+                   FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,0,0,12"/>
+        <ListBox Grid.Column="0" Grid.Row="1" Background="Transparent"
+                 ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}"
+                 IsVisible="{Binding HasProjects}"
+                 behaviors:DoubleTapCommandBehavior.Command="{Binding OpenCommand}">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="studio:ProjectViewModel">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Image Source="{Binding Icon}" Width="28" Height="28"/>
+                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource ThemeTextBrush}"/>
+                            <TextBlock Text="{Binding Path}" FontSize="{DynamicResource ThemeFontSizeSmall}"
+                                       Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBlock Grid.Column="0" Grid.Row="1" Text="No recent projects yet."
+                   Foreground="{DynamicResource ThemeMutedTextBrush}" IsVisible="{Binding !HasProjects}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+        <!-- Get-started actions, VS style: reopen the selection, browse the disk, or skip. -->
+        <TextBlock Grid.Column="2" Grid.Row="0" Text="Get started" FontSize="{DynamicResource ThemeFontSizeLarge}"
+                   FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,0,0,12"/>
+        <StackPanel Grid.Column="2" Grid.Row="1" Spacing="10">
+            <Button Content="Open selected project" HorizontalAlignment="Stretch"
+                    Command="{Binding OpenCommand}" IsDefault="True"/>
+            <Button Content="Open a project from disk…" HorizontalAlignment="Stretch"
+                    Command="{Binding BrowseCommand}"/>
+            <Button Content="Continue without a project" HorizontalAlignment="Stretch"
+                    Command="{Binding SkipCommand}" IsCancel="True"/>
+        </StackPanel>
+
+        <TextBlock Grid.Column="0" Grid.ColumnSpan="3" Grid.Row="2" Text="{Binding Warning}"
+                   Foreground="{DynamicResource ThemeErrorBrush}" TextWrapping="Wrap" Margin="0,12,0,0"
+                   IsVisible="{Binding Warning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+    </Grid>
+</Window>

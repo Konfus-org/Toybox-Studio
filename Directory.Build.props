@@ -3,7 +3,8 @@
   <PropertyGroup>
     <!-- Project files are named by their folder alone (Utils, Shell, …) since the repo IS
          Toybox.Studio; the produced assemblies and namespaces keep the full Toybox.Studio.* form.
-         (The Shell app overrides both to plain "Toybox.Studio" for the exe.) -->
+         (The Launcher exe overrides both to plain "Toybox.Studio"; the Shell library joins it in
+         the root namespace.) -->
     <AssemblyName>Toybox.Studio.$(MSBuildProjectName)</AssemblyName>
     <RootNamespace>Toybox.Studio.$(MSBuildProjectName)</RootNamespace>
     <TargetFramework>net10.0-windows</TargetFramework>

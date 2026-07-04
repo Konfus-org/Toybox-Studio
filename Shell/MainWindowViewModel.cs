@@ -6,9 +6,9 @@ namespace Toybox.Studio.Shell;
 /// <summary>
 /// The main window's content: the 3D viewport into the engine's world plus the status bar.
 /// </summary>
-public sealed class ShellViewModel
+public sealed class MainWindowViewModel
 {
-    public ShellViewModel(StatusViewModel status, ViewportViewModel viewport)
+    public MainWindowViewModel(StatusViewModel status, ViewportViewModel viewport)
     {
         Status = status;
         Viewport = viewport;

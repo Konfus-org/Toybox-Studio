@@ -7,7 +7,7 @@ namespace Toybox.Studio.Settings;
 /// data itself is plain; this manager does all the persistence — it loads EditorSettings.json from the
 /// user's .toybox folder once at construction (falling back to defaults, preserving an unreadable file
 /// as a *.corrupt breadcrumb) and writes it back on <see cref="SaveAsync"/>. Mutate the object graph
-/// under <see cref="Settings"/>, then save.
+/// under <see cref="Editor"/>, then save.
 /// </summary>
 public sealed class SettingsManager
 {
@@ -20,9 +20,9 @@ public sealed class SettingsManager
 
     private static readonly string FilePath = Path.Combine(BaseDirectory, "EditorSettings.json");
 
-    public SettingsManager() => Settings = Load();
+    public SettingsManager() => Editor = Load();
 
-    public EditorSettings Settings { get; }
+    public EditorSettings Editor { get; }
 
     /// <summary>
     /// Writes the current settings back to EditorSettings.json without blocking the calling (UI) thread:
@@ -33,7 +33,7 @@ public sealed class SettingsManager
     public async Task SaveAsync()
     {
         Directory.CreateDirectory(BaseDirectory);
-        var json = JsonConvert.SerializeObject(Settings, Formatting.Indented);
+        var json = JsonConvert.SerializeObject(Editor, Formatting.Indented);
         await File.WriteAllTextAsync(FilePath, json).ConfigureAwait(false);
     }
 

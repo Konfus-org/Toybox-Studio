@@ -4,7 +4,7 @@
     {
       "name": "studio",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "Shell/Shell.csproj"],
+      "runtimeArgs": ["run", "--project", "Shell/App.csproj"],
       "port": 17890
     }
   ]

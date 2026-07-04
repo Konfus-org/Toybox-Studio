@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The project layer: the opened project (which compiles itself through the generic CMake driver
-       against the engine checkout found beside it) and the coordinator that builds it and drives the
-       engine host from it. -->
+  <!-- The project layer: the active project as pure data, the loader that reads a project's info off
+       the disk, the builder and shipper callers compose to compile and package it (through the generic
+       CMake driver, against the engine checkout found beside the project), and the coordinator that
+       builds the active project and drives the engine host from it. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
@@ -10,6 +11,12 @@
     <ProjectReference Include="..\CMake\CMake.csproj" />
     <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Avalonia only for Bitmap, the project's icon type. -->
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 
 </Project>

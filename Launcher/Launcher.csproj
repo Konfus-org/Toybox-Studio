@@ -1,22 +1,40 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The executable: the app's bootstrap and composition root. Launcher.LaunchAsync boots Avalonia,
+       configures the service provider, and runs the startup flow — project picker, splash while the
+       project compiles and its engine launches, then the studio window (from the Shell library). -->
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>Toybox.Studio</AssemblyName>
+    <!-- A type must not share its namespace leaf (a Toybox.Studio.Launcher namespace would shadow the
+         Launcher type), so this app-frame assembly joins the Shell in the root namespace. -->
+    <RootNamespace>Toybox.Studio</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Update="SplashWindow.axaml.cs">
-      <SubType>Code</SubType>
-      <DependentUpon>%(Filename)</DependentUpon>
-    </Compile>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\Themes\Themes.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Projects\Projects.csproj" />
+    <ProjectReference Include="..\Console\Console.csproj" />
+    <ProjectReference Include="..\Status\Status.csproj" />
+    <ProjectReference Include="..\Viewport\Viewport.csproj" />
+    <ProjectReference Include="..\Shell\App.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="SplashWindow.axaml">
-      <SubType>Designer</SubType>
-    </None>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
 </Project>

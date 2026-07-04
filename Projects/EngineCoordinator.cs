@@ -7,10 +7,11 @@ using Toybox.Studio.Utils;
 namespace Toybox.Studio.Projects;
 
 /// <summary>
-/// Coordinates the engine's host with everything it deliberately doesn't know about: the opened project
-/// supplies the launcher (built first), a detected running instance means attach, and an unresponsive
-/// engine is reported and waited out (a real confirm dialog can offer a force-restart once the editor
-/// grows a dialog layer again). The host itself only launches/attaches/stops what it is handed.
+/// Coordinates the engine's host with everything it deliberately doesn't know about: the active project
+/// supplies the launcher (built first, through the <see cref="ProjectBuilder"/>), a detected running
+/// instance means attach, and an unresponsive engine is reported and waited out (a real confirm dialog
+/// can offer a force-restart once the editor grows a dialog layer again). The host itself only
+/// launches/attaches/stops what it is handed.
 /// </summary>
 public sealed class EngineCoordinator :
     EventSubscriber,
@@ -18,6 +19,17 @@ public sealed class EngineCoordinator :
     IEventHandler<AppStoppedResponding>,
     IEventHandler<AppResumedResponding>
 {
+    // A Debug Studio drives a Debug engine, a Release Studio a Release engine — the studio's own
+    // configuration picks the mode the project (and so the in-tree engine) is built in.
+    private const BuildMode StudioBuildMode =
+#if DEBUG
+        BuildMode.Debug;
+#else
+        BuildMode.Release;
+#endif
+
+    private readonly Project _project;
+    private readonly ProjectBuilder _builder;
     private readonly AppHost<Engine> _host;
     private readonly OwnedAppWatchdog _ownedAppWatchdog;
     private readonly bool _hideEngineWindow;
@@ -28,6 +40,8 @@ public sealed class EngineCoordinator :
     private readonly CancellationTokenSource _lifetime = new();
 
     public EngineCoordinator(
+        Project project,
+        ProjectBuilder builder,
         AppHost<Engine> host,
         OwnedAppWatchdog ownedAppWatchdog,
         bool hideEngineWindow,
@@ -36,6 +50,8 @@ public sealed class EngineCoordinator :
         EventDispatcher events)
         : base(events)
     {
+        _project = project;
+        _builder = builder;
         _host = host;
         _ownedAppWatchdog = ownedAppWatchdog;
         _hideEngineWindow = hideEngineWindow;
@@ -44,18 +60,21 @@ public sealed class EngineCoordinator :
     }
 
     /// <summary>
-    /// Builds the given project and launches its engine. A failed build no-ops (logged); launch/connect
+    /// Builds the active project and launches its engine. A failed build no-ops (logged); launch/connect
     /// failures land in the log too.
     /// </summary>
-    public async Task StartEngineAsync(Project project, CancellationToken ct = default)
+    public async Task StartEngineAsync(CancellationToken ct = default)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetime.Token);
-        var launcher = await project.PrepareLauncherAsync(linked.Token).ContinueOnAnyContext();
-        if (launcher is null)
+        var build = await _builder.BuildAsync(_project, StudioBuildMode, linked.Token).ContinueOnAnyContext();
+        if (!build)
+        {
+            _log.Error(build.Error!);
             return;
+        }
 
-        var launch = new EngineLaunchInfo(
-            launcher, project.ModuleName, project.AppSettingsPath, _hideEngineWindow)
+        var appSettings = Path.Combine(_project.Path, ProjectLoader.SettingsFileName);
+        var launch = new EngineLaunchInfo(build.Value!, _project.Module, appSettings, _hideEngineWindow)
         {
             ConnectTimeoutSeconds = _connectTimeoutSeconds,
         };

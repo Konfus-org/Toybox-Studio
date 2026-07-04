@@ -14,7 +14,7 @@
   <Project Path="Resources/Resources.csproj" />
   <Project Path="Rpc/Rpc.csproj" />
   <Project Path="Settings/Settings.csproj" />
-  <Project Path="Shell/Shell.csproj" />
+  <Project Path="Shell/App.csproj" />
   <Project Path="Status/Status.csproj" />
   <Project Path="Themes/Themes.csproj" />
   <Project Path="Utils/Utils.csproj" />

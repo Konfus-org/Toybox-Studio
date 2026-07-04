@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:\\\\Users\\\\jercl\\\\Projects\\\\Toybox\\\\Studio\" -name \"WireKeys.cs\" -o -name \"WireTypes.cs\" -o -name \"EngineKeys.cs\")",
+      "Bash(find \"C:\\\\Users\\\\jercl\\\\Projects\\\\Toybox\\\\Studio\" -name \"EngineTypes.cs\" -o -name \"EngineSyncValue.cs\")",
+      "Bash(find \"C:\\\\Users\\\\jercl\\\\Projects\\\\Toybox\\\\Studio\" -name \"IListenable.cs\" -o -name \"Result.cs\" | grep -E \"\\(Utils|EngineApi\\)\")"
+    ]
+  }
+}

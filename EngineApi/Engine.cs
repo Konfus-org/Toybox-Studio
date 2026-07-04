@@ -241,6 +241,10 @@ public sealed class Engine : OwnedApp,
         handlers.On(
             EngineCommands.ViewPresented,
             (string name) => Dispatch.To(DispatchContext.UI, OnFramePresented));
+        handlers.On(
+            EngineCommands.SyncChanged,
+            (string address, string key, Newtonsoft.Json.Linq.JToken value) =>
+                Events.Dispatch(new SyncChanged(address, key, value)));
     }
 
     // The allowed run-state transitions: play from editing, pause only while playing, resume or stop

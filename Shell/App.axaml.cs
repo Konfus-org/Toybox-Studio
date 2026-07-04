@@ -186,6 +186,10 @@ public partial class App : Application
             Engine = new Engine(Log, Events);
             Host = new AppHost<Engine>(Engine, Log, Events, engineSettings.RestartOnCrash);
 
+            // The engine-sync connection point: every engine-mirrored object (entities, components,
+            // assets) binds here to push edits and receive the engine's sync.changed deltas.
+            Sync = new SyncHub(Engine, Log, Events);
+
             // Generic owned-app supervision: ping the connected engine so a freeze is noticed, and while
             // disconnected watch for an engine that is already running (e.g. launched by a debugger) to
             // attach to instead of launching a second one. The coordinator decides what to do with what
@@ -215,6 +219,7 @@ public partial class App : Application
         public ConsoleViewModel Console { get; }
         public EventDispatcher Events { get; }
         public Engine Engine { get; }
+        public SyncHub Sync { get; }
         public AppHost<Engine> Host { get; }
         public EngineCoordinator Coordinator { get; }
         public ViewportViewModel Viewport { get; }
@@ -229,6 +234,7 @@ public partial class App : Application
         {
             Coordinator.Dispose();
             _ownedAppWatchdog.Dispose();
+            Sync.Dispose();
             Viewport.Dispose();
             // Run the async teardown on the thread pool: blocking the UI thread on code that resumes
             // via its SynchronizationContext would deadlock.

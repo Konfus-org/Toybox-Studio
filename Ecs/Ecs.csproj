@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The entity/component domain: engine-mirrored objects built on the EngineSync codegen (the
+       Generators analyzer reference is what runs the source generator over the [EngineSync] members). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Generators\Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

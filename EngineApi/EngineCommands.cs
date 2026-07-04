@@ -19,6 +19,21 @@ public static class EngineCommands
     public const string EngineSetLogColors = "engine.setLogColors";
     public const string EngineLog = "engine.log";
 
+    // The engine-sync channel (see EngineObject/SyncHub): family commands carry value pushes, the
+    // uniform sync.* verbs carry the property grid's default-tracking, and sync.changed is the engine's
+    // inbound delta. The engine-side handlers land together with world sync.
+    public const string SyncChanged = "sync.changed";
+    public const string SyncDescribe = "sync.describe";
+    public const string SyncReset = "sync.reset";
+    public const string SyncIsDefault = "sync.isDefault";
+
+    public const string ComponentSet = "component.set";
+
+    public const string EntitySet = "entity.set";
+    public const string EntityDuplicate = "entity.duplicate";
+    public const string EntityDestroy = "entity.destroy";
+    public const string EntityAddComponent = "entity.addComponent";
+
     public const string ViewStart = "view.start";
     public const string ViewStop = "view.stop";
     public const string ViewSurface = "view.surface";

@@ -1,3 +1,5 @@
+using Newtonsoft.Json.Linq;
+
 namespace Toybox.Studio.EngineApi;
 
 // Every event struct the engine layer dispatches, in one place; the generic owned-app events (connection
@@ -18,3 +20,8 @@ public readonly record struct BuildStateChanged(bool IsBuilding);
 /// <summary><see cref="Engine.State"/> — the single "what is the engine doing" value — changed.
 /// Dispatched on the UI thread.</summary>
 public readonly record struct EngineStateChanged(EngineState State);
+
+/// <summary>The engine changed one synced value: <see cref="Address"/> identifies the owning object
+/// (see <see cref="EngineAddress"/>), <see cref="Key"/> the property. The <see cref="SyncHub"/> routes
+/// it to whatever is bound under that address; fires on the RPC listener thread.</summary>
+public readonly record struct SyncChanged(string Address, string Key, JToken Value);

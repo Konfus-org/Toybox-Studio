@@ -151,9 +151,11 @@ public abstract class EngineObject : IListenable, ISerializable
             return false;
 
         field = value;
+        var hub = slot.Mode != SyncMode.Mirror ? _hub : null;
+        if (hub is not null)
+            OnEdited();
         RaiseChanged();
-        if (_hub is { } hub && slot.Mode != SyncMode.Mirror)
-            hub.Scheduler.Schedule(this, slot, CreateSetPayload(slot, slot.Write(value)));
+        hub?.Scheduler.Schedule(this, slot, CreateSetPayload(slot, slot.Write(value)));
         return true;
     }
 
@@ -169,6 +171,16 @@ public abstract class EngineObject : IListenable, ISerializable
 
         field = incoming;
         RaiseChanged();
+    }
+
+    /// <summary>
+    /// A bound, non-Mirror value just changed locally — a real edit heading for the engine, as opposed
+    /// to an inbound apply, an unbound assignment (constructor defaults, template authoring), or an
+    /// engine-owned Mirror value. Called before the change notification, so derived edit-state (an
+    /// asset's dirty flag) travels with it. The default does nothing.
+    /// </summary>
+    protected virtual void OnEdited()
+    {
     }
 
     /// <summary>Routes one inbound wire key to its property (generated override; chains to the base so

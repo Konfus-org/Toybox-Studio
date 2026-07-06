@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="AppHosting/AppHosting.csproj" />
+  <Project Path="Assets/Assets.csproj" />
   <Project Path="Behaviors/Behaviors.csproj" />
   <Project Path="CMake/CMake.csproj" />
   <Project Path="Console/Console.csproj" />

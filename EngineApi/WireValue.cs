@@ -8,7 +8,8 @@ namespace Toybox.Studio.EngineApi;
 /// The built-in codecs between studio types and the engine's wire JSON, used by generated sync code for
 /// every member without an explicit <see cref="IWireConverter{T}"/>. The wire shapes: vectors are bare
 /// number arrays, quaternions four-element arrays (type identity, not shape, tells them apart), colors
-/// <c>{r,g,b,a}</c> normalized floats, enums snake_case strings, everything else a plain JSON value.
+/// <c>{r,g,b,a}</c> normalized floats, handles <c>{name,id}</c> objects, enums snake_case strings,
+/// everything else a plain JSON value.
 /// Reads are lenient — a missing or malformed token yields the fallback rather than throwing, so a
 /// misbehaving peer can never crash an apply.
 /// </summary>
@@ -42,6 +43,12 @@ public static class WireValue
         ["g"] = value.G / 255f,
         ["b"] = value.B / 255f,
         ["a"] = value.A / 255f,
+    };
+
+    public static JToken Write(Handle value) => new JObject
+    {
+        ["name"] = value.Name,
+        ["id"] = value.Id,
     };
 
     public static JToken WriteEnum<TEnum>(TEnum value) where TEnum : struct, Enum =>
@@ -101,6 +108,11 @@ public static class WireValue
         return Color.FromArgb(
             Channel(value["a"], 1f), Channel(value["r"], 0f), Channel(value["g"], 0f), Channel(value["b"], 0f));
     }
+
+    public static Handle ReadHandle(JToken? token) =>
+        token is JObject value
+            ? new Handle(ReadString(value["name"]), ReadUInt64(value["id"]))
+            : default;
 
     public static TEnum ReadEnum<TEnum>(JToken? token, TEnum fallback = default) where TEnum : struct, Enum
     {

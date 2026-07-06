@@ -5,6 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Toybox.Studio.AppHosting;
+using Toybox.Studio.Assets;
 using Toybox.Studio.Behaviors.Animations;
 using Toybox.Studio.Console;
 using Toybox.Studio.EngineApi;
@@ -157,6 +158,11 @@ public sealed class Launcher
         // assets) binds here to push edits and receive the engine's sync.changed deltas.
         services.AddSingleton<SyncHub>();
 
+        // The asset domain: the catalog mirrors the engine's registered assets, refreshing itself as
+        // the connection comes up. The asset lifecycle lives on the assets themselves (constructing
+        // with an id loads; saving creates), wired to its services once via Asset.Configure in Boot.
+        services.AddSingleton<AssetCatalog>();
+
         // Generic owned-app supervision: ping the connected engine so a freeze is noticed, and while
         // disconnected watch for an engine that is already running (e.g. launched by a debugger) to
         // attach to instead of launching a second one. The coordinator decides what to do with what
@@ -228,7 +234,12 @@ public sealed class Launcher
 
         // Purely event-driven services nobody injects — resolved so they exist and subscribe.
         services.GetRequiredService<SyncHub>();
+        services.GetRequiredService<AssetCatalog>();
         services.GetRequiredService<OwnedAppWatchdog>().Start();
+
+        // Assets are constructed, not injected, so their lifecycle services are wired statically once.
+        Asset.Configure(
+            services.GetRequiredService<SyncHub>(), services.GetRequiredService<AssetCatalog>(), log);
     }
 
     /// <summary>
@@ -241,6 +252,7 @@ public sealed class Launcher
     {
         services.GetRequiredService<EngineCoordinator>().Dispose();
         services.GetRequiredService<OwnedAppWatchdog>().Dispose();
+        services.GetRequiredService<AssetCatalog>().Dispose();
         services.GetRequiredService<SyncHub>().Dispose();
         services.GetRequiredService<ViewportViewModel>().Dispose();
         // Run the async teardown on the thread pool: blocking the UI thread on code that resumes

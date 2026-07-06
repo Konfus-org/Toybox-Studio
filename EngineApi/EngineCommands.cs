@@ -11,6 +11,7 @@ public static class EngineCommands
 {
     public const string EditorHello = "editor.hello";
     public const string EditorLog = "editor.log";
+    public const string EditorListAssets = "editor.listAssets";
 
     public const string EnginePing = "engine.ping";
     public const string EngineShutdown = "engine.shutdown";
@@ -28,6 +29,10 @@ public static class EngineCommands
     public const string SyncIsDefault = "sync.isDefault";
 
     public const string ComponentSet = "component.set";
+
+    public const string AssetSet = "asset.set";
+    public const string AssetCreate = "asset.create";
+    public const string AssetSave = "asset.save";
 
     public const string EntitySet = "entity.set";
     public const string EntityDuplicate = "entity.duplicate";

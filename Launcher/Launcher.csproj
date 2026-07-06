@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Resources\Resources.csproj" />
     <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Assets\Assets.csproj" />
     <ProjectReference Include="..\Projects\Projects.csproj" />
     <ProjectReference Include="..\Console\Console.csproj" />
     <ProjectReference Include="..\Status\Status.csproj" />

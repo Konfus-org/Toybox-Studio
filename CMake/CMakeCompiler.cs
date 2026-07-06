@@ -42,16 +42,9 @@ public sealed class CMakeCompiler
         @"(?<error>error:|fatal error|FAILED:|CMake Error|error C[0-9]+|LNK[0-9]+)|(?<warning>warning)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>
-    /// The selectable compiler options the settings dropdown offers, in declaration order — derived straight from
-    /// <see cref="CompilerPreference"/> so the choices, the persisted values, and <see cref="ParseCompiler"/> can
-    /// never drift apart (a new enum member appears automatically).
-    /// </summary>
-    public static readonly IReadOnlyList<string> CompilerChoices = Enum.GetNames<CompilerPreference>();
-
-    /// <summary>The configure-preset names defined in every Toybox project's <c>CMakePresets.json</c>.</summary>
-    public const string MsvcPreset = "msvc";
-    public const string ClangPreset = "clang";
+    // The configure-preset names defined in every Toybox project's CMakePresets.json.
+    private const string MsvcPreset = "msvc";
+    private const string ClangPreset = "clang";
 
     private static readonly TimeSpan ToolDetectionTimeout = TimeSpan.FromSeconds(5);
 
@@ -161,19 +154,29 @@ public sealed class CMakeCompiler
         }
     }
 
-    public static bool IsConfigured(string buildDirectory)
-    {
-        return File.Exists(Path.Combine(buildDirectory, "CMakeCache.txt"));
-    }
-
     /// <summary>
-    /// Maps a stored compiler setting (a <see cref="CompilerPreference"/> name, case-insensitive) to a preference,
-    /// defaulting to <see cref="CompilerPreference.Auto"/> for anything unrecognized.
+    /// Removes a build tree's CMake configuration (the cache and CMakeFiles), leaving built output
+    /// alone. CMake writes both early, so a failed configure leaves a tree that
+    /// <see cref="ConfiguredPresetOf"/> would read as configured — and that would then never be
+    /// reconfigured. Best-effort: a locked file just means the stale configuration survives until the
+    /// next attempt.
     /// </summary>
-    public static CompilerPreference ParseCompiler(string? value) =>
-        Enum.TryParse<CompilerPreference>(value?.Trim(), ignoreCase: true, out var preference)
-            ? preference
-            : CompilerPreference.Auto;
+    public static void Clean(string buildDirectory)
+    {
+        try
+        {
+            var cache = Path.Combine(buildDirectory, "CMakeCache.txt");
+            if (File.Exists(cache))
+                File.Delete(cache);
+
+            var cmakeFiles = Path.Combine(buildDirectory, "CMakeFiles");
+            if (Directory.Exists(cmakeFiles))
+                Directory.Delete(cmakeFiles, recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
 
     /// <summary>
     /// The build preset for a configure preset and configuration, by the
@@ -211,24 +214,6 @@ public sealed class CMakeCompiler
         if (cxx.Contains("clang", StringComparison.OrdinalIgnoreCase))
             return ClangPreset;
         return null;
-    }
-
-    /// <summary>
-    /// True when an existing build tree was already configured with the toolchain the given preference
-    /// resolves to. <see cref="CompilerPreference.Auto"/> adapts to whatever the tree uses and so always
-    /// matches; an explicit MSVC/Clang choice that differs signals a clean reconfigure is needed (the
-    /// generator itself changes, which CMake cannot do in place).
-    /// </summary>
-    public static bool MatchesCompiler(string buildDirectory, CompilerPreference compiler)
-    {
-        if (compiler == CompilerPreference.Auto)
-            return true;
-
-        var preset = ConfiguredPresetOf(buildDirectory);
-        if (preset is null)
-            return false;
-
-        return compiler == CompilerPreference.Msvc ? preset == MsvcPreset : preset == ClangPreset;
     }
 
     /// <summary>

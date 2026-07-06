@@ -79,9 +79,7 @@ public sealed class ProjectBuilder
 
         // Reuse an already-configured tree's own preset; otherwise pick one for the machine's toolchain
         // and configure from scratch (the first configure can take a while).
-        var configurePreset = CMakeCompiler.IsConfigured(buildDirectory)
-            ? CMakeCompiler.ConfiguredPresetOf(buildDirectory)
-            : null;
+        var configurePreset = CMakeCompiler.ConfiguredPresetOf(buildDirectory);
         if (configurePreset is null)
         {
             configurePreset = await _compiler
@@ -94,6 +92,9 @@ public sealed class ProjectBuilder
             if (!await _compiler
                     .ConfigureAsync(project.Path, configurePreset, defines, ct).ContinueOnAnyContext())
             {
+                // A failed configure still writes a cache, which would make this tree read as configured
+                // and skip this step on every later build; clear it so the next attempt starts clean.
+                CMakeCompiler.Clean(buildDirectory);
                 return Result<string>.Fail("CMake configure failed.");
             }
         }

@@ -10,9 +10,8 @@ namespace Toybox.Studio.CMake;
 /// argument list, never a shell string, so there is no quoting/escaping hazard. Runs to completion and
 /// returns the exit code as the result's value (success is exit code 0). Output is discarded by default;
 /// when <c>logOutput</c> is set it is streamed to the unified log, each line categorized by level via
-/// <c>logCategoryRegex</c>. Supports a timeout and (async only) cooperative cancellation; either kills the
-/// process tree. <see cref="Run"/> and <see cref="RunAsync"/> share one signature bar the async suffix and
-/// cancellation token. The one place the editor shells out.
+/// <c>logCategoryRegex</c>. Supports a timeout and cooperative cancellation; either kills the process
+/// tree. The one place the editor shells out.
 /// </summary>
 public sealed class CommandRunner(Logger log)
 {
@@ -62,32 +61,6 @@ public sealed class CommandRunner(Logger log)
         }
 
         process.WaitForExit(); // Drain the async output handlers before reporting.
-        return FromExit(command, process.ExitCode);
-    }
-
-    /// <summary>
-    /// The synchronous form of <see cref="RunAsync"/>; identical behavior and signature minus cancellation.
-    /// Blocks the calling thread until the process exits, so prefer <see cref="RunAsync"/> off the UI thread.
-    /// </summary>
-    public Result<int> Run(
-        string command,
-        IReadOnlyList<string>? arguments = null,
-        string? workingDirectory = null,
-        bool logOutput = false,
-        Regex? logCategoryRegex = null,
-        TimeSpan? timeout = null)
-    {
-        using var process = Build(command, arguments, workingDirectory, logOutput, logCategoryRegex);
-        if (!TryStart(process, command, arguments, logOutput, out var failure))
-            return failure;
-
-        if (timeout is { } span && !process.WaitForExit((int)span.TotalMilliseconds))
-        {
-            TryKill(process);
-            return TimedOut(command, span);
-        }
-
-        process.WaitForExit(); // Waits out a no-timeout run and drains the async output handlers.
         return FromExit(command, process.ExitCode);
     }
 

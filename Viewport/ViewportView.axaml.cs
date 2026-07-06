@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Platform;
 using Avalonia.Rendering.Composition;
 using Toybox.Studio.EngineApi;
@@ -91,9 +92,12 @@ public partial class ViewportView : UserControl, IInputSink
         (DataContext as ViewportViewModel)?.ForwardInput(input);
     }
 
-    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    // Initialization waits for Loaded rather than OnAttachedToVisualTree: SurfaceHost's composition
+    // visual does not exist yet while the attach walk is still running, so querying it there reads as
+    // "compositor unavailable" and permanently blacks out a perfectly capable viewport.
+    protected override void OnLoaded(RoutedEventArgs e)
     {
-        base.OnAttachedToVisualTree(e);
+        base.OnLoaded(e);
         InitializeAsync().FireAndForget();
     }
 

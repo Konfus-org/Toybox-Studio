@@ -1,6 +1,9 @@
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
+using Toybox.Studio.Projects;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio;
@@ -41,6 +44,9 @@ public sealed partial class SplashViewModel : ObservableEventSubscriber, IEventH
         "Fluffing the clouds…",
     ];
 
+    // The icon shown until a project (with an icon of its own) is picked.
+    private static readonly Uri FallbackIcon = new("avares://Toybox.Studio.Resources/Icons/Toybox.png");
+
     // Which Loading sub-step we're on: the engine reports Loading twice at startup (launching, then
     // preparing the world once connected); count the transitions instead of coupling to its text.
     private int _loadingSteps;
@@ -56,6 +62,35 @@ public sealed partial class SplashViewModel : ObservableEventSubscriber, IEventH
     /// <summary>Startup progress in [0,1], driving the loading bar. Only ever moves forward.</summary>
     [ObservableProperty]
     public partial double Progress { get; private set; } = 0.05;
+
+    /// <summary>The motion state the splash icon plays: rocking while loading, a single nod once ready.</summary>
+    [ObservableProperty]
+    public partial SplashPhase Phase { get; private set; } = SplashPhase.Loading;
+
+    /// <summary>Set once the studio window has taken over; the splash window fades down and closes on it.</summary>
+    [ObservableProperty]
+    public partial bool IsDismissed { get; private set; }
+
+    /// <summary>The icon on the box: the picked project's own icon, or the Toybox logo until one is chosen.</summary>
+    [ObservableProperty]
+    public partial Bitmap Icon { get; private set; } = new(AssetLoader.Open(FallbackIcon));
+
+    /// <summary>Swaps the splash icon to the picked project's (keeping the Toybox logo when it has none).</summary>
+    public void ShowProject(Project project)
+    {
+        if (project.Icon is { } icon)
+            Icon = icon;
+    }
+
+    /// <summary>
+    /// Marks loading finished so the icon takes its Ready bow (the nod). The launch flow calls this at
+    /// handoff because the engine's own Ready state usually lands only after the studio window has taken
+    /// over (the world keeps loading behind it) — too late for the splash to react to.
+    /// </summary>
+    public void FinishLoading() => Phase = SplashPhase.Ready;
+
+    /// <summary>Starts the fade-down handoff to the studio window (the window closes itself when it ends).</summary>
+    public void Dismiss() => IsDismissed = true;
 
     public void Handle(in EngineStateChanged evt)
     {
@@ -83,6 +118,8 @@ public sealed partial class SplashViewModel : ObservableEventSubscriber, IEventH
 
         Status = message;
         Progress = progress;
+        if (state.Phase is EnginePhase.Ready or EnginePhase.Playing)
+            Phase = SplashPhase.Ready;
     }
 
     private static string Pick(string[] lines) => lines[Random.Shared.Next(lines.Length)];

@@ -36,6 +36,25 @@ public sealed class ProjectLoader
         project.Icon = LoadIcon(root);
     }
 
+    /// <summary>
+    /// The project's README text when it carries one (a root-level README of any extension), trimmed;
+    /// null otherwise. The picker previews it in a row's tooltip. Never throws.
+    /// </summary>
+    public static string? PeekReadme(string root)
+    {
+        try
+        {
+            var readme = Directory.EnumerateFiles(root).FirstOrDefault(file =>
+                Path.GetFileNameWithoutExtension(file).Equals("README", StringComparison.OrdinalIgnoreCase));
+            var text = readme is null ? null : File.ReadAllText(readme).Trim();
+            return string.IsNullOrEmpty(text) ? null : text;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>The icon the project's settings point at, decoded; null when the project doesn't set
     /// one, the asset can't be found, or it isn't an image Avalonia can decode.</summary>
     private static Bitmap? LoadIcon(string root)

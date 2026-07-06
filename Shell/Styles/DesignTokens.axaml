@@ -23,6 +23,8 @@
         <SolidColorBrush x:Key="ThemeSecondaryBrush" Color="#C7B8A6"/>
         <SolidColorBrush x:Key="ThemeTertiaryBrush" Color="#A9E5C5"/>
         <SolidColorBrush x:Key="ThemeErrorBrush" Color="#E08379"/>
+        <!-- The error ink brightened toward white — hover state for red affordances (the picker's remove ✕). -->
+        <SolidColorBrush x:Key="ThemeErrorHoverBrush" Color="#EBAEA8"/>
         <SolidColorBrush x:Key="ThemeWarningBrush" Color="#F2C879"/>
         <SolidColorBrush x:Key="ThemeInfoBrush" Color="#86C5E8"/>
         <SolidColorBrush x:Key="ThemeSuccessBrush" Color="#8FD9AE"/>

@@ -30,6 +30,12 @@ internal static class ThemeInkApplier
         SetBrush(resources, "ThemeSecondaryBrush", colors.Secondary);
         SetBrush(resources, "ThemeTertiaryBrush", colors.Tertiary);
         SetBrush(resources, "ThemeErrorBrush", colors.Error);
+        // The error ink brightened toward white — the hover state for red affordances (e.g. the project
+        // picker's remove ✕), which must lighten under the pointer, never flip to the plain button ink.
+        resources["ThemeErrorHoverBrush"] = ColorGradient.BuildBrush(
+            colors.Error.Start.Blend(Colors.White, 0.35f),
+            colors.Error.End.Blend(Colors.White, 0.35f),
+            90);
         SetBrush(resources, "ThemeWarningBrush", colors.Warning);
         SetBrush(resources, "ThemeInfoBrush", colors.Info);
         SetBrush(resources, "ThemeSuccessBrush", colors.Success);

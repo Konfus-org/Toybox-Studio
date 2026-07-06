@@ -113,6 +113,12 @@ internal static class FluentBrushApplier
         foreach (var key in new[] { "MenuFlyoutPresenterBorderBrush", "FlyoutBorderThemeBrush" })
             resources[key] = menuBorder;
 
+        // Tooltips are popup panels too (e.g. the project picker's README previews): same themed surface,
+        // border and ink as the flyouts, instead of FluentTheme's stock neutral panel.
+        resources["ToolTipBackground"] = menuSurface;
+        resources["ToolTipBorderBrush"] = menuBorder;
+        resources["ToolTipForeground"] = new SolidColorBrush(text);
+
         // Sliders (e.g. the Accessibility animation-intensity dial, the theme editor's angle sliders): a clay
         // groove with an accent-gradient value fill and a raised surface thumb. These recolour FluentTheme's
         // slider keys (the inset groove / thumb shadow are added in SliderStyle); they stay here for the same

@@ -1,16 +1,48 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:studio="using:Toybox.Studio"
+        xmlns:anim="using:Toybox.Studio.Behaviors.Animations"
         x:Class="Toybox.Studio.SplashWindow"
         x:DataType="studio:SplashViewModel"
         Width="440" Height="280" CanResize="False"
         WindowDecorations="None"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ThemeBackgroundBrush}"
-        Topmost="True">
+        TransparencyLevelHint="Transparent"
+        Topmost="True"
+        anim:WindowDismissBehavior.Dismiss="{Binding IsDismissed}">
+
+    <!-- TransparencyLevelHint lets the dismissal fade blend into whatever is behind the window (the studio
+         window it hands off to) instead of the surface's clear color; at rest the background brush keeps
+         the splash fully opaque. -->
 
     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="14" Margin="24">
-        <Image Source="avares://Toybox.Studio.Resources/Icons/Toybox.png" Width="84" Height="84"/>
+        <!-- The toy on the box — the picked project's icon (the Toybox logo until one is chosen): rocks
+             while the editor loads (with an occasional full spin as a flourish) and nods once everything
+             is ready. Render-transform only, so the layout never shifts. -->
+        <Image Source="{Binding Icon}" Width="84" Height="84"
+               anim:MotionStateBehavior.State="{Binding Phase}">
+            <anim:MotionStateBehavior.States>
+                <anim:MotionStates>
+                    <anim:MotionState Name="Loading" FlourishMinSeconds="6" FlourishMaxSeconds="12">
+                        <anim:MotionState.Loop>
+                            <anim:RockClip/>
+                        </anim:MotionState.Loop>
+                        <anim:MotionState.Flourish>
+                            <anim:SpinClip/>
+                        </anim:MotionState.Flourish>
+                    </anim:MotionState>
+                    <anim:MotionState Name="Ready">
+                        <anim:MotionState.Enter>
+                            <!-- The bow: deliberately deep (Depth is intensity-scaled, so at the default
+                                 ~0.45 dial this lands around 12px) and doubled so it reads as a clear
+                                 "ready!" before the fade. The launch flow waits for it (ReadyNodDuration). -->
+                            <anim:NodClip Depth="26" Dips="2" Duration="0:0:0.7"/>
+                        </anim:MotionState.Enter>
+                    </anim:MotionState>
+                </anim:MotionStates>
+            </anim:MotionStateBehavior.States>
+        </Image>
         <TextBlock Text="Toybox Studio" FontSize="24" FontWeight="SemiBold"
                    HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextBrush}"/>
 

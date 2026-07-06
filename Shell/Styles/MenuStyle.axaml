@@ -35,4 +35,19 @@
     <Style Selector="FlyoutPresenter /template/ Border, MenuFlyoutPresenter /template/ Border">
         <Setter Property="BoxShadow" Value="0 6 18 0 #33000000"/>
     </Style>
+
+    <!-- Tooltips are popup panels too: rounded like the flyouts, floating with the same soft shadow, and
+         wide enough for the project picker's README previews — whose text must wrap, not stretch the
+         panel. The surface/border/ink brushes come from the theme (FluentBrushApplier). -->
+    <Style Selector="ToolTip">
+        <Setter Property="CornerRadius" Value="{DynamicResource OverlayCornerRadius}"/>
+        <Setter Property="MaxWidth" Value="480"/>
+    </Style>
+    <Style Selector="ToolTip /template/ Border">
+        <Setter Property="CornerRadius" Value="{DynamicResource OverlayCornerRadius}"/>
+        <Setter Property="BoxShadow" Value="0 6 18 0 #33000000"/>
+    </Style>
+    <Style Selector="ToolTip TextBlock">
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
 </Styles>

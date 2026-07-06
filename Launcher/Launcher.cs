@@ -5,6 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Toybox.Studio.AppHosting;
+using Toybox.Studio.Behaviors.Animations;
 using Toybox.Studio.Console;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
@@ -23,7 +24,7 @@ namespace Toybox.Studio;
 /// The app's bootstrap and composition root. <see cref="LaunchAsync"/> is the one endpoint: it boots
 /// Avalonia, configures the service provider (every service registered against exactly what it asks
 /// for in its constructor — nothing ever takes the provider itself), and runs the startup flow: the
-/// splash with the project picker over it, the picked project's compile + engine launch, then the
+/// project picker, then the splash narrating the picked project's compile + engine launch, then the
 /// studio window, which takes over the app's lifetime.
 /// </summary>
 public sealed class Launcher
@@ -31,12 +32,18 @@ public sealed class Launcher
     // Minimum time the splash stays up so a fast launch doesn't flash.
     private static readonly TimeSpan SplashMinimumDuration = TimeSpan.FromMilliseconds(900);
 
+    // How long the handoff waits for the splash icon's Ready nod (its declared clip duration plus a
+    // beat) before starting the fade, so the bow isn't cut off mid-dip. Tracks the NodClip declared
+    // on the Ready state in SplashWindow.axaml (0.7s).
+    private static readonly TimeSpan ReadyNodDuration = TimeSpan.FromMilliseconds(950);
+
     // How long app exit waits for the hosted engine's graceful stop before it is killed.
     private static readonly TimeSpan EngineTeardownTimeout = TimeSpan.FromSeconds(15);
 
     private readonly SettingsManager _settings;
     private readonly Project _project;
     private readonly ProjectLoader _projectLoader;
+    private readonly ProjectFactory _projectFactory;
     private readonly EngineCoordinator _coordinator;
     private readonly Logger _log;
     private readonly MainWindowViewModel _mainViewModel;
@@ -47,6 +54,7 @@ public sealed class Launcher
         SettingsManager settings,
         Project project,
         ProjectLoader projectLoader,
+        ProjectFactory projectFactory,
         EngineCoordinator coordinator,
         Logger log,
         SplashViewModel splashViewModel,
@@ -55,6 +63,7 @@ public sealed class Launcher
         _settings = settings;
         _project = project;
         _projectLoader = projectLoader;
+        _projectFactory = projectFactory;
         _coordinator = coordinator;
         _log = log;
         _mainViewModel = mainViewModel;
@@ -127,6 +136,7 @@ public sealed class Launcher
         // its settings knob (the configured engine source path) as a plain value.
         services.AddSingleton<Project>();
         services.AddSingleton<ProjectLoader>();
+        services.AddSingleton<ProjectFactory>();
         services.AddSingleton(sp => new ProjectBuilder(
             sp.GetRequiredService<SettingsManager>().Editor.Engine.SourcePath,
             sp.GetRequiredService<Logger>(),
@@ -203,6 +213,12 @@ public sealed class Launcher
         var theme = services.GetRequiredService<ThemeManager>();
         theme.ApplySavedTheme();
 
+        // Publish the motion tokens before any window exists: they gate EVERY animation (the splash's
+        // rock/spin/nod and the micro-animation behaviors all read the AnimationIntensity resource, and
+        // an unpublished token reads as 0 — motion off). The future Settings panel re-publishes live as
+        // the intensity slider moves.
+        MotionTokens.Publish(services.GetRequiredService<SettingsManager>().Editor.Accessibility.AnimationIntensity);
+
         var log = services.GetRequiredService<Logger>();
         foreach (var warning in theme.LoadWarnings)
             log.Warning(warning);
@@ -235,24 +251,30 @@ public sealed class Launcher
     }
 
     /// <summary>
-    /// The interactive startup flow, run inside the UI loop: show the splash, prompt for the project,
-    /// compile it and launch its engine (failures land in the log and on the splash; the splash narrates
-    /// the phases from the dispatched engine state), then swap the splash out for the studio window.
-    /// Touches windows, so every await resumes back on the UI thread.
+    /// The interactive startup flow, run inside the UI loop: prompt for the project first, and only
+    /// once one is picked (or created) show the splash narrating its compile + engine launch (failures
+    /// land in the log and on the splash), then swap the splash out for the studio window. Just closing
+    /// the picker quits the app — nobody asked for a studio. Touches windows, so every await resumes
+    /// back on the UI thread.
     /// </summary>
     private async Task RunAsync(ClassicDesktopStyleApplicationLifetime desktop)
     {
-        _splash.Show();
-        var timer = Stopwatch.StartNew();
-
         try
         {
-            if (!await PromptForProjectAsync().ContinueOnSameContext())
+            if (await PromptForProjectAsync().ContinueOnSameContext() == StartupChoice.Quit)
             {
-                _log.Info("No project was chosen; continuing without one.");
-                _splashViewModel.Status = "No project chosen.";
+                _log.Info("The project picker was closed without a choice; exiting.");
+                _splash.Close();
+                desktop.Shutdown();
+                return;
             }
-            else if (_settings.Editor.Engine.AutoLaunchEngine)
+
+            // A project was picked (or just created) — it gives the splash something to narrate, so it
+            // appears here, with the project's own icon already on it.
+            _splash.Show();
+            var timer = Stopwatch.StartNew();
+
+            if (_settings.Editor.Engine.AutoLaunchEngine)
             {
                 await _coordinator.StartEngineAsync().ContinueOnSameContext();
             }
@@ -269,44 +291,80 @@ public sealed class Launcher
         catch (Exception exception)
         {
             _log.Error($"Launch failed: {exception.Message}");
+            // The failure may predate the splash (a picker mishap); make sure it's on screen to carry
+            // the message.
+            if (!_splash.IsVisible)
+                _splash.Show();
             _splashViewModel.Status = $"Launch failed: {exception.Message}";
             await Task.Delay(TimeSpan.FromSeconds(3)).ContinueOnSameContext();
         }
 
         // Launch is done (or failed past the splash): only now does the studio window come to exist.
-        // Show it, hand it the app's lifetime, then swap the splash out for it.
+        // Show it behind the (topmost) splash, hand it the app's lifetime, then fade the splash down
+        // into it.
         var mainWindow = new MainWindow { DataContext = _mainViewModel };
         desktop.MainWindow = mainWindow;
         mainWindow.Show();
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-        _splash.Close();
+        await CloseSplashAsync().ContinueOnSameContext();
         mainWindow.Activate();
     }
 
     /// <summary>
-    /// Asks the user which project to open with the VS-style picker: the recent projects to reopen,
-    /// plus browsing the disk for one. A valid pick is remembered in the editor settings and loaded
-    /// into the active project; false when the user continues without a project (or just closes the
-    /// picker), leaving the active project empty.
+    /// Hands the screen to the studio window: flips the splash to Ready so its icon takes the bow (the
+    /// nod — the engine's own Ready state usually lands only after this handoff, so the flow declares
+    /// it), lets it land while the studio window paints its first frame behind the topmost splash, then
+    /// triggers the fade-down dismissal (the splash window closes itself when the fade ends — instantly
+    /// at animation intensity 0). The timeout backstop means a splash that can't animate never strands
+    /// topmost over the editor.
     /// </summary>
-    private async Task<bool> PromptForProjectAsync()
+    private async Task CloseSplashAsync()
+    {
+        _splashViewModel.FinishLoading();
+        await Task.Delay(ReadyNodDuration).ContinueOnSameContext();
+
+        var closed = new TaskCompletionSource();
+        _splash.Closed += (_, _) => closed.TrySetResult();
+        _splashViewModel.Dismiss();
+        await Task.WhenAny(closed.Task, Task.Delay(TimeSpan.FromSeconds(2))).ContinueOnSameContext();
+        _splash.Close();
+    }
+
+    /// <summary>
+    /// Asks the user which project to open with the picker: the known projects as a flat list, plus
+    /// the Add row (a new project from the bundled template, or an existing one from disk). A valid
+    /// pick is remembered in the editor settings and loaded into the active project; just closing the
+    /// picker means quit.
+    /// </summary>
+    private async Task<StartupChoice> PromptForProjectAsync()
     {
         var picker = new ProjectPickerWindow();
         var viewModel = new ProjectPickerViewModel(
-            _settings.Editor.Projects.Recent, _projectLoader, picker.StorageProvider);
+            _settings, _projectLoader, _projectFactory, picker.StorageProvider);
         picker.DataContext = viewModel;
-        // Closing the window without choosing (the title-bar X) counts as continuing without a project.
-        picker.Closed += (_, _) => viewModel.SkipCommand.Execute(null);
-        picker.Show(_splash);
+        // Closing the window without choosing (the title-bar X) is a dismissal, not a choice.
+        picker.Closed += (_, _) => viewModel.Dismiss();
+        picker.Show();
 
         var root = await viewModel.Choice.ContinueOnSameContext();
         picker.Close();
         if (root is null)
-            return false;
+            return StartupChoice.Quit;
 
         RememberProject(root);
         _projectLoader.Load(root, _project);
-        return true;
+        _splashViewModel.ShowProject(_project);
+        return StartupChoice.Project;
+    }
+
+    /// <summary>How the project picker concluded — what the startup flow does next hangs on it.</summary>
+    private enum StartupChoice
+    {
+        /// <summary>A project was picked (or created) and loaded; launch it under the splash.</summary>
+        Project,
+
+        /// <summary>The picker was closed without a choice: quit the app.</summary>
+        Quit,
     }
 
     /// <summary>Records the opened project as the last-opened and front of the recents (capped) list.</summary>

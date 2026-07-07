@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.EnumValueView"
+             x:DataType="local:EnumValueViewModel">
+    <ComboBox ItemsSource="{Binding Choices}"
+              SelectedItem="{Binding Value}"
+              IsEnabled="{Binding !IsReadOnly}"
+              HorizontalAlignment="Stretch"/>
+</UserControl>

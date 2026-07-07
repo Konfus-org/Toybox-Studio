@@ -1,3 +1,7 @@
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Toybox.Studio.Utils.Attributes;
+
 namespace Toybox.Studio.Settings;
 
 /// <summary>
@@ -21,15 +25,34 @@ public sealed class EditorSettings
 }
 
 /// <summary>
+/// Which C++ toolchain the editor builds native code with. Mirrors the CMake layer's
+/// CompilerPreference member-for-member — kept as its own enum here (rather than referencing the CMake
+/// project) so the settings layer stays independent; the build services map it.
+/// </summary>
+public enum CompilerChoice
+{
+    /// <summary>MSVC on Windows, Clang elsewhere.</summary>
+    Auto,
+
+    /// <summary>The Microsoft Visual C++ toolchain (Windows only).</summary>
+    Msvc,
+
+    /// <summary>The LLVM Clang toolchain.</summary>
+    Clang,
+}
+
+/// <summary>
 /// How the editor compiles a project's native code (engine + project, built in-tree via CMake).
 /// </summary>
+[Icon("Hammer")]
 public sealed class BuildEditorSettings
 {
     /// <summary>
-    /// Which C++ toolchain to build with: "Auto" (MSVC on Windows, Clang elsewhere), "MSVC", or
-    /// "Clang". Changing this reconfigures the build tree from clean on the next compile.
+    /// Which C++ toolchain to build with. Changing this reconfigures the build tree from clean on the
+    /// next compile. Persisted by name so the settings file stays hand-readable.
     /// </summary>
-    public string Compiler { get; set; } = "Auto";
+    [JsonConverter(typeof(StringEnumConverter))]
+    public CompilerChoice Compiler { get; set; } = CompilerChoice.Auto;
 
     /// <summary>
     /// Build targets in parallel (faster); turn off for serial, easier-to-follow build output.
@@ -42,6 +65,7 @@ public sealed class BuildEditorSettings
     public bool Verbose { get; set; }
 }
 
+[Icon("Cog")]
 public sealed class EngineEditorSettings
 {
     public string SourcePath { get; set; } = string.Empty;
@@ -59,10 +83,14 @@ public sealed class EngineEditorSettings
     public bool AutoLaunchEngine { get; set; } = true;
 }
 
+[Icon("FolderOpen")]
 public sealed class ProjectEditorSettings
 {
+    // Bookkeeping the launch flow maintains, not preferences — hidden from the Settings grid.
+    [Hidden]
     public string LastOpened { get; set; } = string.Empty;
 
+    [Hidden]
     public List<string> Recent { get; set; } = [];
 }
 
@@ -70,6 +98,7 @@ public sealed class ProjectEditorSettings
 /// The in-Studio C++ script editor (the inline Script-tab strip and the popped-out window). These apply to
 /// both surfaces so the two stay consistent.
 /// </summary>
+[Icon("Code")]
 public sealed class ScriptingEditorSettings
 {
     /// <summary>
@@ -93,15 +122,17 @@ public sealed class ScriptingEditorSettings
 /// editor's micro-animations (button press, toggle tilt, typing wiggle) — see
 /// <c>Toybox.Studio.Behaviors.Animations.MotionTokens</c>. 0 turns motion off entirely; 1 is the most pronounced.
 /// </summary>
+[Icon("PersonStanding")]
 public sealed class AccessibilityEditorSettings
 {
     /// <summary>
     /// How energetic the editor's micro-animations are, 0 (no motion) to 1 (full). Defaults to a subtle 0.35.
-    /// Rendered as a clay slider in Settings via [View("intensitySlider")].
+    /// The Settings window live-previews edits to it, so the motion is felt as the value moves.
     /// </summary>
     public double AnimationIntensity { get; set; } = 0.35;
 }
 
+[Icon("Palette")]
 public sealed class ThemeEditorSettings
 {
     // The default theme name. Kept as a literal here (rather than referencing the theming layer's
@@ -110,8 +141,7 @@ public sealed class ThemeEditorSettings
 
     /// <summary>
     /// Name of the currently applied theme. There is no light/dark variant — a light/dark pair is just two
-    /// themes named by convention, picked from this single list like any other. (The Settings panel renders
-    /// the theme selection as its own section, so no [View] tag is needed on the data here.)
+    /// themes named by convention, picked from this single list like any other.
     /// </summary>
     public string Active { get; set; } = DefaultTheme;
 }

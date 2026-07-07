@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.StateIndicatorView"
+             x:DataType="local:StateIndicatorViewModel">
+    <!-- Fixed width so rows with and without a visible state keep their trailing edge aligned. -->
+    <Button Classes="Basic" Width="24" Padding="2" VerticalAlignment="Center"
+            Command="{Binding ResetCommand}" ToolTip.Tip="{Binding Tip}">
+        <Panel>
+            <icons:IconView Kind="Lock" Width="13" Height="13" IsVisible="{Binding IsReadOnly}"/>
+            <Ellipse Width="11" Height="11" IsVisible="{Binding IsModified}"
+                     Fill="{DynamicResource ThemeAccentSolidBrush}"/>
+            <Ellipse Width="11" Height="11" IsVisible="{Binding IsDefault}"
+                     Stroke="{DynamicResource ThemeBorderBrush}" StrokeThickness="1.5"/>
+        </Panel>
+    </Button>
+</UserControl>

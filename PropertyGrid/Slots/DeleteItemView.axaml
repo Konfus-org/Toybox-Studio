@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.DeleteItemView"
+             x:DataType="local:DeleteItemViewModel">
+    <Button Classes="Basic" Padding="2" VerticalAlignment="Center"
+            Command="{Binding DeleteCommand}" ToolTip.Tip="Delete this element">
+        <icons:IconView Kind="X" Width="12" Height="12"
+                        Foreground="{DynamicResource ThemeErrorBrush}"/>
+    </Button>
+</UserControl>

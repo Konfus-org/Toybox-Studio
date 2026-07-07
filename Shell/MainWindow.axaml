@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="using:Toybox.Studio.Shell"
+        xmlns:menubar="using:Toybox.Studio.MenuBar"
         xmlns:status="using:Toybox.Studio.Status"
         xmlns:viewport="using:Toybox.Studio.Viewport"
         x:Class="Toybox.Studio.Shell.MainWindow"
@@ -10,6 +11,8 @@
         Width="1440" Height="850">
 
     <DockPanel>
+        <menubar:MenuBarView DataContext="{Binding MenuBar}" DockPanel.Dock="Top"/>
+
         <Border Classes="StatusBar" DockPanel.Dock="Bottom">
             <status:StatusView DataContext="{Binding Status}"/>
         </Border>

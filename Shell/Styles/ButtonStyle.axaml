@@ -142,12 +142,15 @@
     <Style Selector="ToggleButton.Basic:pointerover, ToggleButton.Basic:checked">
         <Setter Property="Opacity" Value="1"/>
     </Style>
+    <!-- Foreground is pinned too: Fluent's :checked state would otherwise flip the content to the
+         on-accent ink (white), which on the transparent Basic chrome reads as the glyph vanishing. -->
     <Style Selector="ToggleButton.Basic /template/ ContentPresenter#PART_ContentPresenter,
                      ToggleButton.Basic:pointerover /template/ ContentPresenter#PART_ContentPresenter,
                      ToggleButton.Basic:pressed /template/ ContentPresenter#PART_ContentPresenter,
                      ToggleButton.Basic:checked /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}"/>
     </Style>
 
     <!-- Chrome-less icon buttons (Basic / row affordances) just dim when disabled — no fill. -->

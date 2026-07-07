@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.ActionView"
+             x:DataType="local:ActionViewModel">
+    <Button Classes="Basic" Padding="2" VerticalAlignment="Center"
+            Command="{Binding InvokeCommand}" ToolTip.Tip="{Binding Tip}">
+        <icons:IconView Kind="{Binding Icon}" Width="12" Height="12"/>
+    </Button>
+</UserControl>

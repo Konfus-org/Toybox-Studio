@@ -72,6 +72,28 @@ public sealed class SettingsManager : EventSubscriber, IEventHandler<AssetCatalo
     }
 
     /// <summary>
+    /// A detached deep copy of the current editor settings, for a buffered edit (the Settings window):
+    /// mutate the draft freely, then land it with <see cref="ApplyEditorDraftAsync"/> — or just drop it.
+    /// </summary>
+    public EditorSettings CreateEditorDraft() =>
+        JsonConvert.DeserializeObject<EditorSettings>(JsonConvert.SerializeObject(Editor))!;
+
+    /// <summary>
+    /// Commits a draft: copies its values into the live <see cref="Editor"/> object (whose identity
+    /// services hold), then persists through <see cref="SaveAsync"/> — dispatching the usual
+    /// <see cref="EditorSettingsChanged"/>. Creation is Replace, not the default merge, so the draft's
+    /// list edits don't append onto the live lists.
+    /// </summary>
+    public Task ApplyEditorDraftAsync(EditorSettings draft)
+    {
+        JsonConvert.PopulateObject(
+            JsonConvert.SerializeObject(draft),
+            Editor,
+            new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+        return SaveAsync();
+    }
+
+    /// <summary>
     /// Loads the settings from EditorSettings.json, falling back to defaults when the file is missing
     /// or unreadable.
     /// </summary>

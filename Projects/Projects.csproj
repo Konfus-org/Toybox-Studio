@@ -9,6 +9,7 @@
     <ProjectReference Include="..\Utils\Utils.csproj" />
     <ProjectReference Include="..\Logging\Logging.csproj" />
     <ProjectReference Include="..\CMake\CMake.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
     <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
   </ItemGroup>

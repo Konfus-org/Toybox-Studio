@@ -19,15 +19,6 @@ public sealed class EngineCoordinator :
     IEventHandler<AppStoppedResponding>,
     IEventHandler<AppResumedResponding>
 {
-    // A Debug Studio drives a Debug engine, a Release Studio a Release engine — the studio's own
-    // configuration picks the mode the project (and so the in-tree engine) is built in.
-    private const BuildMode StudioBuildMode =
-#if DEBUG
-        BuildMode.Debug;
-#else
-        BuildMode.Release;
-#endif
-
     private readonly Project _project;
     private readonly ProjectBuilder _builder;
     private readonly AppHost<Engine> _host;
@@ -66,7 +57,8 @@ public sealed class EngineCoordinator :
     public async Task StartEngineAsync(CancellationToken ct = default)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetime.Token);
-        var build = await _builder.BuildAsync(_project, StudioBuildMode, linked.Token).ContinueOnAnyContext();
+        // A Debug Studio drives a Debug engine, a Release Studio a Release engine.
+        var build = await _builder.BuildAsync(_project, StudioBuild.Mode, linked.Token).ContinueOnAnyContext();
         if (!build)
         {
             _log.Error(build.Error!);

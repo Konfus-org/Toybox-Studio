@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Settings panel: an asset owner whose body is a property grid (via the reflection node
+       factory) over a DRAFT of the editor settings — edits preview live where it matters (motion
+       intensity) and land in the real EditorSettings only on Save, which commits through
+       SettingsManager. Opened by the menu bar's Edit ▸ Settings, in its own window. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\AssetOwners\AssetOwners.csproj" />
+    <ProjectReference Include="..\PropertyGrid\PropertyGrid.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:slots="using:Toybox.Studio.PropertyGrid.Slots"
+             xmlns:local="using:Toybox.Studio.PropertyGrid"
+             x:Class="Toybox.Studio.PropertyGrid.PropertyGridView"
+             x:DataType="local:PropertyGridViewModel">
+
+    <!-- Every slot view-model resolves to its view here, once for the whole grid (nested node views
+         inherit these templates) — a new slot occupant is one view-model + view pair and one line below. -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="slots:TextValueViewModel">
+            <slots:TextValueView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:NumberValueViewModel">
+            <slots:NumberValueView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:BoolValueViewModel">
+            <slots:BoolValueView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:EnumValueViewModel">
+            <slots:EnumValueView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:StateIndicatorViewModel">
+            <slots:StateIndicatorView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:ActionViewModel">
+            <slots:ActionView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:AddItemViewModel">
+            <slots:AddItemView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:DeleteItemViewModel">
+            <slots:DeleteItemView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:ReorderHandleViewModel">
+            <slots:ReorderHandleView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <!-- The scrollbar keeps its own lane (no auto-hide overlay) so it never sits on the rows' trailing
+         slots; the margin keeps a small gap between the rows and the bar. -->
+    <ScrollViewer AllowAutoHide="False">
+        <ItemsControl ItemsSource="{Binding Nodes}" Margin="0,0,6,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="local:PropertyNode">
+                    <local:PropertyNodeView/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </ScrollViewer>
+</UserControl>

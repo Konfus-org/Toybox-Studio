@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.BoolValueView"
+             x:DataType="local:BoolValueViewModel">
+    <CheckBox IsChecked="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"/>
+</UserControl>

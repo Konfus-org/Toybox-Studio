@@ -42,9 +42,11 @@ public sealed class CMakeCompiler
         @"(?<error>error:|fatal error|FAILED:|CMake Error|error C[0-9]+|LNK[0-9]+)|(?<warning>warning)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // The configure-preset names defined in every Toybox project's CMakePresets.json.
-    private const string MsvcPreset = "msvc";
-    private const string ClangPreset = "clang";
+    /// <summary>The MSVC configure-preset name defined in every Toybox CMakePresets.json.</summary>
+    public const string MsvcPreset = "msvc";
+
+    /// <summary>The Clang configure-preset name defined in every Toybox CMakePresets.json.</summary>
+    public const string ClangPreset = "clang";
 
     private static readonly TimeSpan ToolDetectionTimeout = TimeSpan.FromSeconds(5);
 

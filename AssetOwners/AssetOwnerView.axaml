@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.AssetOwners"
+             x:Class="Toybox.Studio.AssetOwners.AssetOwnerView"
+             x:DataType="local:AssetOwnerViewModel">
+
+    <!-- The owner chrome every asset-owning panel shares: the owned body fills the panel, with the
+         Save/Cancel pair anchored beneath it. The concrete owner's view wraps this and supplies the
+         DataTemplate that resolves Body to its view. -->
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,8,0,0">
+            <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+            <Button Classes="action" Content="Save" Command="{Binding SaveCommand}"/>
+        </StackPanel>
+
+        <ContentControl Content="{Binding Body}"/>
+    </DockPanel>
+</UserControl>

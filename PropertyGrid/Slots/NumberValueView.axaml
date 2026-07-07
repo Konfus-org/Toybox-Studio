@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.NumberValueView"
+             x:DataType="local:NumberValueViewModel">
+    <NumericUpDown Value="{Binding Value}"
+                   Increment="{Binding Increment}"
+                   FormatString="{Binding Format}"
+                   IsEnabled="{Binding !IsReadOnly}"
+                   HorizontalAlignment="Stretch"/>
+</UserControl>

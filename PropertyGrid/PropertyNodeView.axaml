@@ -1,0 +1,109 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.PropertyGrid"
+             x:Class="Toybox.Studio.PropertyGrid.PropertyNodeView"
+             x:DataType="local:PropertyNode">
+
+    <UserControl.Styles>
+        <!-- The expander chevron turns to point down as its node expands. -->
+        <Style Selector="ToggleButton.expander icons|IconView">
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.expander:checked icons|IconView">
+            <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+        </Style>
+
+        <!-- Every node raises a touch on hover (the intensity-scaled header token, so it tracks the
+             animation setting) and lights a primary underline. The underline thickness is always
+             reserved — only its brush changes — so hover never shifts layout. -->
+        <Style Selector="Border.node">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+            <Setter Property="RenderTransform" Value="{DynamicResource ThemeControlRestTransform}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" Easing="CubicEaseOut"/>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.node:pointerover">
+            <Setter Property="RenderTransform" Value="{DynamicResource ThemeHeaderHoverTransform}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemePrimaryBrush}"/>
+        </Style>
+
+        <!-- Headers are full-width tinted separator bands; their label and icon carry the accent ink. -->
+        <Style Selector="Border.header">
+            <Setter Property="Background" Value="{DynamicResource ThemeHeaderBrush}"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+            <Setter Property="Margin" Value="0,2"/>
+        </Style>
+        <Style Selector="Border.header TextBlock.label">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
+        <Style Selector="Border.header ToggleButton.expander icons|IconView">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel>
+        <!-- The collapsible separator band a composite or list renders as. -->
+        <Border Classes="node header" IsVisible="{Binding IsHeader}" MinHeight="30" Padding="4,2">
+            <Grid ColumnDefinitions="18,Auto,Auto,*,Auto,Auto">
+                <ToggleButton Grid.Column="0" Classes="Basic expander" Padding="2" VerticalAlignment="Center"
+                              IsVisible="{Binding HasChildren}" IsChecked="{Binding IsExpanded}">
+                    <icons:IconView Kind="ChevronRight" Width="10" Height="10"/>
+                </ToggleButton>
+                <ContentControl Grid.Column="1" Content="{Binding Left}" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <icons:IconView Kind="{Binding Icon}" IsVisible="{Binding HasIcon}"
+                                    Width="14" Height="14" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
+                    <TextBlock Classes="label" Text="{Binding Label}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Grid.Column="4" Text="{Binding Detail}" VerticalAlignment="Center" Margin="0,0,8,0"
+                           IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Foreground="{DynamicResource ThemeMutedTextBrush}"
+                           FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <ContentControl Content="{Binding Right}"/>
+                    <ContentControl Content="{Binding Indicator}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- The label/value row a leaf renders as: [left] label | [value] [right][indicator]. -->
+        <Border Classes="node" IsVisible="{Binding !IsHeader}" MinHeight="28" Padding="4,1">
+            <Grid ColumnDefinitions="Auto,150,1,*,Auto">
+                <ContentControl Grid.Column="0" Content="{Binding Left}" VerticalAlignment="Center"
+                                Margin="0,0,4,0"/>
+                <TextBlock Grid.Column="1" Classes="label" Text="{Binding Label}" VerticalAlignment="Center"
+                           Margin="4,0,8,0" TextTrimming="CharacterEllipsis"/>
+                <Rectangle Grid.Column="2" Width="1" Fill="{DynamicResource ThemeGrooveBrush}" Margin="0,3"/>
+                <ContentControl Grid.Column="3" Content="{Binding Value}" VerticalAlignment="Center"
+                                Margin="8,0,4,0"/>
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <ContentControl Content="{Binding Right}"/>
+                    <ContentControl Content="{Binding Indicator}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Children indent under the row, shown while expanded; each renders as this same view. -->
+        <ItemsControl ItemsSource="{Binding Children}" IsVisible="{Binding IsExpanded}" Margin="18,0,0,0">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="local:PropertyNode">
+                    <local:PropertyNodeView/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

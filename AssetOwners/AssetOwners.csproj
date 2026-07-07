@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The shared chrome of every panel that owns an editable asset (or asset-like document): an
+       AssetOwnerViewModel carries the dirty-star title and the Save/Cancel pair, the AssetOwnerView
+       renders them beneath the owner's body content. Owners hosting a real engine Asset get dirty
+       tracking and saving from the asset itself; document owners (the Settings draft) supply their
+       own persistence. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Assets\Assets.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

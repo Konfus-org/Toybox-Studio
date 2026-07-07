@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:grid="using:Toybox.Studio.PropertyGrid"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.ReorderHandleView"
+             x:DataType="local:ReorderHandleViewModel">
+    <Border Background="Transparent" Padding="2" VerticalAlignment="Center"
+            Cursor="SizeNorthSouth" ToolTip.Tip="Drag to reorder"
+            grid:ListReorder.Enabled="True">
+        <icons:IconView Kind="GripVertical" Width="12" Height="12" Opacity="0.6"/>
+    </Border>
+</UserControl>

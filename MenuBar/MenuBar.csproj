@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The main window's menu bar: Edit ▸ Settings (the settings window), Build ▸ <project> in Debug/
+       Release and Build ▸ Engine (the checkout itself), Debug ▸ Attach To Running Build. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Projects\Projects.csproj" />
+    <ProjectReference Include="..\SettingsEditor\SettingsEditor.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

@@ -7,12 +7,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Toybox.Studio.AppHosting;
 using Toybox.Studio.Assets;
 using Toybox.Studio.Behaviors.Animations;
+using Toybox.Studio.CMake;
 using Toybox.Studio.Console;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
 using Toybox.Studio.Logging;
+using Toybox.Studio.MenuBar;
 using Toybox.Studio.Projects;
 using Toybox.Studio.Settings;
+using Toybox.Studio.SettingsEditor;
 using Toybox.Studio.Shell;
 using Toybox.Studio.Status;
 using Toybox.Studio.Themes;
@@ -73,7 +76,20 @@ public sealed class Launcher
     }
 
     [STAThread]
-    public static void Main(string[] args) => LaunchAsync(args).GetAwaiter().GetResult();
+    public static void Main(string[] args)
+    {
+        try
+        {
+            LaunchAsync(args).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            // The outermost net, for crashes before CrashGuard's hooks exist (or escaping them): record,
+            // then rethrow so the process still fails loudly (exit code, Windows error reporting).
+            CrashGuard.ReportFatal(exception);
+            throw;
+        }
+    }
 
     /// <summary>
     /// Boots the whole studio: builds the Avalonia app, configures the service provider, and runs the
@@ -133,15 +149,18 @@ public sealed class Launcher
         services.AddSingleton<EventDispatcher>();
 
         // The active project — pure data, populated by the launch flow through the loader once the
-        // user picks one — and the build/ship services callers compose around it. The builder gets
-        // its settings knob (the configured engine source path) as a plain value.
+        // user picks one — and the build/ship services callers compose around it. Both builders share
+        // the one locator and build runner, so the engine path and build settings are read live from
+        // the settings, and at most one native build runs across the two.
         services.AddSingleton<Project>();
         services.AddSingleton<ProjectLoader>();
         services.AddSingleton<ProjectFactory>();
-        services.AddSingleton(sp => new ProjectBuilder(
-            sp.GetRequiredService<SettingsManager>().Editor.Engine.SourcePath,
-            sp.GetRequiredService<Logger>(),
-            sp.GetRequiredService<EventDispatcher>()));
+        services.AddSingleton<CommandRunner>();
+        services.AddSingleton<CMakeCompiler>();
+        services.AddSingleton<EngineSourceLocator>();
+        services.AddSingleton<BuildRunner>();
+        services.AddSingleton<ProjectBuilder>();
+        services.AddSingleton<EngineBuilder>();
         services.AddSingleton<ProjectShipper>();
 
         // The engine and its host: the engine service is what everything talks to (and reads State
@@ -200,6 +219,8 @@ public sealed class Launcher
         // one construct built outside the container, in the flow: it needs the picker window's own
         // storage provider for its Browse dialog.)
         services.AddSingleton<StatusViewModel>();
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<MenuBarViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<Launcher>();
@@ -221,11 +242,16 @@ public sealed class Launcher
 
         // Publish the motion tokens before any window exists: they gate EVERY animation (the splash's
         // rock/spin/nod and the micro-animation behaviors all read the AnimationIntensity resource, and
-        // an unpublished token reads as 0 — motion off). The future Settings panel re-publishes live as
-        // the intensity slider moves.
+        // an unpublished token reads as 0 — motion off). The Settings window re-publishes live as the
+        // intensity value is edited.
         MotionTokens.Publish(services.GetRequiredService<SettingsManager>().Editor.Accessibility.AnimationIntensity);
 
         var log = services.GetRequiredService<Logger>();
+
+        // From here on no crash is silent: UI exceptions log and are survived, fatal ones leave a
+        // synchronous crash file beside the logs.
+        CrashGuard.Install(log);
+
         foreach (var warning in theme.LoadWarnings)
             log.Warning(warning);
 

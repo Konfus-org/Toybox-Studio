@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="AppHosting/AppHosting.csproj" />
+  <Project Path="AssetOwners/AssetOwners.csproj" />
   <Project Path="Assets/Assets.csproj" />
   <Project Path="Behaviors/Behaviors.csproj" />
   <Project Path="CMake/CMake.csproj" />
@@ -10,11 +11,14 @@
   <Project Path="Input/Input.csproj" />
   <Project Path="Launcher/Launcher.csproj" Id="2aacafed-e699-4184-a23e-fbbcb1996fad" />
   <Project Path="Logging/Logging.csproj" />
+  <Project Path="MenuBar/MenuBar.csproj" />
   <Project Path="Overlays/Overlays.csproj" />
   <Project Path="Projects/Projects.csproj" />
+  <Project Path="PropertyGrid/PropertyGrid.csproj" />
   <Project Path="Resources/Resources.csproj" />
   <Project Path="Rpc/Rpc.csproj" />
   <Project Path="Settings/Settings.csproj" />
+  <Project Path="SettingsEditor/SettingsEditor.csproj" />
   <Project Path="Shell/App.csproj" />
   <Project Path="Status/Status.csproj" />
   <Project Path="Themes/Themes.csproj" />

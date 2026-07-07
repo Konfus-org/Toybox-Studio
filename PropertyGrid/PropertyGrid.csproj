@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The generic property grid: a PropertyGridViewModel renders the PropertyNode rows a supplied
+       IPropertyNodeFactory composes, each row four slots — [left][value][right][indicator] — filled
+       with slot view-models (value editor, state indicator, list affordances), a view per slot
+       occupant. ReflectionPropertyNodeFactory is the built-in factory over plain CLR object graphs
+       (the Settings window's). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+  </ItemGroup>
+
+</Project>

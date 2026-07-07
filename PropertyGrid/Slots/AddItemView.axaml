@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.AddItemView"
+             x:DataType="local:AddItemViewModel">
+    <Button Classes="Basic" Padding="2" VerticalAlignment="Center"
+            Command="{Binding AddCommand}" ToolTip.Tip="Add an element">
+        <icons:IconView Kind="Plus" Width="12" Height="12"
+                        Foreground="{DynamicResource ThemeSuccessBrush}"/>
+    </Button>
+</UserControl>

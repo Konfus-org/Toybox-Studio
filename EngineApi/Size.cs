@@ -1,4 +1,4 @@
-namespace Toybox.Studio.Ecs;
+namespace Toybox.Studio.EngineApi;
 
 /// <summary>A width/height pair, mirroring the engine's <c>Size</c>.</summary>
 public readonly record struct Size(int Width, int Height)

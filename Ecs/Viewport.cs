@@ -1,4 +1,5 @@
 using System.Numerics;
+using Toybox.Studio.EngineApi;
 
 namespace Toybox.Studio.Ecs;
 

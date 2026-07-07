@@ -1,15 +1,22 @@
 using Newtonsoft.Json;
+using Toybox.Studio.Assets;
+using Toybox.Studio.Events;
 
 namespace Toybox.Studio.Settings;
 
 /// <summary>
-/// Owns the editor's persisted configuration for the app's lifetime. The <see cref="EditorSettings"/>
-/// data itself is plain; this manager does all the persistence — it loads EditorSettings.json from the
-/// user's .toybox folder once at construction (falling back to defaults, preserving an unreadable file
-/// as a *.corrupt breadcrumb) and writes it back on <see cref="SaveAsync"/>. Mutate the object graph
-/// under <see cref="Editor"/>, then save.
+/// Owns the editor's persisted configuration for the app's lifetime, in two halves. The editor half is
+/// plain data: <see cref="Editor"/> loads from EditorSettings.json in the user's .toybox folder once at
+/// construction (falling back to defaults, preserving an unreadable file as a *.corrupt breadcrumb) and
+/// writes back on <see cref="SaveAsync"/> — mutate the object graph, then save; each save dispatches one
+/// <see cref="EditorSettingsChanged"/>. The project half is an
+/// asset: <see cref="App"/> is the open project's <see cref="AppSettings"/> mirror, loaded from the
+/// asset catalog's <c>AppSettings.json</c> row as the engine connection comes up and dropped when it
+/// goes; edits push live like any asset's and persist through the asset's own
+/// <see cref="Asset.SaveAsync"/>. Each swap of <see cref="App"/> dispatches one
+/// <see cref="AppSettingsChanged"/>.
 /// </summary>
-public sealed class SettingsManager
+public sealed class SettingsManager : EventSubscriber, IEventHandler<AssetCatalogChanged>
 {
     /// <summary>
     /// The root .toybox folder under the user profile where all editor data lives (settings,
@@ -20,20 +27,47 @@ public sealed class SettingsManager
 
     private static readonly string FilePath = Path.Combine(BaseDirectory, "EditorSettings.json");
 
-    public SettingsManager() => Editor = Load();
+    public SettingsManager(EventDispatcher events) : base(events) => Editor = Load();
 
     public EditorSettings Editor { get; }
 
+    /// <summary>The open project's app settings asset, live while the catalog advertises it (the
+    /// engine connection is up); null otherwise. Await its <see cref="Asset.Loaded"/> to know the
+    /// values are hydrated.</summary>
+    public AppSettings? App { get; private set; }
+
+    /// <summary>Tracks the project's <c>AppSettings.json</c> through the catalog: the row appearing
+    /// (or changing identity) loads a fresh mirror, the listing emptying on disconnect drops it.</summary>
+    public void Handle(in AssetCatalogChanged evt)
+    {
+        var entry = evt.Entries.FirstOrDefault(candidate =>
+            string.Equals(candidate.Path, AppSettings.FileName, StringComparison.OrdinalIgnoreCase));
+        if (App?.Id == entry?.Id)
+            return;
+
+        // Detach the outgoing mirror so the hub doesn't keep routing to (or warn about) a settings
+        // object nobody holds anymore.
+        App?.Unbind();
+        App = entry is null ? null : new AppSettings(entry.Id);
+        Events.Dispatch(new AppSettingsChanged(App));
+    }
+
     /// <summary>
-    /// Writes the current settings back to EditorSettings.json without blocking the calling (UI) thread:
-    /// the JSON is serialized synchronously on the caller (a correct, race-free snapshot) and only the disk
-    /// write is awaited. Callers either <c>await</c> this (a future Settings panel) or fire-and-forget it
-    /// (the event-driven service writes — theme pick, recent-project list).
+    /// Writes the current editor settings back to EditorSettings.json without blocking the calling (UI)
+    /// thread: the JSON is serialized synchronously on the caller (a correct, race-free snapshot) and only
+    /// the disk write is awaited. Callers either <c>await</c> this (a future Settings panel) or
+    /// fire-and-forget it (the event-driven service writes — theme pick, recent-project list). Editing is
+    /// mutate-then-save, so the save is where the change becomes announceable: each call dispatches one
+    /// <see cref="EditorSettingsChanged"/> — on the caller's thread, before the disk write, since the
+    /// in-memory values consumers react to have changed whether or not the write succeeds. The project's
+    /// <see cref="App"/> asset persists separately, through its own <see cref="Asset.SaveAsync"/>.
     /// </summary>
     public async Task SaveAsync()
     {
-        Directory.CreateDirectory(BaseDirectory);
         var json = JsonConvert.SerializeObject(Editor, Formatting.Indented);
+        Events.Dispatch(new EditorSettingsChanged(Editor));
+
+        Directory.CreateDirectory(BaseDirectory);
         await File.WriteAllTextAsync(FilePath, json).ConfigureAwait(false);
     }
 

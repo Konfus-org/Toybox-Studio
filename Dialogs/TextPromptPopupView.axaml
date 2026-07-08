@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.Dialogs"
+             x:Class="Toybox.Studio.Dialogs.TextPromptPopupView"
+             x:DataType="local:TextPromptPopupViewModel">
+
+    <StackPanel Orientation="Horizontal" Spacing="14">
+        <icons:IconView Kind="Pencil" Foreground="{DynamicResource ThemeInfoBrush}"
+                        Width="30" Height="30" VerticalAlignment="Top"/>
+        <TextBox Text="{Binding Value}" PlaceholderText="{Binding Watermark}"
+                 MinWidth="320" VerticalAlignment="Center"/>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.Dialogs"
+             x:Class="Toybox.Studio.Dialogs.MessagePopupView"
+             x:DataType="local:MessagePopupViewModel">
+
+    <StackPanel Orientation="Horizontal" Spacing="14">
+        <Panel Width="30" Height="30" VerticalAlignment="Top">
+            <icons:IconView Kind="Info" Foreground="{DynamicResource ThemeInfoBrush}"
+                            IsVisible="{Binding IsInfo}"/>
+            <icons:IconView Kind="TriangleAlert" Foreground="{DynamicResource ThemeWarningBrush}"
+                            IsVisible="{Binding IsWarning}"/>
+            <icons:IconView Kind="CircleAlert" Foreground="{DynamicResource ThemeErrorBrush}"
+                            IsVisible="{Binding IsError}"/>
+        </Panel>
+        <!-- A long message scrolls rather than growing the non-resizable window until the buttons are
+             pushed off-screen. -->
+        <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
+                       VerticalAlignment="Center" MaxWidth="340"/>
+        </ScrollViewer>
+    </StackPanel>
+</UserControl>

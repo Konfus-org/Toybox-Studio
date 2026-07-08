@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:Toybox.Studio.Dialogs"
+        x:Class="Toybox.Studio.Dialogs.PopupWindow"
+        x:DataType="local:PopupViewModel"
+        Icon="avares://Toybox.Studio.Resources/Icons/Toybox.png"
+        Width="{Binding Width}" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Title="{Binding Title}">
+
+    <!-- The one popup host: the body view (resolved from the popup view-model by convention) above
+         the shared button row, so every popup gets identical chrome. -->
+    <Window.DataTemplates>
+        <local:PopupViewLocator/>
+    </Window.DataTemplates>
+
+    <StackPanel Margin="18" Spacing="16">
+        <ContentControl Content="{Binding}"/>
+
+        <ItemsControl ItemsSource="{Binding Buttons}" HorizontalAlignment="Right">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="8"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:PopupButton">
+                    <Button Content="{Binding Label}" MinWidth="80" Command="{Binding Command}"
+                            IsDefault="{Binding IsPrimary}" IsCancel="{Binding IsCancel}"
+                            Classes.action="{Binding IsPrimary}" Classes.toy="{Binding !IsPrimary}"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</Window>

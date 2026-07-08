@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.Dialogs"
+             x:Class="Toybox.Studio.Dialogs.ConfirmPopupView"
+             x:DataType="local:ConfirmPopupViewModel">
+
+    <StackPanel Orientation="Horizontal" Spacing="14">
+        <icons:IconView Kind="CircleQuestionMark" Foreground="{DynamicResource ThemeInfoBrush}"
+                        Width="30" Height="30" VerticalAlignment="Top"/>
+        <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <TextBlock Text="{Binding Message}" TextWrapping="Wrap"
+                       VerticalAlignment="Center" MaxWidth="360"/>
+        </ScrollViewer>
+    </StackPanel>
+</UserControl>

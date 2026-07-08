@@ -13,10 +13,10 @@ namespace Toybox.Studio.SettingsEditor;
 /// <see cref="EditorSettings"/> only on Save, which commits through
 /// <see cref="SettingsManager.ApplyEditorDraftAsync"/> (and so dispatches the usual
 /// <c>EditorSettingsChanged</c>). Closing without saving discards the draft and reverts the preview.
-/// The window's own lifetime is the opener's business (the menu bar); this only models
-/// open / edit / save / close.
+/// The panel's own lifetime is the workspace's business; this only models open / edit / save / close,
+/// hooked to the dock through <see cref="IDockAware"/>.
 /// </summary>
-public sealed class SettingsViewModel : AssetOwnerViewModel
+public sealed class SettingsViewModel : AssetOwnerViewModel, IDockAware
 {
     private readonly SettingsManager _settings;
     private EditorSettings? _draft;
@@ -42,7 +42,7 @@ public sealed class SettingsViewModel : AssetOwnerViewModel
         IsDirty = false;
     }
 
-    /// <summary>Discards the draft (the window closed) and reverts anything that live-previewed.</summary>
+    /// <summary>Discards the draft (the panel closed) and reverts anything that live-previewed.</summary>
     public void Close()
     {
         Grid.Show(null);
@@ -50,6 +50,10 @@ public sealed class SettingsViewModel : AssetOwnerViewModel
         IsDirty = false;
         MotionTokens.Publish(_settings.Editor.Accessibility.AnimationIntensity);
     }
+
+    void IDockAware.OnDockOpened() => Open();
+
+    void IDockAware.OnDockClosed() => Close();
 
     protected override async Task<Result> PersistAsync()
     {

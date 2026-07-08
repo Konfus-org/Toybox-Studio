@@ -68,9 +68,8 @@ internal static class ThemeTokenApplier
             resources["ThemeWellInsetShadow"] = new BoxShadows(
                 new BoxShadow { OffsetX = ox * 2, OffsetY = oy * 2, Blur = 4, Spread = 0, Color = Color.FromArgb(0x33, 0, 0, 0), IsInset = true },
                 [new BoxShadow { OffsetX = -ox * 2, OffsetY = -oy * 2, Blur = 4, Spread = 0, Color = Color.FromArgb(0xAA, 255, 255, 255), IsInset = true }]);
-            // Dark-only variant (no light highlight) for the numeric field's well: the white highlight of the
-            // full inset lands on the bottom-right corner exactly where the spinner arrows sit, reading as a
-            // weird halo over them — so the spinner border uses this softer, highlight-free press instead.
+            // Dark-only variant (no light highlight) for wells whose far corner carries other chrome the
+            // highlight would halo over — the slider track uses this softer, highlight-free press.
             resources["ThemeWellInsetSoftShadow"] = new BoxShadows(
                 new BoxShadow { OffsetX = ox * 2, OffsetY = oy * 2, Blur = 4, Spread = 0, Color = Color.FromArgb(0x2E, 0, 0, 0), IsInset = true });
             resources["ThemeCardShadow"] = new BoxShadows(

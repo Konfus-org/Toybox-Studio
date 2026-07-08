@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:grid="using:Toybox.Studio.PropertyGrid"
+             xmlns:local="using:Toybox.Studio.Dialogs"
+             x:Class="Toybox.Studio.Dialogs.FormPopupView"
+             x:DataType="local:FormPopupViewModel">
+
+    <ScrollViewer MaxHeight="480" VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <grid:PropertyGridView DataContext="{Binding Grid}"/>
+    </ScrollViewer>
+</UserControl>

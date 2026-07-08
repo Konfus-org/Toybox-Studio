@@ -15,11 +15,15 @@
     <ProjectReference Include="..\MenuBar\MenuBar.csproj" />
     <ProjectReference Include="..\Status\Status.csproj" />
     <ProjectReference Include="..\Viewport\Viewport.csproj" />
+    <ProjectReference Include="..\Workspaces\Workspaces.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Dock.Avalonia" />
+    <PackageReference Include="Dock.Avalonia.Themes.Fluent" />
+    <PackageReference Include="Dock.Model.Avalonia" />
   </ItemGroup>
 
   <ItemGroup>

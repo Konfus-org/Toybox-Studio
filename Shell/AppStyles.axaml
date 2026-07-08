@@ -19,12 +19,17 @@
 
     <StyleInclude Source="/Styles/DesignTokens.axaml"/>
 
+    <!-- Dock's control themes ship in their own package and are NOT bundled with FluentTheme; without
+         this include the DockControl has no templates. Loaded before our overrides below. -->
+    <StyleInclude Source="avares://Dock.Avalonia.Themes.Fluent/DockFluentTheme.axaml"/>
+
     <StyleInclude Source="/Styles/WindowStyle.axaml"/>
     <StyleInclude Source="/Styles/ShellStyle.axaml"/>
     <StyleInclude Source="/Styles/ButtonStyle.axaml"/>
     <StyleInclude Source="/Styles/InputStyle.axaml"/>
     <StyleInclude Source="/Styles/SliderStyle.axaml"/>
     <StyleInclude Source="/Styles/MenuStyle.axaml"/>
+    <StyleInclude Source="/Styles/DockStyle.axaml"/>
     <StyleInclude Source="/Styles/TabStyle.axaml"/>
     <StyleInclude Source="/Styles/SectionStyle.axaml"/>
 </Styles>

@@ -13,6 +13,24 @@
         </Style>
     </UserControl.Styles>
 
+    <UserControl.Resources>
+        <!-- The row theme the data-driven Window and Layout menus share: icon + title, the row's own
+             command. -->
+        <ControlTheme x:Key="WindowMenuItemTheme" TargetType="MenuItem" x:DataType="local:WindowMenuItem"
+                      BasedOn="{StaticResource {x:Type MenuItem}}">
+            <Setter Property="Header" Value="{Binding}"/>
+            <Setter Property="HeaderTemplate">
+                <DataTemplate x:DataType="local:WindowMenuItem">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <icons:IconView Kind="{Binding Icon}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </DataTemplate>
+            </Setter>
+            <Setter Property="Command" Value="{Binding OpenCommand}"/>
+        </ControlTheme>
+    </UserControl.Resources>
+
     <Menu>
         <MenuItem Header="Edit">
             <MenuItem Header="Settings" Command="{Binding OpenSettingsCommand}">
@@ -50,5 +68,11 @@
                 </MenuItem.Icon>
             </MenuItem>
         </MenuItem>
+        <!-- Data-driven: one row per registered [Dockable] (icon + title). -->
+        <MenuItem Header="Window" ItemsSource="{Binding WindowItems}"
+                  ItemContainerTheme="{StaticResource WindowMenuItemTheme}"/>
+        <!-- The dock-arrangement actions: save / load / reset. -->
+        <MenuItem Header="Layout" ItemsSource="{Binding LayoutItems}"
+                  ItemContainerTheme="{StaticResource WindowMenuItemTheme}"/>
     </Menu>
 </UserControl>

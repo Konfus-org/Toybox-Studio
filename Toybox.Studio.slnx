@@ -5,6 +5,7 @@
   <Project Path="Behaviors/Behaviors.csproj" />
   <Project Path="CMake/CMake.csproj" />
   <Project Path="Console/Console.csproj" />
+  <Project Path="Dialogs/Dialogs.csproj" />
   <Project Path="Ecs/Ecs.csproj" />
   <Project Path="EngineApi/EngineApi.csproj" />
   <Project Path="Generators/Generators.csproj" />
@@ -24,4 +25,5 @@
   <Project Path="Themes/Themes.csproj" />
   <Project Path="Utils/Utils.csproj" />
   <Project Path="Viewport/Viewport.csproj" />
+  <Project Path="Workspaces/Workspaces.csproj" />
 </Solution>

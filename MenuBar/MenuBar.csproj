@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The main window's menu bar: Edit ▸ Settings (the settings window), Build ▸ <project> in Debug/
-       Release and Build ▸ Engine (the checkout itself), Debug ▸ Attach To Running Build. -->
+  <!-- The main window's menu bar: Edit ▸ Settings (the settings dockable), Build ▸ <project> in Debug/
+       Release and Build ▸ Engine (the checkout itself), Debug ▸ Attach To Running Build, and the
+       auto-populated Window menu (one entry per registered [Dockable] plus the layout commands). -->
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
@@ -11,6 +12,7 @@
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
     <ProjectReference Include="..\Projects\Projects.csproj" />
     <ProjectReference Include="..\SettingsEditor\SettingsEditor.csproj" />
+    <ProjectReference Include="..\Workspaces\Workspaces.csproj" />
   </ItemGroup>
 
   <ItemGroup>

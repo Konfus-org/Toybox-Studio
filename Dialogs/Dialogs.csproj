@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The app's modal popup system: the Popups service opens themed modal dialogs over the main
+       window — message/confirm presets plus any custom popup composed as a PopupViewModel whose body
+       view is resolved by convention (XxxPopupViewModel → XxxPopupView). The form popup hosts a
+       property grid over an arbitrary draft object for ad-hoc structured input. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\PropertyGrid\PropertyGrid.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

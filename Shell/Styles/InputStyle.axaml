@@ -15,13 +15,14 @@
 
     <!-- Numeric fields are ONE toy well spanning the text and a pair of compact, flat up/down chevrons tucked
          at the right — the same slidable field used in the property grid (drag-to-scrub via NumericScrub) and
-         in dialogs. The well + inset shadow live on the ButtonSpinner's own border so they wrap the whole
-         control; the inner TextBox is stripped of its own border/inset so the two don't double up (this
-         overrides the generic TextBox inset rule above, hence it comes after it). -->
+         in dialogs. The well + inset shadow (the SAME full inset text boxes use, so mixed rows read as one
+         family) live on the ButtonSpinner's own border so they wrap the whole control; the inner TextBox is
+         stripped of its own border/inset so the two don't double up (this overrides the generic TextBox
+         inset rule above, hence it comes after it). -->
     <Style Selector="ButtonSpinner /template/ Border#border">
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
-        <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetSoftShadow}"/>
+        <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetShadow}"/>
     </Style>
     <Style Selector="NumericUpDown TextBox /template/ Border#PART_BorderElement">
         <Setter Property="Background" Value="Transparent"/>

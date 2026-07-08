@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:behaviors="using:Toybox.Studio.Behaviors"
+             xmlns:local="using:Toybox.Studio.Dialogs"
+             x:Class="Toybox.Studio.Dialogs.ListPickPopupView"
+             x:DataType="local:ListPickPopupViewModel">
+
+    <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}"
+             MaxHeight="360" MinHeight="120">
+        <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="local:ListPickItem">
+                <!-- Double-tapping a row picks it without a trip to the OK button. -->
+                <StackPanel Spacing="2" Background="Transparent"
+                            behaviors:DoubleTapCommandBehavior.Command="{Binding $parent[ListBox].((local:ListPickPopupViewModel)DataContext).PickCommand}">
+                    <TextBlock Text="{Binding Name}"/>
+                    <TextBlock Text="{Binding Detail}" Opacity="0.6" FontSize="11"
+                               IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+            </DataTemplate>
+        </ListBox.ItemTemplate>
+    </ListBox>
+</UserControl>

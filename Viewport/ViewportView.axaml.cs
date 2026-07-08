@@ -10,6 +10,7 @@ using Avalonia.Rendering.Composition;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Input;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Attributes;
 
 namespace Toybox.Studio.Viewport;
 
@@ -23,6 +24,8 @@ namespace Toybox.Studio.Viewport;
 /// texture fills the control, and so where the pointer lands on it) lives here too, view concerns
 /// both — before they flow on to the bound <see cref="ViewportViewModel"/>.
 /// </summary>
+[Dockable(Title = "Viewport", Icon = "Axis3d", Slot = DockSlot.Top, Singleton = false,
+    FloatWidth = 960, FloatHeight = 600)]
 public partial class ViewportView : UserControl, IInputSink
 {
     /// <summary>The engine view's shared GPU texture to show (bound to the view-model). Null clears.</summary>

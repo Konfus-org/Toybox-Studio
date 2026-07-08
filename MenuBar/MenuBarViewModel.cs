@@ -6,16 +6,19 @@ using Toybox.Studio.Logging;
 using Toybox.Studio.Projects;
 using Toybox.Studio.SettingsEditor;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Workspaces;
+using Icon = IconPacks.Avalonia.Lucide.PackIconLucideKind;
 
 namespace Toybox.Studio.MenuBar;
 
 /// <summary>
-/// The main menu's state and commands. Edit ▸ Settings opens the settings window (one at a time —
-/// reopening focuses it); Build ▸ compiles the open project in an explicit mode (its submenu is named
-/// after the project, so the menu reads as building THE app) or the engine checkout itself; Debug ▸
-/// attaches to an engine already running on the well-known port (e.g. one launched under a native
-/// debugger) instead of building and launching our own. Build commands disable while any compile runs,
-/// tracked through the dispatched <see cref="BuildStateChanged"/>.
+/// The main menu's state and commands. Edit ▸ Settings opens the settings dockable (focusing it when
+/// already open); Build ▸ compiles the open project in an explicit mode (its submenu is named after the
+/// project, so the menu reads as building THE app) or the engine checkout itself; Debug ▸ attaches to
+/// an engine already running on the well-known port (e.g. one launched under a native debugger) instead
+/// of building and launching our own; Window ▸ lists every registered dockable (auto-populated from the
+/// workspace — Settings opts out) plus the save/load/reset layout actions. Build commands disable while
+/// any compile runs, tracked through the dispatched <see cref="BuildStateChanged"/>.
 /// </summary>
 public sealed partial class MenuBarViewModel :
     ObservableEventSubscriber,
@@ -25,10 +28,9 @@ public sealed partial class MenuBarViewModel :
     private readonly ProjectBuilder _builder;
     private readonly EngineBuilder _engineBuilder;
     private readonly AppHost<Engine> _host;
-    private readonly SettingsViewModel _settings;
+    private readonly WorkspaceViewModel _workspace;
     private readonly Logger _log;
 
-    private SettingsWindow? _settingsWindow;
     private bool _isBuilding;
 
     public MenuBarViewModel(
@@ -36,7 +38,7 @@ public sealed partial class MenuBarViewModel :
         ProjectBuilder builder,
         EngineBuilder engineBuilder,
         AppHost<Engine> host,
-        SettingsViewModel settings,
+        WorkspaceViewModel workspace,
         Logger log,
         EventDispatcher events)
         : base(events)
@@ -45,11 +47,29 @@ public sealed partial class MenuBarViewModel :
         _builder = builder;
         _engineBuilder = engineBuilder;
         _host = host;
-        _settings = settings;
+        _workspace = workspace;
         _log = log;
-        // Cancel closes the window this menu opened; the Closed handler then discards the draft.
-        settings.CloseRequested += () => _settingsWindow?.Close();
+
+        // One entry per registered dockable (Settings opts out via ShowInWindowMenu — it lives under
+        // Edit). Built once: the registry is fixed after composition.
+        WindowItems = [.. workspace.All
+            .Where(descriptor => descriptor.ShowInWindowMenu)
+            .Select(descriptor => new WindowMenuItem(
+                descriptor.Title, descriptor.Icon, new RelayCommand(() => workspace.Open(descriptor))))];
+
+        LayoutItems =
+        [
+            new WindowMenuItem("Save Layout…", Icon.Save, workspace.SaveLayoutCommand),
+            new WindowMenuItem("Load Layout…", Icon.FolderOpen, workspace.LoadLayoutCommand),
+            new WindowMenuItem("Reset Layout", Icon.RotateCcw, workspace.ResetLayoutCommand),
+        ];
     }
+
+    /// <summary>The Window menu's rows: every listed dockable.</summary>
+    public IReadOnlyList<WindowMenuItem> WindowItems { get; }
+
+    /// <summary>The Layout menu's rows: save / load / reset the dock arrangement.</summary>
+    public IReadOnlyList<WindowMenuItem> LayoutItems { get; }
 
     /// <summary>The open project's name, heading its Build submenu. Read once the window binds — the
     /// launch flow loads the project long before the menu exists.</summary>
@@ -70,24 +90,7 @@ public sealed partial class MenuBarViewModel :
     private bool CanBuild => !_isBuilding;
 
     [RelayCommand]
-    private void OpenSettings()
-    {
-        if (_settingsWindow is not null)
-        {
-            _settingsWindow.Activate();
-            return;
-        }
-
-        _settings.Open();
-        var window = new SettingsWindow { DataContext = _settings };
-        window.Closed += (_, _) =>
-        {
-            _settings.Close();
-            _settingsWindow = null;
-        };
-        _settingsWindow = window;
-        window.Show();
-    }
+    private void OpenSettings() => _workspace.Open<SettingsViewModel>();
 
     [RelayCommand]
     private async Task AttachToRunningBuildAsync()

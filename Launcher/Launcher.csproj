@@ -29,6 +29,8 @@
     <ProjectReference Include="..\Viewport\Viewport.csproj" />
     <ProjectReference Include="..\MenuBar\MenuBar.csproj" />
     <ProjectReference Include="..\SettingsEditor\SettingsEditor.csproj" />
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\Workspaces\Workspaces.csproj" />
     <ProjectReference Include="..\Shell\App.csproj" />
   </ItemGroup>
 

@@ -24,9 +24,53 @@ public sealed class DockableAttribute : Attribute
     /// </summary>
     public Type? ViewModel { get; init; }
 
-    /// <summary>Width of the floating window when the dockable is opened standalone.</summary>
-    public double Width { get; init; } = 800;
+    /// <summary>The edge this dockable docks to in the default layout (or <see cref="DockSlot.Float"/>
+    /// to stay out of it) — see <see cref="DockSlot"/> for the edge semantics.</summary>
+    public DockSlot Slot { get; init; } = DockSlot.Float;
 
-    /// <summary>Height of the floating window when the dockable is opened standalone.</summary>
-    public double Height { get; init; } = 600;
+    /// <summary>
+    /// The dockable this one docks relative to, by its view-model type (the dockable identity). Null —
+    /// the default — anchors <see cref="Slot"/> to the main window; set, this dockable's dock splits
+    /// off the dock containing the parent on the <see cref="Slot"/> edge (e.g. an asset browser docked
+    /// <see cref="DockSlot.Bottom"/> of the viewport). Meaningless for <see cref="DockSlot.Float"/>.
+    /// </summary>
+    public Type? Parent { get; init; }
+
+    /// <summary>
+    /// Proportion of its dock row/column in the default layout. Left/Right set the column width,
+    /// Top/Bottom the center-column row heights, and a parented dockable the share it splits off its
+    /// parent's dock; the remainder goes to what it split from.
+    /// </summary>
+    public double Proportion { get; init; } = double.NaN;
+
+    /// <summary>Tie-breaker for ordering within a slot and in the Window menu (lower comes first).</summary>
+    public int Order { get; init; }
+
+    /// <summary>Width of the floating window a <see cref="DockSlot.Float"/> dockable opens as.</summary>
+    public double FloatWidth { get; init; } = 800;
+
+    /// <summary>Height of the floating window a <see cref="DockSlot.Float"/> dockable opens as.</summary>
+    public double FloatHeight { get; init; } = 600;
+
+    /// <summary>Screen X of the floating window; <see cref="double.NaN"/> (the default) centers it
+    /// over the main window.</summary>
+    public double FloatX { get; init; } = double.NaN;
+
+    /// <summary>Screen Y of the floating window; <see cref="double.NaN"/> (the default) centers it
+    /// over the main window.</summary>
+    public double FloatY { get; init; } = double.NaN;
+
+    /// <summary>
+    /// When <c>true</c> (the default), there is at most one of this dockable: opening it again focuses
+    /// the existing one. When <c>false</c>, every open spawns a fresh instance (its own view-model and
+    /// engine resources) — used by the viewport, where each panel drives a separate engine camera.
+    /// The workspace disposes a spawned view-model when its panel closes.
+    /// </summary>
+    public bool Singleton { get; init; } = true;
+
+    /// <summary>
+    /// Whether the dockable is listed in the auto-populated Window menu (the default). Settings turns
+    /// this off — it is opened from its own Edit ▸ Settings item instead.
+    /// </summary>
+    public bool ShowInWindowMenu { get; init; } = true;
 }

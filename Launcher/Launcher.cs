@@ -3,12 +3,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using Dock.Settings;
 using Microsoft.Extensions.DependencyInjection;
 using Toybox.Studio.AppHosting;
 using Toybox.Studio.Assets;
 using Toybox.Studio.Behaviors.Animations;
 using Toybox.Studio.CMake;
-using Toybox.Studio.Console;
+using Toybox.Studio.Dialogs;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
 using Toybox.Studio.Logging;
@@ -21,6 +22,7 @@ using Toybox.Studio.Status;
 using Toybox.Studio.Themes;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Viewport;
+using Toybox.Studio.Workspaces;
 
 namespace Toybox.Studio;
 
@@ -44,6 +46,9 @@ public sealed class Launcher
     // How long app exit waits for the hosted engine's graceful stop before it is killed.
     private static readonly TimeSpan EngineTeardownTimeout = TimeSpan.FromSeconds(15);
 
+    // How long app exit waits for the Closing-time layout save's file write before giving up on it.
+    private static readonly TimeSpan LayoutSaveTimeout = TimeSpan.FromSeconds(3);
+
     private readonly SettingsManager _settings;
     private readonly Project _project;
     private readonly ProjectLoader _projectLoader;
@@ -53,6 +58,9 @@ public sealed class Launcher
     private readonly MainWindowViewModel _mainViewModel;
     private readonly SplashViewModel _splashViewModel;
     private readonly SplashWindow _splash;
+
+    // The Closing-time layout save, awaited by Shutdown so the process doesn't exit under its write.
+    private Task _layoutSave = Task.CompletedTask;
 
     public Launcher(
         SettingsManager settings,
@@ -138,11 +146,10 @@ public sealed class Launcher
         services.AddSingleton<SettingsManager>();
         services.AddSingleton<ThemeManager>();
 
-        // Unified logging: TbxStudio.log plus the console view, with the engine console's colours
-        // tracking the active theme via the ThemeLogSource adapter.
+        // Unified logging: TbxStudio.log, with the engine console's colours tracking the active theme
+        // via the ThemeLogSource adapter.
         services.AddSingleton(sp =>
             new Logger(new LogFile(), new ThemeLogSource(sp.GetRequiredService<ThemeManager>())));
-        services.AddSingleton<ConsoleViewModel>();
 
         // The event bus every domain signal flows through — publishers dispatch typed structs,
         // handlers register; nobody holds anybody.
@@ -205,25 +212,61 @@ public sealed class Launcher
                 sp.GetRequiredService<EventDispatcher>());
         });
 
-        // The one 3D view: an editor-camera stream into the engine's world, filling the main window.
+        // The docking workspace: the catalog scans the feature assemblies for [Dockable] Views, and the
+        // composition root authors each panel's view-model factory here — view-models are never
+        // service-registered; a panel's lifetime belongs to the workspace. The viewport factory builds
+        // a fresh view-model per opened panel (each spawns its own editor-camera stream into the
+        // engine's world, disposed when the panel closes); Settings closes over one lazily-created
+        // instance, so its panel survives close/reopen. Popups is the app-wide modal service.
         services.AddSingleton(sp =>
         {
-            var viewport = new ViewportViewModel(
-                sp.GetRequiredService<EventDispatcher>(), sp.GetRequiredService<Logger>(), ViewKind.Editor);
-            viewport.Prepare(new ViewportStream(
-                sp.GetRequiredService<Engine>(), sp.GetRequiredService<EventDispatcher>(), ViewKind.Editor));
-            return viewport;
+            SettingsViewModel? settings = null;
+            return new DockableFactories()
+                .Add(() =>
+                {
+                    var viewport = new ViewportViewModel(
+                        sp.GetRequiredService<EventDispatcher>(), sp.GetRequiredService<Logger>(), ViewKind.Editor);
+                    viewport.Prepare(new ViewportStream(
+                        sp.GetRequiredService<Engine>(), sp.GetRequiredService<EventDispatcher>(), ViewKind.Editor));
+                    return viewport;
+                })
+                .Add(() => settings ??= new SettingsViewModel(sp.GetRequiredService<SettingsManager>()));
         });
+        services.AddSingleton(sp => new DockableCatalog(
+            sp.GetRequiredService<DockableFactories>(),
+            sp.GetRequiredService<Logger>(),
+            typeof(ViewportView).Assembly, typeof(SettingsView).Assembly));
+        services.AddSingleton<Popups>();
 
-        // The window view-models and the launch flow itself. (The project picker's view-model is the
-        // one construct built outside the container, in the flow: it needs the picker window's own
-        // storage provider for its Browse dialog.)
-        services.AddSingleton<StatusViewModel>();
-        services.AddSingleton<SettingsViewModel>();
-        services.AddSingleton<MenuBarViewModel>();
-        services.AddSingleton<MainWindowViewModel>();
-        services.AddSingleton<SplashViewModel>();
-        services.AddSingleton<Launcher>();
+        // The launch flow, carrying the window view-model graph it drives. View-models are composed
+        // here — parents construct (or receive) their children; none is a service, so no panel or
+        // window state is injectable. (The project picker's view-model is the one construct built
+        // later, in the flow: it needs the picker window's own storage provider for its Browse dialog.)
+        services.AddSingleton(sp =>
+        {
+            var workspace = new WorkspaceViewModel(
+                sp.GetRequiredService<DockableCatalog>(),
+                sp.GetRequiredService<Popups>(),
+                sp.GetRequiredService<Logger>());
+            var menuBar = new MenuBarViewModel(
+                sp.GetRequiredService<Project>(),
+                sp.GetRequiredService<ProjectBuilder>(),
+                sp.GetRequiredService<EngineBuilder>(),
+                sp.GetRequiredService<AppHost<Engine>>(),
+                workspace,
+                sp.GetRequiredService<Logger>(),
+                sp.GetRequiredService<EventDispatcher>());
+            var status = new StatusViewModel(sp.GetRequiredService<EventDispatcher>());
+            return new Launcher(
+                sp.GetRequiredService<SettingsManager>(),
+                sp.GetRequiredService<Project>(),
+                sp.GetRequiredService<ProjectLoader>(),
+                sp.GetRequiredService<ProjectFactory>(),
+                sp.GetRequiredService<EngineCoordinator>(),
+                sp.GetRequiredService<Logger>(),
+                new SplashViewModel(sp.GetRequiredService<EventDispatcher>()),
+                new MainWindowViewModel(menuBar, status, workspace));
+        });
 
         return services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
@@ -248,15 +291,18 @@ public sealed class Launcher
 
         var log = services.GetRequiredService<Logger>();
 
+        // Dock's own docking diagnostics flow into the studio log: a drag logs which drop control was
+        // considered and why adorners were (or weren't) shown, so a failing drag-and-drop names the
+        // check that rejected it instead of failing silently.
+        DockSettings.EnableDiagnosticsLogging = true;
+        DockSettings.DiagnosticsLogHandler = message => log.Info(message);
+
         // From here on no crash is silent: UI exceptions log and are survived, fatal ones leave a
         // synchronous crash file beside the logs.
         CrashGuard.Install(log);
 
         foreach (var warning in theme.LoadWarnings)
             log.Warning(warning);
-
-        var console = services.GetRequiredService<ConsoleViewModel>();
-        log.Logged += entry => console.Append(new ConsoleLine(entry.Message, SeverityOf(entry)));
 
         // Purely event-driven services nobody injects — resolved so they exist and subscribe.
         services.GetRequiredService<SyncHub>();
@@ -276,11 +322,23 @@ public sealed class Launcher
     /// </summary>
     private static void Shutdown(ServiceProvider services)
     {
+        var launcher = services.GetRequiredService<Launcher>();
+
+        // The workspace's open panel view-models go first: each viewport's view.stop needs the
+        // engine connection the teardown below closes. (The layout itself was already captured at
+        // MainWindow.Closing — by now the floating windows have closed and left the dock model —
+        // but its file write may still be in flight; see below.)
+        launcher.DisposeWorkspacePanels();
+
+        // Let the Closing-time layout save's write land before the process exits. Safe to block on:
+        // the layout was serialized synchronously in the Closing handler, and the store's remaining
+        // continuation is context-free (thread pool), so it can't need this (UI) thread.
+        launcher.CompleteLayoutSave();
+
         services.GetRequiredService<EngineCoordinator>().Dispose();
         services.GetRequiredService<OwnedAppWatchdog>().Dispose();
         services.GetRequiredService<AssetCatalog>().Dispose();
         services.GetRequiredService<SyncHub>().Dispose();
-        services.GetRequiredService<ViewportViewModel>().Dispose();
         // Run the async teardown on the thread pool: blocking the UI thread on code that resumes
         // via its SynchronizationContext would deadlock.
         Task.Run(async () =>
@@ -341,6 +399,12 @@ public sealed class Launcher
         // Show it behind the (topmost) splash, hand it the app's lifetime, then fade the splash down
         // into it.
         var mainWindow = new MainWindow { DataContext = _mainViewModel };
+        // The dock layout must be captured BEFORE the window starts closing: floating panels are OS
+        // windows owned by this one, and closing them (part of this window's close) removes them from
+        // the dock model — a save in Shutdown() would persist a layout with every float stripped.
+        // The save snapshots the layout synchronously here; the kept task is its in-flight file
+        // write, which Shutdown() waits out before the process exits.
+        mainWindow.Closing += (_, _) => _layoutSave = _mainViewModel.SaveLayoutAsync();
         desktop.MainWindow = mainWindow;
         mainWindow.Show();
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
@@ -420,8 +484,11 @@ public sealed class Launcher
         _settings.SaveAsync().FireAndForget();
     }
 
-    private static ConsoleSeverity SeverityOf(LogEntry entry) =>
-        entry.IsError ? ConsoleSeverity.Error
-        : entry.IsWarning ? ConsoleSeverity.Warning
-        : ConsoleSeverity.Normal;
+    /// <summary>Disposes every open panel view-model (each viewport's engine view stops). Run first in
+    /// shutdown, while the engine connection the disposals talk to is still up.</summary>
+    internal void DisposeWorkspacePanels() => _mainViewModel.Workspace.DisposeInstances();
+
+    /// <summary>Waits (bounded) for the Closing-time layout save's file write. The save never faults —
+    /// the store logs and swallows its own I/O errors — so this only ever times out.</summary>
+    internal void CompleteLayoutSave() => _layoutSave.Wait(LayoutSaveTimeout);
 }

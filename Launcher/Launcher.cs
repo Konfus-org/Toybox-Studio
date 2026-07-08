@@ -12,6 +12,7 @@ using Toybox.Studio.CMake;
 using Toybox.Studio.Dialogs;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
+using Toybox.Studio.Gizmos;
 using Toybox.Studio.Logging;
 using Toybox.Studio.MenuBar;
 using Toybox.Studio.Projects;
@@ -184,6 +185,10 @@ public sealed class Launcher
         // assets) binds here to push edits and receive the engine's sync.changed deltas.
         services.AddSingleton<SyncHub>();
 
+        // The editor's gizmo overlay: named retained drawing layers the engine renders over editor
+        // viewports; the hub owns them and re-pushes on every (re)connect.
+        services.AddSingleton<Gizmo>();
+
         // The asset domain: the catalog mirrors the engine's registered assets, refreshing itself as
         // the connection comes up. The asset lifecycle lives on the assets themselves (constructing
         // with an id loads; saving creates), wired to its services once via Asset.Configure in Boot.
@@ -306,6 +311,7 @@ public sealed class Launcher
 
         // Purely event-driven services nobody injects — resolved so they exist and subscribe.
         services.GetRequiredService<SyncHub>();
+        services.GetRequiredService<Gizmo>();
         services.GetRequiredService<AssetCatalog>();
         services.GetRequiredService<OwnedAppWatchdog>().Start();
 
@@ -338,6 +344,7 @@ public sealed class Launcher
         services.GetRequiredService<EngineCoordinator>().Dispose();
         services.GetRequiredService<OwnedAppWatchdog>().Dispose();
         services.GetRequiredService<AssetCatalog>().Dispose();
+        services.GetRequiredService<Gizmo>().Dispose();
         services.GetRequiredService<SyncHub>().Dispose();
         // Run the async teardown on the thread pool: blocking the UI thread on code that resumes
         // via its SynchronizationContext would deadlock.

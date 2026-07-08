@@ -9,6 +9,7 @@
   <Project Path="Ecs/Ecs.csproj" />
   <Project Path="EngineApi/EngineApi.csproj" />
   <Project Path="Generators/Generators.csproj" />
+  <Project Path="Gizmos/Gizmos.csproj" />
   <Project Path="Input/Input.csproj" />
   <Project Path="Launcher/Launcher.csproj" Id="2aacafed-e699-4184-a23e-fbbcb1996fad" />
   <Project Path="Logging/Logging.csproj" />

@@ -45,6 +45,11 @@ public static class EngineCommands
     public const string ViewPresented = "view.presented";
     public const string ViewInput = "view.input";
 
+    // The editor-authored gizmo overlay (the Gizmos project): retained named layers of drawing ops
+    // the engine replays into its gizmo renderer over editor viewports.
+    public const string GizmoSet = "gizmos.set";
+    public const string GizmoRemove = "gizmos.remove";
+
     // The launcher process's command-line switches and environment (see Engine.Launch).
     public const string AppArgument = "--app";
     public const string SettingsArgument = "--settings";

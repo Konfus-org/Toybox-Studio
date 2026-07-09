@@ -28,12 +28,14 @@
                 </DataTemplate>
             </Setter>
             <Setter Property="Command" Value="{Binding OpenCommand}"/>
+            <Setter Property="InputGesture" Value="{Binding Gesture}"/>
         </ControlTheme>
     </UserControl.Resources>
 
     <Menu>
         <MenuItem Header="Edit">
-            <MenuItem Header="Settings" Command="{Binding OpenSettingsCommand}">
+            <MenuItem Header="Settings" Command="{Binding OpenSettingsCommand}"
+                      InputGesture="{Binding SettingsGesture}">
                 <MenuItem.Icon>
                     <icons:IconView Kind="Settings"/>
                 </MenuItem.Icon>
@@ -44,25 +46,29 @@
                 <MenuItem.Icon>
                     <icons:IconView Kind="Hammer" Foreground="{DynamicResource ThemeSuccessBrush}"/>
                 </MenuItem.Icon>
-                <MenuItem Header="Debug" Command="{Binding BuildAppDebugCommand}">
+                <MenuItem Header="Debug" Command="{Binding BuildAppDebugCommand}"
+                          InputGesture="{Binding BuildAppDebugGesture}">
                     <MenuItem.Icon>
                         <icons:IconView Kind="Bug" Foreground="{DynamicResource ThemeWarningBrush}"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="Release" Command="{Binding BuildAppReleaseCommand}">
+                <MenuItem Header="Release" Command="{Binding BuildAppReleaseCommand}"
+                          InputGesture="{Binding BuildAppReleaseGesture}">
                     <MenuItem.Icon>
                         <icons:IconView Kind="Package" Foreground="{DynamicResource ThemeSuccessBrush}"/>
                     </MenuItem.Icon>
                 </MenuItem>
             </MenuItem>
-            <MenuItem Header="Engine" Command="{Binding BuildEngineCommand}">
+            <MenuItem Header="Engine" Command="{Binding BuildEngineCommand}"
+                      InputGesture="{Binding BuildEngineGesture}">
                 <MenuItem.Icon>
                     <icons:IconView Kind="Cog"/>
                 </MenuItem.Icon>
             </MenuItem>
         </MenuItem>
         <MenuItem Header="Debug">
-            <MenuItem Header="Attach To Running Build" Command="{Binding AttachToRunningBuildCommand}">
+            <MenuItem Header="Attach To Running Build" Command="{Binding AttachToRunningBuildCommand}"
+                      InputGesture="{Binding AttachGesture}">
                 <MenuItem.Icon>
                     <icons:IconView Kind="Plug" Foreground="{DynamicResource ThemeInfoBrush}"/>
                 </MenuItem.Icon>

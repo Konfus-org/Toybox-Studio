@@ -12,6 +12,7 @@ internal sealed class SyncedClass(
     string? addressExpression,
     string? engineMemberName,
     List<SyncedProperty> properties,
+    List<SyncedEvent> events,
     List<SyncedMethod> methods,
     List<DiagnosticInfo> diagnostics,
     bool emit)
@@ -39,6 +40,8 @@ internal sealed class SyncedClass(
     public string? EngineMemberName { get; } = engineMemberName;
 
     public List<SyncedProperty> Properties { get; } = properties;
+
+    public List<SyncedEvent> Events { get; } = events;
 
     public List<SyncedMethod> Methods { get; } = methods;
 

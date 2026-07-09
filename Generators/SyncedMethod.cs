@@ -10,6 +10,9 @@ internal sealed class SyncedMethod(
     string accessibility,
     string command,
     bool relay,
+    string? replyTypeDisplay,
+    string? replyReadCall,
+    string? converterDisplay,
     List<SyncedMethod.Parameter> parameters,
     List<SyncedExtra> extras)
 {
@@ -22,12 +25,27 @@ internal sealed class SyncedMethod(
     /// <summary>Also emit a bindable async command wrapping the method (view-model classes only).</summary>
     public bool Relay { get; } = relay;
 
+    /// <summary>The fully-qualified reply type of a <c>Task&lt;Result&lt;T&gt;&gt;</c> query; null for a
+    /// plain <c>Task&lt;Result&gt;</c> command.</summary>
+    public string? ReplyTypeDisplay { get; } = replyTypeDisplay;
+
+    /// <summary>The reply decode expression over the <c>token</c> parameter; null for commands.</summary>
+    public string? ReplyReadCall { get; } = replyReadCall;
+
+    /// <summary>The fully-qualified converter type decoding the reply, when the member overrides the
+    /// built-in codec.</summary>
+    public string? ConverterDisplay { get; } = converterDisplay;
+
+    public bool HasReply => ReplyTypeDisplay is not null;
+
     public List<Parameter> Parameters { get; } = parameters;
 
     public List<SyncedExtra> Extras { get; } = extras;
 
     public string? CancellationTokenName =>
         Parameters.FirstOrDefault(parameter => parameter.IsCancellationToken)?.Name;
+
+    public string ConverterFieldName => Name + "SyncConverter";
 
     public IEnumerable<Parameter> PayloadParameters =>
         Parameters.Where(parameter => !parameter.IsCancellationToken);

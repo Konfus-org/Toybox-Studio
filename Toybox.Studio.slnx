@@ -11,6 +11,8 @@
   <Project Path="Generators/Generators.csproj" />
   <Project Path="Gizmos/Gizmos.csproj" />
   <Project Path="Input/Input.csproj" />
+  <Project Path="Keybindings/Keybindings.csproj" />
+  <Project Path="KeybindingsEditor/KeybindingsEditor.csproj" />
   <Project Path="Launcher/Launcher.csproj" Id="2aacafed-e699-4184-a23e-fbbcb1996fad" />
   <Project Path="Logging/Logging.csproj" />
   <Project Path="MenuBar/MenuBar.csproj" />
@@ -24,7 +26,9 @@
   <Project Path="Shell/App.csproj" />
   <Project Path="Status/Status.csproj" />
   <Project Path="Themes/Themes.csproj" />
+  <Project Path="Toolbar/Toolbar.csproj" />
   <Project Path="Utils/Utils.csproj" />
   <Project Path="Viewport/Viewport.csproj" />
   <Project Path="Workspaces/Workspaces.csproj" />
+  <Project Path="Worlds/Worlds.csproj" />
 </Solution>

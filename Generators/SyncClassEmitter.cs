@@ -7,14 +7,17 @@ namespace Toybox.Studio.Generators;
 
 /// <summary>
 /// Writes one synced class's generated partial: the injected <c>EngineObject</c> base, per-property
-/// slots/fields/implementations, the inbound <c>Apply</c>/<c>WireKeyFor</c>/<c>WriteExtras</c>
-/// overrides, method bodies as engine commands, and relay command wrappers.
+/// slots/fields/implementations, per-event slots/accessors, the inbound
+/// <c>Apply</c>/<c>Raise</c>/<c>WireKeyFor</c>/<c>WriteExtras</c> overrides, method bodies as engine
+/// commands (with reply decoding for <c>Task&lt;Result&lt;T&gt;&gt;</c> queries), and relay command
+/// wrappers.
 /// </summary>
 internal static class SyncClassEmitter
 {
     private const string EngineObject = "global::Toybox.Studio.EngineApi.EngineObject";
     private const string EngineAddress = "global::Toybox.Studio.EngineApi.EngineAddress";
     private const string SyncSlot = "global::Toybox.Studio.EngineApi.SyncSlot";
+    private const string SyncEventSlot = "global::Toybox.Studio.EngineApi.SyncEventSlot";
     private const string SyncMode = "global::Toybox.Studio.EngineApi.SyncMode";
     private const string JToken = "global::Newtonsoft.Json.Linq.JToken";
     private const string JObject = "global::Newtonsoft.Json.Linq.JObject";
@@ -43,8 +46,10 @@ internal static class SyncClassEmitter
 
         EmitFields(source, model);
         EmitProperties(source, model);
+        EmitEvents(source, model);
         EmitMethods(source, model);
         EmitApply(source, model);
+        EmitRaise(source, model);
         EmitCollectInto(source, model);
         EmitWireKeyFor(source, model);
         EmitWriteExtras(source, model);
@@ -60,6 +65,14 @@ internal static class SyncClassEmitter
             source.Append("    private static readonly ").Append(property.ConverterDisplay).Append(' ')
                 .Append(property.ConverterFieldName).AppendLine(" = new();");
 
+        foreach (var synced in model.Events.Where(synced => synced.ConverterDisplay is not null))
+            source.Append("    private static readonly ").Append(synced.ConverterDisplay).Append(' ')
+                .Append(synced.ConverterFieldName).AppendLine(" = new();");
+
+        foreach (var method in model.Methods.Where(method => method.ConverterDisplay is not null))
+            source.Append("    private static readonly ").Append(method.ConverterDisplay).Append(' ')
+                .Append(method.ConverterFieldName).AppendLine(" = new();");
+
         foreach (var property in model.Properties)
         {
             source.Append("    private static readonly ").Append(SyncSlot).Append(' ')
@@ -73,7 +86,15 @@ internal static class SyncClassEmitter
             source.Append("        static token => ").Append(property.ReadCall).AppendLine(");");
         }
 
-        if (model.Properties.Count > 0)
+        foreach (var synced in model.Events)
+        {
+            source.Append("    private static readonly ").Append(SyncEventSlot).Append(' ')
+                .Append(synced.SlotName).AppendLine(" = new(");
+            source.Append("        ").Append(Quote(synced.Key)).AppendLine(",");
+            source.Append("        static token => ").Append(synced.ReadCall).AppendLine(");");
+        }
+
+        if (model.Properties.Count > 0 || model.Events.Count > 0)
             source.AppendLine();
 
         foreach (var property in model.Properties)
@@ -84,11 +105,21 @@ internal static class SyncClassEmitter
             source.AppendLine(";");
         }
 
+        foreach (var synced in model.Events)
+        {
+            var fieldType = synced.DelegateDisplay.EndsWith("?", System.StringComparison.Ordinal)
+                ? synced.DelegateDisplay
+                : synced.DelegateDisplay + "?";
+            source.Append("    private ").Append(fieldType).Append(' ')
+                .Append(synced.FieldName).AppendLine(";");
+        }
+
         foreach (var method in model.Methods.Where(method => method.Relay))
             source.Append("    private ").Append(RelayCommandType(method, iface: false))
                 .Append("? ").Append(RelayFieldName(method)).AppendLine(";");
 
-        if (model.Properties.Count > 0 || model.Methods.Any(method => method.Relay))
+        if (model.Properties.Count > 0 || model.Events.Count > 0
+            || model.Methods.Any(method => method.Relay))
             source.AppendLine();
     }
 
@@ -135,6 +166,22 @@ internal static class SyncClassEmitter
         }
     }
 
+    private static void EmitEvents(StringBuilder source, SyncedClass model)
+    {
+        foreach (var synced in model.Events)
+        {
+            source.Append("    ").Append(synced.Accessibility).Append(" partial event ")
+                .Append(synced.DelegateDisplay).Append(' ').AppendLine(synced.Name);
+            source.AppendLine("    {");
+            source.Append("        add => AddHandler(ref ").Append(synced.FieldName)
+                .Append(", value, ").Append(synced.SlotName).AppendLine(");");
+            source.Append("        remove => RemoveHandler(ref ").Append(synced.FieldName)
+                .Append(", value, ").Append(synced.SlotName).AppendLine(");");
+            source.AppendLine("    }");
+            source.AppendLine();
+        }
+    }
+
     private static void EmitMethods(StringBuilder source, SyncedClass model)
     {
         foreach (var method in model.Methods)
@@ -142,7 +189,10 @@ internal static class SyncClassEmitter
             var parameters = string.Join(
                 ", ",
                 method.Parameters.Select(parameter => parameter.TypeDisplay + " " + parameter.Name));
-            source.Append("    ").Append(method.Accessibility).Append(" partial ").Append(ResultTask)
+            var returnType = method.HasReply
+                ? $"global::System.Threading.Tasks.Task<global::Toybox.Studio.Utils.Result<{method.ReplyTypeDisplay}>>"
+                : ResultTask;
+            source.Append("    ").Append(method.Accessibility).Append(" partial ").Append(returnType)
                 .Append(' ').Append(method.Name).Append('(').Append(parameters).AppendLine(")");
             source.AppendLine("    {");
             source.Append("        var payload = ")
@@ -153,9 +203,21 @@ internal static class SyncClassEmitter
             foreach (var parameter in method.PayloadParameters)
                 source.Append("        payload[").Append(Quote(parameter.Key)).Append("] = ")
                     .Append(parameter.WriteCall).AppendLine(";");
-            var send = model.IsRooted ? "SendCommandAsync" : model.EngineMemberName + ".SendCommandAsync";
-            source.Append("        return ").Append(send).Append('(').Append(Quote(method.Command))
-                .Append(", payload, ").Append(method.CancellationTokenName ?? NoToken).AppendLine(");");
+            if (method.HasReply)
+            {
+                // Queries need the sync base's reply decoding; the parser guarantees IsRooted here.
+                source.Append("        return SendQueryAsync(").Append(Quote(method.Command))
+                    .Append(", payload, static token => (").Append(method.ReplyTypeDisplay).Append(')')
+                    .Append(method.ReplyReadCall).Append("!, ")
+                    .Append(method.CancellationTokenName ?? NoToken).AppendLine(");");
+            }
+            else
+            {
+                var send = model.IsRooted ? "SendCommandAsync" : model.EngineMemberName + ".SendCommandAsync";
+                source.Append("        return ").Append(send).Append('(').Append(Quote(method.Command))
+                    .Append(", payload, ").Append(method.CancellationTokenName ?? NoToken).AppendLine(");");
+            }
+
             source.AppendLine("    }");
             source.AppendLine();
         }
@@ -180,6 +242,30 @@ internal static class SyncClassEmitter
 
         source.AppendLine("            default:");
         source.AppendLine("                return base.Apply(key, value);");
+        source.AppendLine("        }");
+        source.AppendLine("    }");
+        source.AppendLine();
+    }
+
+    private static void EmitRaise(StringBuilder source, SyncedClass model)
+    {
+        if (model.Events.Count == 0)
+            return;
+
+        source.Append("    protected override bool Raise(string key, ").Append(JToken).AppendLine(" args)");
+        source.AppendLine("    {");
+        source.AppendLine("        switch (key)");
+        source.AppendLine("        {");
+        foreach (var synced in model.Events)
+        {
+            source.Append("            case ").Append(Quote(synced.Key)).AppendLine(":");
+            source.Append("                RaiseEvent(").Append(synced.FieldName).Append(", args, ")
+                .Append(synced.SlotName).AppendLine(");");
+            source.AppendLine("                return true;");
+        }
+
+        source.AppendLine("            default:");
+        source.AppendLine("                return base.Raise(key, args);");
         source.AppendLine("        }");
         source.AppendLine("    }");
         source.AppendLine();

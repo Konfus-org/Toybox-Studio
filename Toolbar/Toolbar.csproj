@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The viewport's movable overlay toolbar: the transform-tool radio buttons + snapping toggle
+       (action-driven — clicks publish the same EditorActionInvoked the keybindings do), dockable
+       against any viewport edge by dragging its grip; the edge persists with the dock layout. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Assets\Assets.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Worlds\Worlds.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+  </ItemGroup>
+
+</Project>

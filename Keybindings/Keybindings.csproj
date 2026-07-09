@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The editor's rebindable action layer: the ActionRegistry (every invokable editor action, with
+       its title/icon/default chords), the EditorKeymap (the actions' bindings as a real .inputmap —
+       the same asset format the engine loads for game input — stored in ~/.toybox), and the
+       KeybindingDispatcher that matches window key chords against the keymap and publishes
+       EditorActionInvoked through the event bus. Menus publish the same event, so keyboard and menu
+       are one invocation path. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Assets\Assets.csproj" />
+    <ProjectReference Include="..\Input\Input.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

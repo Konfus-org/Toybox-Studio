@@ -67,7 +67,8 @@
                     <icons:IconView Kind="{Binding Icon}" IsVisible="{Binding HasIcon}"
                                     Width="14" Height="14" VerticalAlignment="Center"
                                     Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
-                    <TextBlock Classes="label" Text="{Binding Label}" VerticalAlignment="Center"/>
+                    <TextBlock Classes="label" VerticalAlignment="Center"
+                               Text="{Binding Label, Converter={x:Static local:DisplayNameConverter.Instance}}"/>
                 </StackPanel>
                 <TextBlock Grid.Column="4" Text="{Binding Detail}" VerticalAlignment="Center" Margin="0,0,8,0"
                            IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -85,7 +86,8 @@
             <Grid ColumnDefinitions="Auto,150,1,*,Auto">
                 <ContentControl Grid.Column="0" Content="{Binding Left}" VerticalAlignment="Center"
                                 Margin="0,0,4,0"/>
-                <TextBlock Grid.Column="1" Classes="label" Text="{Binding Label}" VerticalAlignment="Center"
+                <TextBlock Grid.Column="1" Classes="label" VerticalAlignment="Center"
+                           Text="{Binding Label, Converter={x:Static local:DisplayNameConverter.Instance}}"
                            Margin="4,0,8,0" TextTrimming="CharacterEllipsis"/>
                 <Rectangle Grid.Column="2" Width="1" Fill="{DynamicResource ThemeGrooveBrush}" Margin="0,3"/>
                 <ContentControl Grid.Column="3" Content="{Binding Value}" VerticalAlignment="Center"

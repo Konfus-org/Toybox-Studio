@@ -8,8 +8,9 @@ namespace Toybox.Studio.EngineApi;
 /// it as the base type of any class opted in with <see cref="EngineSyncAttribute"/>. It carries the sync
 /// plumbing the generated members call into: <see cref="Push{T}"/> behind property setters (notify, then
 /// schedule the edit per its <see cref="SyncMode"/>), <see cref="Hydrate{T}"/> behind inbound applies
-/// (write the field directly — never through the setter, so an engine change can't echo back), and the
-/// command seam generated methods send through.
+/// (write the field directly — never through the setter, so an engine change can't echo back), the
+/// command/query seams generated methods send through, and the accessor/raise plumbing behind partial
+/// events (engine → studio callbacks, streamed only while subscribed).
 ///
 /// An object is inert until <see cref="Bind"/> hands it the <see cref="SyncHub"/>: unbound pushes just
 /// update the local value (which is what makes constructor defaults safe). <see cref="Address"/> is the
@@ -20,6 +21,10 @@ namespace Toybox.Studio.EngineApi;
 public abstract class EngineObject : IListenable, ISerializable
 {
     private SyncHub? _hub;
+
+    // The event slots that currently have handlers, kept so Bind can replay the subscriptions — the
+    // engine only streams raises someone is listening to (see AddHandler/RemoveHandler).
+    private List<SyncEventSlot>? _subscribedEvents;
 
     /// <summary>Raised after any synced value changes, from either side. Raised on the setter's thread
     /// for local edits and on the UI thread for engine-applied ones.</summary>
@@ -50,14 +55,24 @@ public abstract class EngineObject : IListenable, ISerializable
         Unbind();
         _hub = hub;
         hub.Register(this);
+        if (_subscribedEvents is { } subscribed)
+            foreach (var slot in subscribed)
+                SendSubscription(hub, EngineCommands.SyncSubscribe, slot);
     }
 
-    /// <summary>Disconnects the object: pending pushes are dropped and further edits stay local.</summary>
+    /// <summary>Disconnects the object: pending pushes are dropped, further edits stay local, and the
+    /// engine stops streaming this object's event raises.</summary>
     public void Unbind()
     {
         var hub = _hub;
         _hub = null;
-        hub?.Unregister(this);
+        if (hub is null)
+            return;
+
+        if (_subscribedEvents is { } subscribed)
+            foreach (var slot in subscribed)
+                SendSubscription(hub, EngineCommands.SyncUnsubscribe, slot);
+        hub.Unregister(this);
     }
 
     /// <summary>Sends every staged edit — <see cref="SyncMode.Manual"/> values and any batched push
@@ -80,7 +95,7 @@ public abstract class EngineObject : IListenable, ISerializable
         if (!reply)
             return Result.Fail(reply.Error!);
 
-        if (reply.Value is { } value)
+        if (WireValue.Unwrap(reply.Value) is { } value)
             Apply(key, value);
         return Result.Ok();
     }
@@ -106,9 +121,14 @@ public abstract class EngineObject : IListenable, ISerializable
             return Result.Fail(reply.Error!);
 
         if (reply.Value is { } body)
+        {
+            // The engine's describe wraps each field in its typed envelope; the slot readers want
+            // the bare value.
             foreach (var (key, value) in body)
-                if (value is not null)
-                    Apply(key, value);
+                if (WireValue.Unwrap(value) is { } bare)
+                    Apply(key, bare);
+        }
+
         return Result.Ok();
     }
 
@@ -133,12 +153,16 @@ public abstract class EngineObject : IListenable, ISerializable
     public void Deserialize(JObject body)
     {
         foreach (var (key, value) in body)
-            if (value is not null)
-                Apply(key, value);
+            if (WireValue.Unwrap(value) is { } bare)
+                Apply(key, bare);
     }
 
     /// <summary>One inbound engine change, routed here by the hub on the UI thread.</summary>
-    internal void ApplyFromEngine(string key, JToken value) => Apply(key, value);
+    internal void ApplyFromEngine(string key, JToken value) =>
+        Apply(key, WireValue.Unwrap(value) ?? value);
+
+    /// <summary>One inbound engine event raise, routed here by the hub on the UI thread.</summary>
+    internal void RaiseFromEngine(string key, JToken args) => Raise(key, args);
 
     /// <summary>
     /// The generated setter body: updates the field, notifies, and — when bound — schedules the push per
@@ -183,9 +207,52 @@ public abstract class EngineObject : IListenable, ISerializable
     {
     }
 
+    /// <summary>
+    /// The generated add-accessor body for a synced event: the first handler subscribes the event with
+    /// the engine — immediately when bound, recorded and replayed by <see cref="Bind"/> otherwise — so
+    /// the engine only streams raises someone is listening to.
+    /// </summary>
+    protected void AddHandler<T>(ref Action<T>? field, Action<T>? value, SyncEventSlot slot)
+    {
+        var wasEmpty = field is null;
+        field += value;
+        if (!wasEmpty || field is null)
+            return;
+
+        (_subscribedEvents ??= []).Add(slot);
+        if (_hub is { } hub)
+            SendSubscription(hub, EngineCommands.SyncSubscribe, slot);
+    }
+
+    /// <summary>The generated remove-accessor body: the last handler leaving unsubscribes.</summary>
+    protected void RemoveHandler<T>(ref Action<T>? field, Action<T>? value, SyncEventSlot slot)
+    {
+        var hadHandlers = field is not null;
+        field -= value;
+        if (!hadHandlers || field is not null)
+            return;
+
+        _subscribedEvents?.Remove(slot);
+        if (_hub is { } hub)
+            SendSubscription(hub, EngineCommands.SyncUnsubscribe, slot);
+    }
+
+    /// <summary>The generated raise body for one event: decodes the args and invokes the handlers.</summary>
+    protected static void RaiseEvent<T>(Action<T>? handlers, JToken args, SyncEventSlot slot)
+    {
+        if (handlers is null)
+            return;
+
+        handlers((T)slot.Read(args)!);
+    }
+
     /// <summary>Routes one inbound wire key to its property (generated override; chains to the base so
     /// an inheritance chain applies end to end). True when the key was recognized.</summary>
     protected virtual bool Apply(string key, JToken value) => false;
+
+    /// <summary>Routes one inbound event raise to its event (generated override; chains to the base so
+    /// an inheritance chain raises end to end). True when the key was recognized.</summary>
+    protected virtual bool Raise(string key, JToken args) => false;
 
     /// <summary>Collects the synced, non-Mirror property values into <paramref name="body"/> (generated
     /// override; chains to the base so an inheritance chain serializes end to end).</summary>
@@ -208,6 +275,20 @@ public abstract class EngineObject : IListenable, ISerializable
         _hub is { } hub
             ? hub.Engine.SendCommandAsync(command, payload, ct)
             : Task.FromResult(Result.Fail("The object is not bound to the engine."));
+
+    /// <summary>Sends an engine query and decodes its reply (generated typed-reply method bodies call
+    /// this); a failure when unbound or when the engine sends no reply value.</summary>
+    protected async Task<Result<T>> SendQueryAsync<T>(
+        string command, JObject payload, Func<JToken, T> read, CancellationToken ct)
+    {
+        if (_hub is not { } hub)
+            return Result<T>.Fail("The object is not bound to the engine.");
+
+        var reply = await hub.Engine.SendCommandAsync<JToken>(command, payload, ct).ContinueOnAnyContext();
+        return reply is { Success: true, Value: { } value }
+            ? Result<T>.Ok(read(value))
+            : Result<T>.Fail(reply.Error ?? "The engine sent no reply.");
+    }
 
     /// <summary>A fresh outbound payload carrying the object's <see cref="Address"/> (when it has one).</summary>
     protected JObject CreatePayload()
@@ -234,5 +315,15 @@ public abstract class EngineObject : IListenable, ISerializable
         payload["key"] = slot.Key;
         payload["value"] = value;
         return payload;
+    }
+
+    // Subscription changes are fire-and-forget notifications: there is nothing to await in an event
+    // accessor, and a lost subscribe self-heals on the next Bind (the engine drops its table per
+    // connection anyway).
+    private void SendSubscription(SyncHub hub, string command, SyncEventSlot slot)
+    {
+        var payload = CreatePayload();
+        payload["key"] = slot.Key;
+        _ = hub.Engine.SendNotificationAsync(command, payload);
     }
 }

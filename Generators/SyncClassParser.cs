@@ -35,7 +35,7 @@ internal static class SyncClassParser
             return true;
 
         foreach (var member in declaration.Members)
-            if (member is PropertyDeclarationSyntax or MethodDeclarationSyntax
+            if (member is PropertyDeclarationSyntax or MethodDeclarationSyntax or EventFieldDeclarationSyntax
                 && HasEngineSyncName(member.AttributeLists))
                 return true;
 
@@ -66,7 +66,8 @@ internal static class SyncClassParser
             diagnostics.Add(new DiagnosticInfo(
                 SyncDiagnostics.ClassNotPartial, declaration.Identifier.GetLocation(), symbol.Name));
             return Model(
-                symbol, injectBase: false, isRooted: false, null, null, [], [], diagnostics, emit: false);
+                symbol, injectBase: false, isRooted: false, null, null, [], [], [], diagnostics,
+                emit: false);
         }
 
         var baseType = symbol.BaseType;
@@ -77,6 +78,7 @@ internal static class SyncClassParser
 
         var defaults = SyncAttributeConfig.ClassDefaults(symbol);
         var properties = new List<SyncedProperty>();
+        var events = new List<SyncedEvent>();
         var methods = new List<SyncedMethod>();
 
         foreach (var (member, config) in SyncedMembers(symbol))
@@ -95,6 +97,19 @@ internal static class SyncClassParser
 
                     if (ParseProperty(symbol, property, merged, diagnostics) is { } parsedProperty)
                         properties.Add(parsedProperty);
+                    break;
+
+                case IEventSymbol synced:
+                    if (!isRooted)
+                    {
+                        diagnostics.Add(new DiagnosticInfo(
+                            SyncDiagnostics.BaseConflict, Location(synced), symbol.Name,
+                            baseType!.ToDisplayString()));
+                        continue;
+                    }
+
+                    if (ParseEvent(synced, merged, diagnostics) is { } parsedEvent)
+                        events.Add(parsedEvent);
                     break;
 
                 case IMethodSymbol method:
@@ -125,7 +140,7 @@ internal static class SyncClassParser
 
         return Model(
             symbol, injectBase, isRooted, addressExpression, engineMember,
-            properties, methods, diagnostics, emit: true);
+            properties, events, methods, diagnostics, emit: true);
     }
 
     private static SyncedProperty? ParseProperty(
@@ -207,6 +222,53 @@ internal static class SyncClassParser
             extras);
     }
 
+    // An event needs no command — it never pushes; inbound raises route by the object's address and the
+    // event's wire key. Only the delegate's payload type needs a codec (or the attribute's converter).
+    private static SyncedEvent? ParseEvent(
+        IEventSymbol synced, SyncAttributeConfig config, List<DiagnosticInfo> diagnostics)
+    {
+        if (!IsPartialDefinition(synced))
+        {
+            diagnostics.Add(new DiagnosticInfo(
+                SyncDiagnostics.MemberNotPartial, Location(synced), synced.Name, "event"));
+            return null;
+        }
+
+        if (synced.Type is not INamedTypeSymbol { Arity: 1 } delegateType
+            || delegateType.ConstructedFrom.ToDisplayString() != "System.Action<T>")
+        {
+            diagnostics.Add(new DiagnosticInfo(SyncDiagnostics.BadEventShape, Location(synced), synced.Name));
+            return null;
+        }
+
+        var payload = delegateType.TypeArguments[0];
+        string readCall;
+        string? converterDisplay = null;
+        if (config.Converter is { } converter)
+        {
+            converterDisplay = converter.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            readCall = $"{synced.Name}SyncEventConverter.Read(token)";
+        }
+        else if (WireCodecs.Find(payload) is { } codec)
+        {
+            readCall = codec.ReadInvocation("token");
+        }
+        else
+        {
+            diagnostics.Add(new DiagnosticInfo(
+                SyncDiagnostics.NoCodec, Location(synced), synced.Name, payload.ToDisplayString()));
+            return null;
+        }
+
+        return new SyncedEvent(
+            synced.Name,
+            AccessibilityText(synced.DeclaredAccessibility),
+            delegateType.ToDisplayString(FullyQualified),
+            config.Key ?? CamelCase(synced.Name),
+            converterDisplay,
+            readCall);
+    }
+
     private static SyncedMethod? ParseMethod(
         INamedTypeSymbol owner, IMethodSymbol method, SyncAttributeConfig config,
         bool isRooted, List<DiagnosticInfo> diagnostics)
@@ -224,10 +286,42 @@ internal static class SyncClassParser
             return null;
         }
 
+        string? replyTypeDisplay = null;
+        string? replyReadCall = null;
+        string? converterDisplay = null;
         if (method.ReturnType.ToDisplayString() != ResultTaskName)
         {
-            diagnostics.Add(new DiagnosticInfo(SyncDiagnostics.BadMethodShape, Location(method), method.Name));
-            return null;
+            // Not the fire-and-forget shape — a Task<Result<T>> query, or an error.
+            if (ReplyType(method.ReturnType) is not { } reply)
+            {
+                diagnostics.Add(new DiagnosticInfo(SyncDiagnostics.BadMethodShape, Location(method), method.Name));
+                return null;
+            }
+
+            // A query awaits its reply through the sync base; a foreign-based class has no seam for that.
+            if (!isRooted)
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    SyncDiagnostics.QueryNeedsSyncBase, Location(method), method.Name, owner.Name));
+                return null;
+            }
+
+            replyTypeDisplay = reply.ToDisplayString(FullyQualified);
+            if (config.Converter is { } converter)
+            {
+                converterDisplay = converter.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                replyReadCall = $"{method.Name}SyncConverter.Read(token)";
+            }
+            else if (WireCodecs.Find(reply) is { } codec)
+            {
+                replyReadCall = codec.ReadInvocation("token");
+            }
+            else
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    SyncDiagnostics.NoCodec, Location(method), method.Name, reply.ToDisplayString()));
+                return null;
+            }
         }
 
         var parameters = new List<SyncedMethod.Parameter>();
@@ -267,8 +361,18 @@ internal static class SyncClassParser
 
         var extras = ParseExtras(owner, method, config, diagnostics);
         return new SyncedMethod(
-            method.Name, AccessibilityText(method.DeclaredAccessibility), command, relay, parameters, extras);
+            method.Name, AccessibilityText(method.DeclaredAccessibility), command, relay,
+            replyTypeDisplay, replyReadCall, converterDisplay, parameters, extras);
     }
+
+    /// <summary>The <c>T</c> of a <c>Task&lt;Result&lt;T&gt;&gt;</c> return type; null for any other shape.</summary>
+    private static ITypeSymbol? ReplyType(ITypeSymbol returnType) =>
+        returnType is INamedTypeSymbol { Arity: 1 } task
+        && task.ConstructedFrom.ToDisplayString() == "System.Threading.Tasks.Task<TResult>"
+        && task.TypeArguments[0] is INamedTypeSymbol { Arity: 1 } result
+        && result.ConstructedFrom.ToDisplayString() == "Toybox.Studio.Utils.Result<T>"
+            ? result.TypeArguments[0]
+            : null;
 
     // Resolves the attribute's engineParams: a "key", value pair becomes a typed literal, a lone
     // nameof(Member) becomes a codec call over that sibling member, and "key=text" a string constant.
@@ -446,7 +550,7 @@ internal static class SyncClassParser
     {
         foreach (var member in type.GetMembers())
         {
-            if (member is not (IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary }))
+            if (member is not (IPropertySymbol or IEventSymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary }))
                 continue;
 
             if (SyncAttributeConfig.On(member) is { } config)
@@ -456,8 +560,8 @@ internal static class SyncClassParser
 
     private static SyncedClass Model(
         INamedTypeSymbol symbol, bool injectBase, bool isRooted, string? addressExpression,
-        string? engineMember, List<SyncedProperty> properties, List<SyncedMethod> methods,
-        List<DiagnosticInfo> diagnostics, bool emit)
+        string? engineMember, List<SyncedProperty> properties, List<SyncedEvent> events,
+        List<SyncedMethod> methods, List<DiagnosticInfo> diagnostics, bool emit)
     {
         var ns = symbol.ContainingNamespace.IsGlobalNamespace
             ? string.Empty
@@ -467,16 +571,23 @@ internal static class SyncClassParser
             : "<" + string.Join(", ", symbol.TypeParameters.Select(parameter => parameter.Name)) + ">";
         return new SyncedClass(
             ns, symbol.Name, typeParameters, injectBase, isRooted, addressExpression, engineMember,
-            properties, methods, diagnostics, emit);
+            properties, events, methods, diagnostics, emit);
     }
 
+    // A field-like event's declaring syntax is the variable declarator inside the event declaration,
+    // so the partial modifier lives two parents up.
     private static bool IsPartialDefinition(ISymbol member) =>
         member.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax()).Any(
-            syntax => syntax is PropertyDeclarationSyntax property
-                ? property.Modifiers.Any(SyntaxKind.PartialKeyword)
-                : syntax is MethodDeclarationSyntax method
-                    && method.Modifiers.Any(SyntaxKind.PartialKeyword)
-                    && method.Body is null && method.ExpressionBody is null);
+            syntax => syntax switch
+            {
+                PropertyDeclarationSyntax property => property.Modifiers.Any(SyntaxKind.PartialKeyword),
+                MethodDeclarationSyntax method => method.Modifiers.Any(SyntaxKind.PartialKeyword)
+                    && method.Body is null && method.ExpressionBody is null,
+                VariableDeclaratorSyntax declarator =>
+                    declarator.Parent?.Parent is EventFieldDeclarationSyntax declaration
+                    && declaration.Modifiers.Any(SyntaxKind.PartialKeyword),
+                _ => false,
+            });
 
     private static bool HasEngineSyncName(SyntaxList<AttributeListSyntax> lists)
     {

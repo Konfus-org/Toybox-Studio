@@ -1,10 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using Toybox.Studio.Ecs;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
 using Toybox.Studio.Logging;
 using Toybox.Studio.Input;
 using Toybox.Studio.AppHosting;
+using Toybox.Studio.Toolbar;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Toolbars;
 
 namespace Toybox.Studio.Viewport;
 
@@ -23,12 +26,15 @@ namespace Toybox.Studio.Viewport;
 /// </remarks>
 public sealed partial class ViewportViewModel :
     ObservableEventSubscriber,
+    IToolbarHost,
     IEventHandler<ConnectionChanged>,
     IEventHandler<EngineStateChanged>,
     IEventHandler<ViewSurfaceCreated>
 {
     private readonly Logger _logger;
     private readonly ViewKind _kind;
+    private readonly WorldSelection? _selection;
+    private readonly ViewportTapTracker _taps = new();
     private ViewportStream? _stream;
 
     // The engine's derived state, copied here on the (UI-thread) EngineStateChanged events so the
@@ -36,13 +42,28 @@ public sealed partial class ViewportViewModel :
     private EngineState _engineState = EngineState.Off;
 
     public ViewportViewModel(
-        EventDispatcher events, Logger logger, ViewKind kind, string emptyMessage = "No world loaded.")
+        EventDispatcher events,
+        Logger logger,
+        ViewKind kind,
+        string emptyMessage = "No world loaded.",
+        IReadOnlyList<ToolbarViewModel>? toolbars = null,
+        WorldSelection? selection = null)
         : base(events)
     {
         _logger = logger;
         _kind = kind;
+        _selection = selection;
         EmptyMessage = emptyMessage;
+        Toolbars = toolbars ?? [];
     }
+
+    /// <summary>The overlay toolbars (the transform tools, the render layers), empty for a viewport
+    /// kind without them (game, asset preview). The host composes them; this panel owns their
+    /// lifetimes and their layout-persisted placements.</summary>
+    public IReadOnlyList<ToolbarViewModel> Toolbars { get; }
+
+    /// <summary>The toolbars overlay only a live image (and only on a viewport that has them).</summary>
+    public bool ShowToolbars => HasFrames && Toolbars.Count > 0;
 
     /// <summary>
     /// Binds this viewport to a started engine view. The host owns creating the stream (by kind, or by
@@ -68,6 +89,7 @@ public sealed partial class ViewportViewModel :
     /// <summary>Whether a real frame is on screen — gates the host's overlays.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
+    [NotifyPropertyChangedFor(nameof(ShowToolbars))]
     public partial bool HasFrames { get; private set; }
 
     /// <summary>
@@ -100,15 +122,70 @@ public sealed partial class ViewportViewModel :
     public bool ShowEmptyGhost => (!HasFrames || InteropUnavailable) && !ShowLoadingGhost;
 
     /// <summary>
-    /// Streams a captured input snapshot (already pointer-mapped by the view) to the engine view.
-    /// A no-op until a stream is bound.
+    /// Streams a captured input snapshot (already pointer-mapped by the view) to the engine view (a
+    /// no-op until a stream is bound). A snapshot completing a tap also picks: the click-select
+    /// gesture, on a viewport composed with the editor's selection.
     /// </summary>
-    public void ForwardInput(InputSnapshot input) => _stream?.SendInput(input);
+    public void ForwardInput(InputSnapshot input)
+    {
+        if (_selection is not null && _taps.Track(input) is { } tap)
+            PickAsync(tap).FireAndForget();
+
+        _stream?.SendInput(input);
+    }
+
+    // Asks the engine what the tap hit, then lands the gesture on the shared WorldSelection (whose
+    // synced push lights the engine's selection outline and anchors the gizmo). A gizmo-handle tap is
+    // deliberate no-op territory: clearing would drop the gizmo mid-interaction.
+    private async Task PickAsync(ViewportTap tap)
+    {
+        if (_stream is null)
+            return;
+
+        var result = await _stream.PickAsync(tap.U, tap.V).ContinueOnAnyContext();
+        if (!result || result.Value is not { } pick)
+            return; // A dropped connection mid-click; nothing to select against.
+
+        if (pick.Gizmo)
+            return;
+
+        Dispatch.To(DispatchContext.UI, () => ApplyPick(pick.Id, tap));
+    }
+
+    private void ApplyPick(ulong? id, ViewportTap tap)
+    {
+        if (_selection is null)
+            return;
+
+        if (id is { } value)
+        {
+            if (tap.Toggle)
+                _selection.Toggle(value);
+            else if (tap.Additive)
+                _selection.Add(value);
+            else
+                _selection.Set(value);
+        }
+        else if (!tap.Toggle && !tap.Additive)
+        {
+            _selection.Clear();
+        }
+    }
+
+    /// <summary>The workspace hands in this panel's layout-persisted toolbar placements (see
+    /// <see cref="IToolbarHost"/>); idempotent across a restore's repeated attach passes.</summary>
+    public void BindToolbars(ToolbarDockStates states)
+    {
+        foreach (var toolbar in Toolbars)
+            toolbar.BindDockState(states.For(toolbar.Key, toolbar.DefaultEdge));
+    }
 
     public override void Dispose()
     {
         base.Dispose();
         DropStream();
+        foreach (var toolbar in Toolbars)
+            toolbar.Dispose();
     }
 
     public void Handle(in ConnectionChanged evt)

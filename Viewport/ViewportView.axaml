@@ -2,16 +2,21 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Viewport"
              xmlns:ghost="using:Toybox.Studio.Ghost"
+             xmlns:toolbar="using:Toybox.Studio.Toolbar"
              x:Class="Toybox.Studio.Viewport.ViewportView"
              x:DataType="local:ViewportViewModel"
              Surface="{Binding CurrentSurface}"
              InteropUnavailable="{Binding InteropUnavailable, Mode=OneWayToSource}">
 
     <!-- THE viewport control: the code-behind imports the engine view's shared GPU texture (zero copy)
-         into the SurfaceHost's composition visual, owns the cover-scaling mapping, and captures input
-         (via the input-binding behavior, with itself as the sink). The ghosts overlay it. -->
+         into the SurfaceHost's composition visual and owns the cover-scaling mapping. Input is
+         captured on the dedicated InputSurface (the input-binding behavior, with this control as the
+         sink) so the toolbar — a LATER SIBLING — never routes its clicks through the capture: clicking
+         a tool can't arm a camera drag or steal the pointer. The ghosts overlay in between. -->
     <Panel Background="Black">
         <Border x:Name="SurfaceHost" ClipToBounds="True"/>
+
+        <Border x:Name="InputSurface" Background="Transparent"/>
 
         <ghost:GhostView Message="{Binding EmptyMessage}" IsVisible="{Binding ShowEmptyGhost}"/>
 
@@ -19,5 +24,21 @@
         <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding ShowLoadingGhost}">
             <ghost:LoadingGhostView Message="{Binding LoadingMessage}"/>
         </Border>
+
+        <!-- The movable overlay toolbars, topmost so their buttons stay clickable over the image.
+             Each item fills the viewport region (a plain Panel items host) and aligns itself to its
+             own docked edge or corner via the ToolbarView's alignment bindings. -->
+        <ItemsControl ItemsSource="{Binding Toolbars}" IsVisible="{Binding ShowToolbars}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Panel/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="toolbar:ToolbarViewModel">
+                    <toolbar:ToolbarView/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </Panel>
 </UserControl>

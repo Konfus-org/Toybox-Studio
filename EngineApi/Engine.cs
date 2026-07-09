@@ -219,6 +219,9 @@ public sealed class Engine : OwnedApp,
     protected override Task OnDetachingAsync() =>
         State.IsPaused ? SetPausedAsync(false) : Task.CompletedTask;
 
+    /// <summary>Asks the engine to exit via the engine.shutdown RPC (bounded; best-effort).</summary>
+    protected override Task RequestShutdownAsync() => ShutdownAsync();
+
     /// <summary>The connection is gone: stop forwarding studio logs into it. The state fold resets the
     /// run flags itself when the connection change arrives.</summary>
     protected override void OnDisconnected()
@@ -245,6 +248,10 @@ public sealed class Engine : OwnedApp,
             EngineCommands.SyncChanged,
             (string address, string key, Newtonsoft.Json.Linq.JToken value) =>
                 Events.Dispatch(new SyncChanged(address, key, value)));
+        handlers.On(
+            EngineCommands.SyncEvent,
+            (string address, string key, Newtonsoft.Json.Linq.JToken args) =>
+                Events.Dispatch(new SyncEventRaised(address, key, args)));
     }
 
     // The allowed run-state transitions: play from editing, pause only while playing, resume or stop

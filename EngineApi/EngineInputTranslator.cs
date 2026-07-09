@@ -284,10 +284,12 @@ public static class EngineInputTranslator
     public static EngineInput Translate(InputSnapshot input) =>
         new(ButtonBits(input.Buttons), MoveKeyBits(input.Keys), WireKeys(input.Keys));
 
-    // Maps an Avalonia key to the engine's InputKey code, so forwarded game input matches what the
-    // engine's input manager reports for the physical key. Covers the keys games commonly read;
-    // unmapped keys return Unknown and are dropped.
-    private static InputKey Map(Key key) => key switch
+    /// <summary>
+    /// Maps an Avalonia key to the engine's InputKey code, so forwarded game input (and the editor's
+    /// keybinding dispatch, which shares the vocabulary) matches what the engine's input manager
+    /// reports for the physical key. Unmapped keys return Unknown and are dropped.
+    /// </summary>
+    public static InputKey Map(Key key) => key switch
     {
         // Letters: InputKey.A … InputKey.Z are contiguous, like Avalonia Key.A … Key.Z.
         >= Key.A and <= Key.Z => InputKey.A + (key - Key.A),
@@ -312,12 +314,34 @@ public static class EngineInputTranslator
         Key.Down => InputKey.Down,
         Key.Up => InputKey.Up,
 
+        Key.Insert => InputKey.Insert,
+        Key.Delete => InputKey.Delete,
+        Key.Home => InputKey.Home,
+        Key.End => InputKey.End,
+        Key.PageUp => InputKey.PageUp,
+        Key.PageDown => InputKey.PageDown,
+
+        // The OEM punctuation row, named by the US-layout glyph like the engine's scancodes.
+        Key.OemComma => InputKey.Comma,
+        Key.OemPeriod => InputKey.Period,
+        Key.OemMinus => InputKey.Minus,
+        Key.OemPlus => InputKey.Equals,
+        Key.OemQuestion => InputKey.Slash,
+        Key.OemSemicolon => InputKey.Semicolon,
+        Key.OemQuotes => InputKey.Apostrophe,
+        Key.OemOpenBrackets => InputKey.LeftBracket,
+        Key.OemCloseBrackets => InputKey.RightBracket,
+        Key.OemPipe => InputKey.Backslash,
+        Key.OemTilde => InputKey.Grave,
+
         Key.LeftCtrl => InputKey.LCtrl,
         Key.LeftShift => InputKey.LShift,
         Key.LeftAlt => InputKey.LAlt,
+        Key.LWin => InputKey.LGui,
         Key.RightCtrl => InputKey.RCtrl,
         Key.RightShift => InputKey.RShift,
         Key.RightAlt => InputKey.RAlt,
+        Key.RWin => InputKey.RGui,
 
         _ => InputKey.Unknown,
     };

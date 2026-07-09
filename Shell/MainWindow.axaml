@@ -6,10 +6,12 @@
         xmlns:dock="using:Dock.Avalonia.Controls"
         xmlns:dockModel="using:Dock.Model.Avalonia.Controls"
         xmlns:workspaces="using:Toybox.Studio.Workspaces"
+        xmlns:keybindings="using:Toybox.Studio.Keybindings"
         x:Class="Toybox.Studio.Shell.MainWindow"
         x:DataType="shell:MainWindowViewModel"
         Icon="avares://Toybox.Studio.Resources/Icons/Toybox.png"
         Title="{Binding Title}"
+        keybindings:KeybindingScope.Dispatcher="{Binding Keybindings}"
         Width="1440" Height="850">
 
     <DockPanel>

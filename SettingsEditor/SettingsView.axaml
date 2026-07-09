@@ -1,15 +1,15 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:owners="using:Toybox.Studio.AssetOwners"
-             xmlns:grid="using:Toybox.Studio.PropertyGrid"
              xmlns:local="using:Toybox.Studio.SettingsEditor"
              x:Class="Toybox.Studio.SettingsEditor.SettingsView"
              x:DataType="local:SettingsViewModel">
 
-    <!-- The owner chrome renders the body (resolved to the grid below) with Save/Cancel beneath it. -->
+    <!-- The owner chrome renders the body (the view-model itself, resolved to the tabbed grids
+         below) with Save/Cancel beneath it. -->
     <UserControl.DataTemplates>
-        <DataTemplate DataType="grid:PropertyGridViewModel">
-            <grid:PropertyGridView/>
+        <DataTemplate DataType="local:SettingsViewModel">
+            <local:SettingsBodyView/>
         </DataTemplate>
     </UserControl.DataTemplates>
 

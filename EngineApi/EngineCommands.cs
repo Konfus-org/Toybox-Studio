@@ -28,7 +28,19 @@ public static class EngineCommands
     public const string SyncReset = "sync.reset";
     public const string SyncIsDefault = "sync.isDefault";
 
+    // The engine-sync event channel (see EngineObject's partial events): subscribe/unsubscribe tell the
+    // engine which (address, key) raises to stream — driven by an event's first/last handler — and
+    // sync.event is the engine's inbound raise.
+    public const string SyncEvent = "sync.event";
+    public const string SyncSubscribe = "sync.subscribe";
+    public const string SyncUnsubscribe = "sync.unsubscribe";
+
     public const string ComponentSet = "component.set";
+
+    // The runtime physics surface: raycast is a typed-reply query; overlapScan requests a manual
+    // trigger scan by component address. The trigger/collider event raises ride the sync.event channel.
+    public const string PhysicsRaycast = "physics.raycast";
+    public const string PhysicsOverlapScan = "physics.overlapScan";
 
     public const string AssetSet = "asset.set";
     public const string AssetCreate = "asset.create";
@@ -45,10 +57,26 @@ public static class EngineCommands
     public const string ViewPresented = "view.presented";
     public const string ViewInput = "view.input";
 
+    // The transform gizmo (Worlds/GizmoTool): the active tool's editor-authored handle set + snap
+    // settings, pushed as one notification.
+    public const string ViewSetGizmo = "view.setGizmo";
+
+    // Viewport picking: the entity under a view's normalized point, or {gizmo: true} when the
+    // cursor is on a transform handle (neither select nor clear).
+    public const string ViewPick = "view.pick";
+
     // The editor-authored gizmo overlay (the Gizmos project): retained named layers of drawing ops
     // the engine replays into its gizmo renderer over editor viewports.
     public const string GizmoSet = "gizmos.set";
     public const string GizmoRemove = "gizmos.remove";
+
+    // The editor's entity selection (Ecs/WorldSelection): the selected-id set the engine highlights,
+    // pushed as one synced value.
+    public const string SelectionSet = "selection.set";
+
+    // The render layers (Worlds/RenderLayers): the collider wireframe modes, the post-processing
+    // toggle, and the render-stage debug view, pushed as one notification.
+    public const string EditorSetRenderLayers = "editor.setRenderLayers";
 
     // The launcher process's command-line switches and environment (see Engine.Launch).
     public const string AppArgument = "--app";

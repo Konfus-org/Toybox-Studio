@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The world/editor-session tools: the transform tool (GizmoTool) — the active gizmo mode +
+       snapping the viewport toolbar and keybindings drive — and the editor-authored transform-gizmo
+       handle sets (TransformGizmo) it pushes to the engine over view.setGizmo. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Assets\Assets.csproj" />
+    <ProjectReference Include="..\Gizmos\Gizmos.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

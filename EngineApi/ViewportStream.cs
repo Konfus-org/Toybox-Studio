@@ -80,6 +80,21 @@ public sealed class ViewportStream : EventSubscriber, IEventHandler<ConnectionCh
             _engine.StreamInput(name, input);
     }
 
+    /// <summary>
+    /// Picks the entity under the normalized image point (0..1, top-left origin) in this stream's
+    /// view — the click-select query. The engine answers with the nearest entity, a miss, or the
+    /// gizmo-handle flag (see <see cref="PickResult"/>).
+    /// </summary>
+    public async Task<Result<PickResult>> PickAsync(double u, double v)
+    {
+        if (_viewName is not { } name)
+            return Result<PickResult>.Fail("The engine view has not started.");
+
+        return await _engine
+            .SendCommandAsync<PickResult>(EngineCommands.ViewPick, new { View = name, U = u, V = v })
+            .ContinueOnAnyContext();
+    }
+
     public override void Dispose()
     {
         // The dispatcher outlives the stream, so the base's unregistration matters here — a registered

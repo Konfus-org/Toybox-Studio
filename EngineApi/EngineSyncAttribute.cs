@@ -7,7 +7,16 @@ namespace Toybox.Studio.EngineApi;
 /// the value mirroring the engine; a <see cref="SyncMode.Mirror"/> property is declared get-only (or
 /// with a private setter). On a <b>method</b> it generates the body as an engine command whose payload
 /// is the object's address plus the method's parameters — and with <see cref="Relay"/>, a bindable
-/// <c>FooCommand</c> alongside.
+/// <c>FooCommand</c> alongside. A method returning <c>Task&lt;Result&lt;T&gt;&gt;</c> is a query: the
+/// generated body awaits the engine's reply and decodes it into <c>T</c> (via the member's
+/// <see cref="Converter"/> or a built-in codec).
+///
+/// On an <b>event</b> (a partial event whose delegate is <c>Action&lt;T&gt;</c>) it generates the
+/// accessors and the inbound raise: the engine's <c>sync.event</c> notifications route to the event by
+/// the object's address and the member's <see cref="Key"/>, decoding the raise's args into <c>T</c>.
+/// Subscription is demand-driven — the first handler added sends <c>sync.subscribe</c> (replayed on
+/// every bind), the last removed sends <c>sync.unsubscribe</c> — so the engine only streams raises
+/// someone is listening to.
 ///
 /// On a <b>class</b> it sets the defaults that bare <c>[EngineSync]</c> members inherit, declares the
 /// object's wire identity (<see cref="Address"/>), and opts the class into the sync base: the generator
@@ -22,7 +31,8 @@ namespace Toybox.Studio.EngineApi;
 /// <c>nameof(Member)</c> for a sibling member whose current value rides along, and <c>"key=text"</c>
 /// for a string constant (a bare string pair would be ambiguous with member references).
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method)]
+[AttributeUsage(
+    AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Method | AttributeTargets.Event)]
 public sealed class EngineSyncAttribute : Attribute
 {
     /// <summary>A bare member marker: everything comes from the class-level defaults (and the

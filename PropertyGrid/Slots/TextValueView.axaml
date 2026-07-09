@@ -3,5 +3,7 @@
              xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
              x:Class="Toybox.Studio.PropertyGrid.Slots.TextValueView"
              x:DataType="local:TextValueViewModel">
-    <TextBox Text="{Binding Value}" IsReadOnly="{Binding IsReadOnly}"/>
+    <!-- Read-only values disable outright (grayed by the theme's disabled state), like every other
+         value editor — not the still-editable-looking TextBox read-only mode. -->
+    <TextBox Text="{Binding Value}" IsEnabled="{Binding !IsReadOnly}"/>
 </UserControl>

@@ -1,5 +1,7 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Toybox.Studio.Assets;
+using Toybox.Studio.Utils;
 using Toybox.Studio.Utils.Attributes;
 
 namespace Toybox.Studio.Settings;
@@ -19,9 +21,48 @@ public sealed class EditorSettings
 
     public ScriptingEditorSettings Scripting { get; set; } = new();
 
+    public GizmoEditorSettings Gizmos { get; set; } = new();
+
     public ThemeEditorSettings Theme { get; set; } = new();
 
     public AccessibilityEditorSettings Accessibility { get; set; } = new();
+
+    /// <summary>
+    /// The editor's keybindings, surfaced as a settings section so the grid reflects them like any
+    /// other data. NOT part of this file's persistence — the keymap lives in its own
+    /// <c>.inputmap</c> asset (the Keybindings layer's <c>EditorKeymap</c> owns it), and the
+    /// settings window fills this list for the grid session and commits it back on save. The
+    /// registry defines the editor's actions, so the list arrives read-only (no adding or removing
+    /// rows) and only each entry's chord is editable; project input map assets are the fully
+    /// editable surface.
+    /// </summary>
+    [JsonIgnore]
+    [Icon("Keyboard")]
+    public IReadOnlyList<Keybinding> Keybindings { get; set; } = [];
+}
+
+/// <summary>
+/// One editor action's binding, shaped for the settings grid: the action id it invokes (which also
+/// labels the row) beside the chord that triggers it — null is "unbound". The name is the registered
+/// action's identity, so it is construction-only and renders read-only; the chord is the editable
+/// part, through the chord capture editor like any <see cref="KeyChordInputControl"/> value. The
+/// action's registered default chord rides along (hidden) as the grid's reset/modified reference,
+/// supplied through <see cref="IDefaultSource"/>.
+/// </summary>
+public sealed class Keybinding(string name) : IDefaultSource
+{
+    /// <summary>The action id the chord invokes (an <c>InputAction</c> name in the keymap).</summary>
+    public string Name { get; } = name;
+
+    public KeyChordInputControl? Chord { get; set; }
+
+    /// <summary>The action's registered default chord — what the state dot compares against and
+    /// reset restores; null when the action ships unbound.</summary>
+    [Hidden]
+    public KeyChordInputControl? DefaultChord { get; init; }
+
+    object? IDefaultSource.CreateDefaults() =>
+        new Keybinding(Name) { Chord = DefaultChord, DefaultChord = DefaultChord };
 }
 
 /// <summary>
@@ -118,6 +159,28 @@ public sealed class ScriptingEditorSettings
 }
 
 /// <summary>
+/// The viewport transform gizmo's snapping: whether drags snap by default (the viewport toolbar's
+/// magnet toggle — the snap-hold key, Ctrl out of the box, momentarily inverts it) and the per-kind
+/// steps a snapped drag quantizes to.
+/// </summary>
+[Icon("Magnet")]
+public sealed class GizmoEditorSettings
+{
+    /// <summary>Snap gizmo drags to the steps below without holding the snap key (holding it then
+    /// gives a free drag).</summary>
+    public bool SnapEnabled { get; set; }
+
+    /// <summary>The translate grid step, in world units.</summary>
+    public double TranslateStep { get; set; } = 0.5;
+
+    /// <summary>The rotate step, in degrees.</summary>
+    public double RotateStepDegrees { get; set; } = 15;
+
+    /// <summary>The scale factor step.</summary>
+    public double ScaleStep { get; set; } = 0.1;
+}
+
+/// <summary>
 /// Accessibility / comfort preferences. Currently the global animation-intensity dial that scales the
 /// editor's micro-animations (button press, toggle tilt, typing wiggle) — see
 /// <c>Toybox.Studio.Behaviors.Animations.MotionTokens</c>. 0 turns motion off entirely; 1 is the most pronounced.
@@ -130,6 +193,13 @@ public sealed class AccessibilityEditorSettings
     /// The Settings window live-previews edits to it, so the motion is felt as the value moves.
     /// </summary>
     public double AnimationIntensity { get; set; } = 0.35;
+
+    /// <summary>
+    /// How thick the viewport transform-gizmo handles draw, as a multiplier (1 = the default slender
+    /// look; raise it for more visible handles). Purely visual — the pointer's grab distances are
+    /// unchanged.
+    /// </summary>
+    public double GizmoThickness { get; set; } = 1.0;
 }
 
 [Icon("Palette")]

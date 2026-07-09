@@ -109,10 +109,38 @@ public static class WireValue
             Channel(value["a"], 1f), Channel(value["r"], 0f), Channel(value["g"], 0f), Channel(value["b"], 0f));
     }
 
-    public static Handle ReadHandle(JToken? token) =>
-        token is JObject value
-            ? new Handle(ReadString(value["name"]), ReadUInt64(value["id"]))
-            : default;
+    public static Handle ReadHandle(JToken? token) => token switch
+    {
+        JObject value => new Handle(ReadString(value["name"]), ReadUInt64(value["id"])),
+        // The engine's serializer writes a handle as its bare id.
+        JValue { Type: JTokenType.Integer } id => new Handle("", id.Value<ulong>()),
+        _ => default,
+    };
+
+    /// <summary>
+    /// Looks a field up by its editor wire key, tolerating the engine's serialized dialect: the
+    /// snake_case spelling of the key, and the <c>{type/attributes, value}</c> envelope the typed
+    /// serializer wraps every field in. The returned token is the bare value (or null when absent),
+    /// so the lenient readers above apply as usual.
+    /// </summary>
+    public static JToken? Field(JToken? body, string key)
+    {
+        if (body is not JObject value)
+            return null;
+
+        return Unwrap(value[key] ?? value[ToSnakeCase(key)]);
+    }
+
+    /// <summary>Strips the engine's <c>{type/attributes/is_default, value}</c> field envelope; a
+    /// bare value (or an object that isn't an envelope) passes through untouched.</summary>
+    public static JToken? Unwrap(JToken? token) =>
+        token is JObject envelope
+        && envelope.ContainsKey("value")
+        && (envelope.ContainsKey("type")
+            || envelope.ContainsKey("attributes")
+            || envelope.ContainsKey("is_default"))
+            ? envelope["value"]
+            : token;
 
     public static TEnum ReadEnum<TEnum>(JToken? token, TEnum fallback = default) where TEnum : struct, Enum
     {

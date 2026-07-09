@@ -60,8 +60,10 @@ public partial class ViewportView : UserControl, IInputSink
     public ViewportView()
     {
         InitializeComponent();
-        // This control is its own input sink: snapshots arrive in ForwardInput below.
-        InputBindingBehavior.SetSink(this, this);
+        // The capture lives on the dedicated InputSurface (a sibling BELOW the toolbar overlay, so
+        // toolbar clicks never route through it); this control stays the sink — snapshots arrive in
+        // ForwardInput below. InputSurface fills the same panel, so snapshot bounds match this control.
+        InputBindingBehavior.SetSink(InputSurface, this);
     }
 
     public ViewSurfaceCreated? Surface

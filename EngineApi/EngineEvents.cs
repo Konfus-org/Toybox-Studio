@@ -25,3 +25,8 @@ public readonly record struct EngineStateChanged(EngineState State);
 /// (see <see cref="EngineAddress"/>), <see cref="Key"/> the property. The <see cref="SyncHub"/> routes
 /// it to whatever is bound under that address; fires on the RPC listener thread.</summary>
 public readonly record struct SyncChanged(string Address, string Key, JToken Value);
+
+/// <summary>The engine raised one synced event: <see cref="Address"/> identifies the owning object,
+/// <see cref="Key"/> the event, <see cref="Args"/> its payload. The <see cref="SyncHub"/> routes it to
+/// whatever is bound under that address; fires on the RPC listener thread.</summary>
+public readonly record struct SyncEventRaised(string Address, string Key, JToken Args);

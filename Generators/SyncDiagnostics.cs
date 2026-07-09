@@ -77,7 +77,8 @@ internal static class SyncDiagnostics
     public static readonly DiagnosticDescriptor BadMethodShape = new(
         "TBX009",
         "Engine-synced method has the wrong shape",
-        "'{0}' must return Task<Result> and take only payload parameters plus an optional CancellationToken",
+        "'{0}' must return Task<Result> or Task<Result<T>> and take only payload parameters plus an "
+        + "optional CancellationToken",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -102,6 +103,23 @@ internal static class SyncDiagnostics
         "TBX011",
         "Relay command supports at most one value parameter",
         "'{0}' sets Relay = true but takes more than one non-CancellationToken parameter; relay commands bind at most one",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor BadEventShape = new(
+        "TBX013",
+        "Engine-synced event has the wrong shape",
+        "'{0}' must be a partial event whose delegate is System.Action<T> (one payload parameter)",
+        Category,
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor QueryNeedsSyncBase = new(
+        "TBX014",
+        "Typed-reply methods belong on engine-synced objects",
+        "'{0}' returns Task<Result<T>> but '{1}' is not an engine-synced object; typed-reply queries "
+        + "need the sync base — move the method to a synced type",
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);

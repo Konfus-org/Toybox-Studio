@@ -10,6 +10,7 @@
     <ProjectReference Include="..\Logging\Logging.csproj" />
     <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
     <ProjectReference Include="..\Projects\Projects.csproj" />
     <ProjectReference Include="..\SettingsEditor\SettingsEditor.csproj" />
     <ProjectReference Include="..\Workspaces\Workspaces.csproj" />

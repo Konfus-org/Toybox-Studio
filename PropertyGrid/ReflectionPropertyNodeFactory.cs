@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using IconPacks.Avalonia.Lucide;
 using Toybox.Studio.PropertyGrid.Slots;
+using Toybox.Studio.Utils;
 using Toybox.Studio.Utils.Attributes;
 
 namespace Toybox.Studio.PropertyGrid;
@@ -15,7 +16,9 @@ namespace Toybox.Studio.PropertyGrid;
 /// reset) is fed by a parallel default instance of the target type when one can be constructed, so the
 /// edited graph never knows about the grid. Writes go straight back through the property setters —
 /// the host decides when the mutated graph commits (e.g. the settings' mutate-then-save). Value-type
-/// composites and shapes without an editor render as read-only text.
+/// composites and shapes without an editor render as read-only text. Domain leaf shapes the grid
+/// doesn't know (a keybinding chord, …) plug in as <see cref="IValueEditor"/>s — a matching editor
+/// wins over the built-ins and makes its type a leaf.
 /// </summary>
 public sealed class ReflectionPropertyNodeFactory : IPropertyNodeFactory
 {
@@ -23,10 +26,14 @@ public sealed class ReflectionPropertyNodeFactory : IPropertyNodeFactory
     // producing rows past this depth rather than hanging the grid.
     private const int MaxDepth = 8;
 
+    private readonly IValueEditor[] _editors;
+
+    public ReflectionPropertyNodeFactory(params IValueEditor[] editors) => _editors = editors;
+
     public IReadOnlyList<PropertyNode> CreateNodes(object target)
     {
         var path = new HashSet<object>(ReferenceEqualityComparer.Instance) { target };
-        return CreateMemberNodes(target, TryCreateDefault(target.GetType()), depth: 0, path);
+        return CreateMemberNodes(target, DefaultsFor(target), depth: 0, path);
     }
 
     private IReadOnlyList<PropertyNode> CreateMemberNodes(
@@ -49,7 +56,10 @@ public sealed class ReflectionPropertyNodeFactory : IPropertyNodeFactory
                 nodes.Add(node);
         }
 
-        return nodes;
+        // Plain rows read first, group bands (composites, lists) after — a leaf declared between two
+        // groups must not render sandwiched between their bands. The sort is stable, so declaration
+        // order holds within each half.
+        return [.. nodes.OrderBy(node => node.IsHeader)];
     }
 
     /// <summary>The property's node, or null when it has nothing to show (a composite whose members are
@@ -143,7 +153,9 @@ public sealed class ReflectionPropertyNodeFactory : IPropertyNodeFactory
             editor = CreateValueEditor(accessor, editType);
         else if (value is not null && !editType.IsValueType && path.Add(value))
         {
-            children = CreateMemberNodes(value, defaults: null, depth + 1, path);
+            // An element that carries its own defaults (IDefaultSource) gives its member rows the
+            // state adorner; a plain element has no parallel default instance to compare against.
+            children = CreateMemberNodes(value, ElementDefaultsFor(value), depth + 1, path);
             path.Remove(value);
         }
         else
@@ -172,11 +184,17 @@ public sealed class ReflectionPropertyNodeFactory : IPropertyNodeFactory
             : new PropertyValueAccessor(get, set);
     }
 
-    private static ValueViewModel CreateValueEditor(PropertyValueAccessor accessor, Type editType) =>
-        editType == typeof(bool) ? new BoolValueViewModel(accessor)
-        : editType.IsEnum ? new EnumValueViewModel(accessor, editType)
-        : NumericTypes.IsNumeric(editType) ? new NumberValueViewModel(accessor, editType)
-        : new TextValueViewModel(accessor);
+    private ValueViewModel CreateValueEditor(PropertyValueAccessor accessor, Type editType)
+    {
+        foreach (var editor in _editors)
+            if (editor.CanEdit(editType))
+                return editor.CreateEditor(accessor, editType);
+
+        return editType == typeof(bool) ? new BoolValueViewModel(accessor)
+            : editType.IsEnum ? new EnumValueViewModel(accessor, editType)
+            : NumericTypes.IsNumeric(editType) ? new NumberValueViewModel(accessor, editType)
+            : new TextValueViewModel(accessor);
+    }
 
     private static PropertyNode CreateReadOnlyTextNode(string label, Func<object?> get) =>
         new(label)
@@ -196,8 +214,9 @@ public sealed class ReflectionPropertyNodeFactory : IPropertyNodeFactory
             : PackIconLucideKind.None;
     }
 
-    private static bool IsLeaf(Type type) =>
-        type == typeof(string) || type == typeof(bool) || type.IsEnum || NumericTypes.IsNumeric(type);
+    private bool IsLeaf(Type type) =>
+        type == typeof(string) || type == typeof(bool) || type.IsEnum || NumericTypes.IsNumeric(type)
+        || _editors.Any(editor => editor.CanEdit(type));
 
     /// <summary>The list's element type, from its IEnumerable&lt;T&gt; shape; object when untyped.</summary>
     private static Type ElementTypeOf(Type declaredType) =>
@@ -213,6 +232,16 @@ public sealed class ReflectionPropertyNodeFactory : IPropertyNodeFactory
 
     private static object? CreateElement(Type elementType) =>
         elementType == typeof(string) ? string.Empty : Activator.CreateInstance(elementType);
+
+    /// <summary>The parallel default instance a root target's rows compare against: the target's own
+    /// (<see cref="IDefaultSource"/>) when it declares one, otherwise a default-constructed twin.</summary>
+    private static object? DefaultsFor(object target) =>
+        target is IDefaultSource source ? source.CreateDefaults() : TryCreateDefault(target.GetType());
+
+    /// <summary>A list element's defaults come only from itself — every element of a list shares one
+    /// type, so a default-constructed twin says nothing about THIS element's authored defaults.</summary>
+    private static object? ElementDefaultsFor(object element) =>
+        element is IDefaultSource source ? source.CreateDefaults() : null;
 
     private static object? TryCreateDefault(Type type)
     {

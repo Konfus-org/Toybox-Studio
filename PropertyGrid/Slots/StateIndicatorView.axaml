@@ -4,15 +4,23 @@
              xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
              x:Class="Toybox.Studio.PropertyGrid.Slots.StateIndicatorView"
              x:DataType="local:StateIndicatorViewModel">
-    <!-- Fixed width so rows with and without a visible state keep their trailing edge aligned. -->
-    <Button Classes="Basic" Width="24" Padding="2" VerticalAlignment="Center"
-            Command="{Binding ResetCommand}" ToolTip.Tip="{Binding Tip}">
-        <Panel>
-            <icons:IconView Kind="Lock" Width="13" Height="13" IsVisible="{Binding IsReadOnly}"/>
-            <Ellipse Width="11" Height="11" IsVisible="{Binding IsModified}"
-                     Fill="{DynamicResource ThemeAccentSolidBrush}"/>
-            <Ellipse Width="11" Height="11" IsVisible="{Binding IsDefault}"
-                     Stroke="{DynamicResource ThemeBorderBrush}" StrokeThickness="1.5"/>
-        </Panel>
-    </Button>
+    <!-- Fixed width so rows with and without a visible state keep their trailing edge aligned. The
+         read-only lock stands outside the reset button: the button disables while there is nothing
+         to reset, which would dim the lock and swallow its tooltip. -->
+    <Panel Width="24" VerticalAlignment="Center">
+        <icons:IconView Kind="Lock" Width="13" Height="13" HorizontalAlignment="Center"
+                        IsVisible="{Binding IsReadOnly}"
+                        Foreground="{DynamicResource ThemeWarningBrush}"
+                        ToolTip.Tip="{Binding Tip}"/>
+        <Button Classes="Basic" Padding="2" HorizontalAlignment="Stretch"
+                IsVisible="{Binding !IsReadOnly}"
+                Command="{Binding ResetCommand}" ToolTip.Tip="{Binding Tip}">
+            <Panel>
+                <Ellipse Width="11" Height="11" IsVisible="{Binding IsModified}"
+                         Fill="{DynamicResource ThemeAccentSolidBrush}"/>
+                <Ellipse Width="11" Height="11" IsVisible="{Binding IsDefault}"
+                         Stroke="{DynamicResource ThemeBorderBrush}" StrokeThickness="1.5"/>
+            </Panel>
+        </Button>
+    </Panel>
 </UserControl>

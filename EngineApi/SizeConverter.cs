@@ -16,8 +16,12 @@ public sealed class SizeConverter : IWireConverter<Size>
         ["height"] = size.Height,
     };
 
+    // Fields read through WireValue.Field, so the engine's serialized dialect (typed field
+    // envelopes) hydrates as well as the editor's own bare writes.
     public static Size ReadSize(JToken? token) =>
-        token is JObject value
-            ? new Size(WireValue.ReadInt(value["width"]), WireValue.ReadInt(value["height"]))
+        WireValue.Unwrap(token) is JObject value
+            ? new Size(
+                WireValue.ReadInt(WireValue.Field(value, "width")),
+                WireValue.ReadInt(WireValue.Field(value, "height")))
             : default;
 }

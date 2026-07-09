@@ -5,28 +5,29 @@ using Toybox.Studio.EngineApi;
 namespace Toybox.Studio.Settings;
 
 /// <summary>The wire codec for <see cref="PhysicsSettings"/>: an object of camelCase keys, the gravity
-/// a bare three-element array.</summary>
+/// a bare three-element array. Fields read through <see cref="WireValue.Field"/>, so the engine's
+/// serialized dialect (snake_case keys, typed field envelopes) hydrates too.</summary>
 public sealed class PhysicsSettingsConverter : IWireConverter<PhysicsSettings>
 {
     public PhysicsSettings Read(JToken value)
     {
-        if (value is not JObject body)
+        if (WireValue.Unwrap(value) is not JObject body)
             return new PhysicsSettings();
 
         return new PhysicsSettings
         {
-            Gravity = body["gravity"] is JArray gravity
+            Gravity = WireValue.Field(body, "gravity") is JArray gravity
                 ? WireValue.ReadVector3(gravity)
                 : new Vector3(0f, -9.81f, 0f),
-            FixedTimeStepSeconds = WireValue.ReadSingle(body["fixedTimeStepSeconds"], 1f / 60f),
-            MaxSubSteps = WireValue.ReadInt(body["maxSubSteps"], 4),
-            MaxBodyCount = WireValue.ReadInt(body["maxBodyCount"], 65536),
-            MaxContactConstraints = WireValue.ReadInt(body["maxContactConstraints"], 65536),
-            MaxBodyPairs = WireValue.ReadInt(body["maxBodyPairs"], 65536),
-            SolverVelocityIterations = WireValue.ReadInt(body["solverVelocityIterations"], 8),
-            SolverPositionIterations = WireValue.ReadInt(body["solverPositionIterations"], 2),
-            MaxLinearVelocity = WireValue.ReadSingle(body["maxLinearVelocity"], 500f),
-            MaxAngularVelocity = WireValue.ReadSingle(body["maxAngularVelocity"], 200f),
+            FixedTimeStepSeconds = WireValue.ReadSingle(WireValue.Field(body, "fixedTimeStepSeconds"), 1f / 60f),
+            MaxSubSteps = WireValue.ReadInt(WireValue.Field(body, "maxSubSteps"), 4),
+            MaxBodyCount = WireValue.ReadInt(WireValue.Field(body, "maxBodyCount"), 65536),
+            MaxContactConstraints = WireValue.ReadInt(WireValue.Field(body, "maxContactConstraints"), 65536),
+            MaxBodyPairs = WireValue.ReadInt(WireValue.Field(body, "maxBodyPairs"), 65536),
+            SolverVelocityIterations = WireValue.ReadInt(WireValue.Field(body, "solverVelocityIterations"), 8),
+            SolverPositionIterations = WireValue.ReadInt(WireValue.Field(body, "solverPositionIterations"), 2),
+            MaxLinearVelocity = WireValue.ReadSingle(WireValue.Field(body, "maxLinearVelocity"), 500f),
+            MaxAngularVelocity = WireValue.ReadSingle(WireValue.Field(body, "maxAngularVelocity"), 200f),
         };
     }
 

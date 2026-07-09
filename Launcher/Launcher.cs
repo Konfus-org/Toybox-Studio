@@ -10,9 +10,11 @@ using Toybox.Studio.Assets;
 using Toybox.Studio.Behaviors.Animations;
 using Toybox.Studio.CMake;
 using Toybox.Studio.Dialogs;
+using Toybox.Studio.Ecs;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
 using Toybox.Studio.Gizmos;
+using Toybox.Studio.Keybindings;
 using Toybox.Studio.Logging;
 using Toybox.Studio.MenuBar;
 using Toybox.Studio.Projects;
@@ -21,9 +23,11 @@ using Toybox.Studio.SettingsEditor;
 using Toybox.Studio.Shell;
 using Toybox.Studio.Status;
 using Toybox.Studio.Themes;
+using Toybox.Studio.Toolbar;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Viewport;
 using Toybox.Studio.Workspaces;
+using Toybox.Studio.Worlds;
 
 namespace Toybox.Studio;
 
@@ -55,6 +59,7 @@ public sealed class Launcher
     private readonly ProjectLoader _projectLoader;
     private readonly ProjectFactory _projectFactory;
     private readonly EngineCoordinator _coordinator;
+    private readonly EditorKeymap _keymap;
     private readonly Logger _log;
     private readonly MainWindowViewModel _mainViewModel;
     private readonly SplashViewModel _splashViewModel;
@@ -69,6 +74,7 @@ public sealed class Launcher
         ProjectLoader projectLoader,
         ProjectFactory projectFactory,
         EngineCoordinator coordinator,
+        EditorKeymap keymap,
         Logger log,
         SplashViewModel splashViewModel,
         MainWindowViewModel mainViewModel)
@@ -78,6 +84,7 @@ public sealed class Launcher
         _projectLoader = projectLoader;
         _projectFactory = projectFactory;
         _coordinator = coordinator;
+        _keymap = keymap;
         _log = log;
         _mainViewModel = mainViewModel;
         _splashViewModel = splashViewModel;
@@ -156,6 +163,14 @@ public sealed class Launcher
         // handlers register; nobody holds anybody.
         services.AddSingleton<EventDispatcher>();
 
+        // The rebindable action layer: the registry (features register their actions at
+        // construction), the editor keymap (their bindings, a real .inputmap in ~/.toybox, reloaded
+        // by the launch flow once registrations exist), and the dispatcher the main window's
+        // key-downs run through.
+        services.AddSingleton<ActionRegistry>();
+        services.AddSingleton<EditorKeymap>();
+        services.AddSingleton<KeybindingDispatcher>();
+
         // The active project — pure data, populated by the launch flow through the loader once the
         // user picks one — and the build/ship services callers compose around it. Both builders share
         // the one locator and build runner, so the engine path and build settings are read live from
@@ -188,6 +203,35 @@ public sealed class Launcher
         // The editor's gizmo overlay: named retained drawing layers the engine renders over editor
         // viewports; the hub owns them and re-pushes on every (re)connect.
         services.AddSingleton<Gizmo>();
+
+        // The runtime physics queries (raycasts): engine-global state with no address, bound to the
+        // hub for its outbound commands only.
+        services.AddSingleton(sp =>
+        {
+            var physics = new Physics();
+            physics.Bind(sp.GetRequiredService<SyncHub>());
+            return physics;
+        });
+
+        // The editor's entity selection: engine-global synced state every panel observes; it re-pushes
+        // itself to the engine on every (re)connect, so it registers with the event bus and binds here.
+        services.AddSingleton(sp =>
+        {
+            var selection = new WorldSelection(
+                sp.GetRequiredService<EventDispatcher>(), sp.GetRequiredService<Logger>());
+            selection.Bind(sp.GetRequiredService<SyncHub>());
+            return selection;
+        });
+
+        // The editor's transform tool: the active gizmo mode + snapping the viewport toolbars and
+        // the Q/W/E/R keybindings drive; it registers its actions at construction and pushes the
+        // active handle set to the engine on every change and (re)connect.
+        services.AddSingleton<GizmoTool>();
+
+        // The editor's render layers: the collider wireframe modes, post-processing toggle, and
+        // render-stage debug view the viewport's render-layers toolbar drives; it registers its
+        // actions at construction and pushes the state to the engine on every change and (re)connect.
+        services.AddSingleton<RenderLayers>();
 
         // The asset domain: the catalog mirrors the engine's registered assets, refreshing itself as
         // the connection comes up. The asset lifecycle lives on the assets themselves (constructing
@@ -230,12 +274,31 @@ public sealed class Launcher
                 .Add(() =>
                 {
                     var viewport = new ViewportViewModel(
-                        sp.GetRequiredService<EventDispatcher>(), sp.GetRequiredService<Logger>(), ViewKind.Editor);
+                        sp.GetRequiredService<EventDispatcher>(),
+                        sp.GetRequiredService<Logger>(),
+                        ViewKind.Editor,
+                        toolbars:
+                        [
+                            new TransformToolbarViewModel(
+                                sp.GetRequiredService<GizmoTool>(),
+                                sp.GetRequiredService<ActionRegistry>(),
+                                sp.GetRequiredService<EditorKeymap>(),
+                                sp.GetRequiredService<EventDispatcher>()),
+                            new RenderLayersToolbarViewModel(
+                                sp.GetRequiredService<RenderLayers>(),
+                                sp.GetRequiredService<ActionRegistry>(),
+                                sp.GetRequiredService<EditorKeymap>(),
+                                sp.GetRequiredService<EventDispatcher>()),
+                        ],
+                        selection: sp.GetRequiredService<WorldSelection>());
                     viewport.Prepare(new ViewportStream(
                         sp.GetRequiredService<Engine>(), sp.GetRequiredService<EventDispatcher>(), ViewKind.Editor));
                     return viewport;
                 })
-                .Add(() => settings ??= new SettingsViewModel(sp.GetRequiredService<SettingsManager>()));
+                .Add(() => settings ??= new SettingsViewModel(
+                    sp.GetRequiredService<SettingsManager>(),
+                    sp.GetRequiredService<EditorKeymap>(),
+                    sp.GetRequiredService<EventDispatcher>()));
         });
         services.AddSingleton(sp => new DockableCatalog(
             sp.GetRequiredService<DockableFactories>(),
@@ -259,6 +322,8 @@ public sealed class Launcher
                 sp.GetRequiredService<EngineBuilder>(),
                 sp.GetRequiredService<AppHost<Engine>>(),
                 workspace,
+                sp.GetRequiredService<ActionRegistry>(),
+                sp.GetRequiredService<EditorKeymap>(),
                 sp.GetRequiredService<Logger>(),
                 sp.GetRequiredService<EventDispatcher>());
             var status = new StatusViewModel(sp.GetRequiredService<EventDispatcher>());
@@ -268,9 +333,11 @@ public sealed class Launcher
                 sp.GetRequiredService<ProjectLoader>(),
                 sp.GetRequiredService<ProjectFactory>(),
                 sp.GetRequiredService<EngineCoordinator>(),
+                sp.GetRequiredService<EditorKeymap>(),
                 sp.GetRequiredService<Logger>(),
                 new SplashViewModel(sp.GetRequiredService<EventDispatcher>()),
-                new MainWindowViewModel(menuBar, status, workspace));
+                new MainWindowViewModel(
+                    menuBar, status, workspace, sp.GetRequiredService<KeybindingDispatcher>()));
         });
 
         return services.BuildServiceProvider(
@@ -309,9 +376,13 @@ public sealed class Launcher
         foreach (var warning in theme.LoadWarnings)
             log.Warning(warning);
 
-        // Purely event-driven services nobody injects — resolved so they exist and subscribe.
+        // Purely event-driven services nobody injects — resolved so they exist and subscribe. The
+        // gizmo tool must exist before RunAsync's keymap reload so its action registrations are in.
         services.GetRequiredService<SyncHub>();
         services.GetRequiredService<Gizmo>();
+        services.GetRequiredService<WorldSelection>();
+        services.GetRequiredService<GizmoTool>();
+        services.GetRequiredService<RenderLayers>();
         services.GetRequiredService<AssetCatalog>();
         services.GetRequiredService<OwnedAppWatchdog>().Start();
 
@@ -344,6 +415,9 @@ public sealed class Launcher
         services.GetRequiredService<EngineCoordinator>().Dispose();
         services.GetRequiredService<OwnedAppWatchdog>().Dispose();
         services.GetRequiredService<AssetCatalog>().Dispose();
+        services.GetRequiredService<GizmoTool>().Dispose();
+        services.GetRequiredService<RenderLayers>().Dispose();
+        services.GetRequiredService<WorldSelection>().Dispose();
         services.GetRequiredService<Gizmo>().Dispose();
         services.GetRequiredService<SyncHub>().Dispose();
         // Run the async teardown on the thread pool: blocking the UI thread on code that resumes
@@ -362,6 +436,10 @@ public sealed class Launcher
     /// </summary>
     private async Task RunAsync(ClassicDesktopStyleApplicationLifetime desktop)
     {
+        // The keymap builds itself from the registered actions overlaid with the user's file; by
+        // now the whole view-model graph (whose constructors register the actions) exists.
+        _keymap.Reload();
+
         try
         {
             if (await PromptForProjectAsync().ContinueOnSameContext() == StartupChoice.Quit)

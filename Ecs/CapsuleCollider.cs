@@ -4,7 +4,7 @@ namespace Toybox.Studio.Ecs;
 
 /// <summary>A solid capsule collision shape defined by radius and cylinder half height, mirroring the
 /// engine's <c>CapsuleCollider</c>.</summary>
-public sealed partial class CapsuleCollider : Component
+public sealed partial class CapsuleCollider : Collider
 {
     public CapsuleCollider()
     {

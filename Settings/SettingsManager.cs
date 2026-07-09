@@ -37,11 +37,15 @@ public sealed class SettingsManager : EventSubscriber, IEventHandler<AssetCatalo
     public AppSettings? App { get; private set; }
 
     /// <summary>Tracks the project's <c>AppSettings.json</c> through the catalog: the row appearing
-    /// (or changing identity) loads a fresh mirror, the listing emptying on disconnect drops it.</summary>
+    /// (or changing identity) loads a fresh mirror, the listing emptying on disconnect drops it.
+    /// Catalog paths are the engine registry's absolute normalized paths, so the row is matched by
+    /// file name — skipping build-output copies, which shadow the source file.</summary>
     public void Handle(in AssetCatalogChanged evt)
     {
         var entry = evt.Entries.FirstOrDefault(candidate =>
-            string.Equals(candidate.Path, AppSettings.FileName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(
+                Path.GetFileName(candidate.Path), AppSettings.FileName, StringComparison.OrdinalIgnoreCase)
+            && !candidate.Path.Contains("/build/", StringComparison.OrdinalIgnoreCase));
         if (App?.Id == entry?.Id)
             return;
 

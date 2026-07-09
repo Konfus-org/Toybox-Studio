@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The chord-editing property-grid vocabulary: the ChordCaptureBox control (click, press the new
+       chord) and its ChordValueViewModel/View value-slot pair, plugged into any
+       ReflectionPropertyNodeFactory through the ChordValueEditor — how the Settings window's
+       Keybindings section (and any grid over an .inputmap) edits chords with a plain reflection
+       grid. -->
+
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Assets\Assets.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
+    <ProjectReference Include="..\PropertyGrid\PropertyGrid.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+  </ItemGroup>
+
+</Project>

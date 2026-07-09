@@ -10,7 +10,9 @@ namespace Toybox.Studio.PropertyGrid;
 /// (<see cref="Slots.ReorderHandleViewModel"/>) — edit the backing list and the child rows together.
 /// Element rows come from the factory-supplied delegate; their accessors resolve the element's index at
 /// access time (through <see cref="IndexOf"/>), so a reorder never leaves a row pointing at a stale
-/// slot. Element labels are the element's index, renumbered on every mutation.
+/// slot. An element carrying a non-empty string <c>Name</c> property labels its row (how a scheme, an
+/// action, or a keybinding reads as itself); anything else is labeled by its index. Labels refresh on
+/// every mutation and edit.
 /// </summary>
 public sealed class ListPropertyNode : PropertyNode
 {
@@ -37,6 +39,9 @@ public sealed class ListPropertyNode : PropertyNode
         for (var i = 0; i < items.Count; i++)
             AddChild(createElementNode(this));
         RefreshChrome();
+
+        // A descendant edit may have renamed an element; keep the row labels honest.
+        Edited += RefreshChrome;
     }
 
     /// <summary>The element row's current position — element accessors and slots resolve their index
@@ -79,12 +84,19 @@ public sealed class ListPropertyNode : PropertyNode
         NotifyEdited();
     }
 
-    /// <summary>Renumbers the element labels and the header's item-count detail after any mutation.</summary>
+    /// <summary>Relabels the element rows (name or index) and the header's item-count detail after
+    /// any mutation or edit.</summary>
     private void RefreshChrome()
     {
         for (var i = 0; i < Children.Count; i++)
-            Children[i].Label = $"[{i}]";
+        {
+            var name = NameOf(_items[i]);
+            Children[i].Label = string.IsNullOrEmpty(name) ? $"[{i}]" : name;
+        }
 
         Detail = Children.Count == 1 ? "1 item" : $"{Children.Count} items";
     }
+
+    private static string? NameOf(object? item) =>
+        item?.GetType().GetProperty("Name")?.GetValue(item) as string;
 }

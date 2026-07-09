@@ -9,6 +9,7 @@ using Toybox.Studio.AssetOwners;
 using Toybox.Studio.Dialogs;
 using Toybox.Studio.Utils;
 using Toybox.Studio.Utils.Attributes;
+using Toybox.Studio.Utils.Toolbars;
 
 namespace Toybox.Studio.Workspaces;
 
@@ -306,16 +307,18 @@ public sealed class Workspace
         return dock;
     }
 
-    // A fresh dock tool for a descriptor, carrying its header icon.
+    // A fresh dock tool for a descriptor, carrying its header icon. A panel whose view-model hosts an
+    // overlay toolbar gets the record subclass that rides the toolbar's placement in the saved layout.
     private static Tool NewTool(DockableDescriptor descriptor, string id)
     {
-        return new DockPanelRecord
-        {
-            Id = id,
-            Title = descriptor.Title,
-            IconName = descriptor.Icon,
-            CanClose = true,
-        };
+        DockPanelRecord tool = typeof(IToolbarHost).IsAssignableFrom(descriptor.ViewModelType)
+            ? new ToolbarPanelRecord()
+            : new DockPanelRecord();
+        tool.Id = id;
+        tool.Title = descriptor.Title;
+        tool.IconName = descriptor.Icon;
+        tool.CanClose = true;
+        return tool;
     }
 
     // Hand Dock a deferred-template factory, not a constructed view: Dock rebuilds the content on every
@@ -342,12 +345,19 @@ public sealed class Workspace
     }
 
     // Wires the runtime bindings for a materialized tool — the owner-to-tab binding (the owner's Cancel
-    // button means "discard my edits and close", so its close skips the unsaved-changes prompt) and the
-    // IDockAware open hook. Runs whenever a tool (re)binds its deferred content — on creation, on open,
-    // and on every attach pass of a restore — so it must stay idempotent.
+    // button means "discard my edits and close", so its close skips the unsaved-changes prompt), the
+    // hosted toolbar's persisted placement, and the IDockAware open hook. Runs whenever a tool
+    // (re)binds its deferred content — on creation, on open, and on every attach pass of a restore —
+    // so it must stay idempotent.
     private void WireToolBindings(Tool tool, object viewModel)
     {
         _owners.Bind(tool, viewModel, closeTab: () => ForceClose(tool));
+
+        // The layout's persisted toolbar placements flow to the hosting view-model (BindToolbars is
+        // idempotent by contract). A plain record for an IToolbarHost — a pre-toolbar saved layout —
+        // just leaves the host on its default states until the panel is next opened fresh.
+        if (tool is ToolbarPanelRecord record && viewModel is IToolbarHost host)
+            host.BindToolbars(record.Toolbars);
 
         if (viewModel is IDockAware aware && _openDockAware.Add(tool.Id))
             aware.OnDockOpened();

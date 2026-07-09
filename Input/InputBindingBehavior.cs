@@ -19,6 +19,12 @@ public sealed class InputBindingBehavior
     public static readonly AttachedProperty<IInputSink?> SinkProperty =
         AvaloniaProperty.RegisterAttached<InputBindingBehavior, Control, IInputSink?>("Sink");
 
+    /// <summary>True while a pointer button is held on the surface — the camera-navigation state the
+    /// keybinding dispatcher reads so bare tool keys (Q/W/E/R) never fire mid-flight, when the same
+    /// keys are steering the engine camera. Maintained by the capture handler.</summary>
+    public static readonly AttachedProperty<bool> IsPointerEngagedProperty =
+        AvaloniaProperty.RegisterAttached<InputBindingBehavior, Control, bool>("IsPointerEngaged");
+
     // Keeps the per-control handler (and its event subscriptions) alive for the control's lifetime.
     private static readonly AttachedProperty<Handler?> HandlerProperty =
         AvaloniaProperty.RegisterAttached<InputBindingBehavior, Control, Handler?>("Handler");
@@ -29,6 +35,8 @@ public sealed class InputBindingBehavior
     public static void SetSink(Control control, IInputSink? value) => control.SetValue(SinkProperty, value);
 
     public static IInputSink? GetSink(Control control) => control.GetValue(SinkProperty);
+
+    public static bool GetIsPointerEngaged(Control control) => control.GetValue(IsPointerEngagedProperty);
 
     private static void OnSinkChanged(Control control, AvaloniaPropertyChangedEventArgs args)
     {
@@ -78,6 +86,9 @@ public sealed class InputBindingBehavior
 
         private void Send(double dx, double dy, double wheel)
         {
+            // The engaged flag tracks the held-button state every send refreshes, so it can never lag
+            // the snapshots the engine sees.
+            _control.SetValue(IsPointerEngagedProperty, _buttons.Count > 0);
             _sink.ForwardInput(new InputSnapshot(
                 _control.IsFocused, [.. _keys], [.. _buttons],
                 _pointer, new Vector(dx, dy), wheel, _control.Bounds.Size));

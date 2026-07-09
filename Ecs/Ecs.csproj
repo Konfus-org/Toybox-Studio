@@ -5,6 +5,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
     <ProjectReference Include="..\Assets\Assets.csproj" />
     <ProjectReference Include="..\Generators\Generators.csproj"

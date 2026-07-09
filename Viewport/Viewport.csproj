@@ -9,9 +9,11 @@
     <ProjectReference Include="..\Logging\Logging.csproj" />
     <ProjectReference Include="..\Input\Input.csproj" />
     <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\Ecs\Ecs.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
     <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
     <ProjectReference Include="..\Overlays\Overlays.csproj" />
+    <ProjectReference Include="..\Toolbar\Toolbar.csproj" />
   </ItemGroup>
 
   <ItemGroup>

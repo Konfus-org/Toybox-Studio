@@ -6,6 +6,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
     <ProjectReference Include="..\Overlays\Overlays.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Searching\Searching.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:Avalonia.Data.Converters"
              xmlns:controls="using:Toybox.Studio.Searching"
-             xmlns:behaviors="using:Toybox.Studio.Behaviors.Animations"
+             xmlns:icons="using:Toybox.Studio.Resources"
              x:Class="Toybox.Studio.Searching.SearchBox">
 
     <UserControl.Styles>
@@ -16,19 +16,18 @@
         </Style>
         <!-- No shadow on the search field (shadows live on panels/bars/flyouts only); just light the ring on focus. -->
         <Style Selector="Border.searchPill:focus-within">
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}"/>
         </Style>
     </UserControl.Styles>
 
     <Border x:Name="Pill" Classes="searchPill"
             Background="{DynamicResource ThemeSurfaceBrush}"
-            BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1.5"
+            BorderBrush="{DynamicResource ThemeBorderLowBrush}" BorderThickness="1.5"
             CornerRadius="10" Padding="9,0" MinHeight="30">
         <DockPanel>
-            <PathIcon DockPanel.Dock="Left"
-                      Data="{StaticResource SearchIconGeometry}"
-                      Width="13" Height="13" Opacity="0.5"
-                      Margin="0,0,6,0" VerticalAlignment="Center"/>
+            <icons:IconView DockPanel.Dock="Left" Kind="Search"
+                            Width="13" Height="13" Opacity="0.5"
+                            Margin="0,0,6,0" VerticalAlignment="Center"/>
 
             <Button DockPanel.Dock="Right" Classes="Basic"
                     Padding="2" Margin="4,0,0,0"
@@ -36,11 +35,15 @@
                     ToolTip.Tip="Clear search"
                     Click="OnClearClicked"
                     IsVisible="{Binding Text, RelativeSource={RelativeSource AncestorType=controls:SearchBox}, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}">
-                <PathIcon Data="{StaticResource CloseIconGeometry}" Width="10" Height="10" Opacity="0.6"/>
+                <icons:IconView Kind="X" Width="10" Height="10" Opacity="0.6"/>
             </Button>
 
+            <!-- Query-in-flight indicator, sits just left of the clear button. -->
+            <controls:Spinner DockPanel.Dock="Right" Margin="4,0,0,0" VerticalAlignment="Center"
+                              Progress="{Binding Progress, RelativeSource={RelativeSource AncestorType=controls:SearchBox}}"
+                              IsVisible="{Binding IsBusy, RelativeSource={RelativeSource AncestorType=controls:SearchBox}}"/>
+
             <TextBox Name="PART_TextBox" Classes="searchInner"
-                     behaviors:TextWiggle.Target="{Binding #Pill}"
                      Background="Transparent" BorderThickness="0"
                      Padding="0" MinHeight="0" VerticalContentAlignment="Center"
                      PlaceholderText="{Binding Watermark, RelativeSource={RelativeSource AncestorType=controls:SearchBox}}"

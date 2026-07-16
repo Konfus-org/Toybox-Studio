@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
     <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
   </ItemGroup>
 
   <ItemGroup>

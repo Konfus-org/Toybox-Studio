@@ -1,6 +1,6 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using IconPacks.Avalonia.Lucide;
+using System.Collections.ObjectModel;
 
 namespace Toybox.Studio.PropertyGrid;
 
@@ -67,6 +67,16 @@ public partial class PropertyNode : ObservableObject
 
     /// <summary>The state slot past the action (the modified/default dot, the read-only lock).</summary>
     public object? Indicator { get; init; }
+
+    /// <summary>The name of the category this top-level node groups under (from the property's
+    /// <see cref="Toybox.Studio.Utils.Attributes.CategoryAttribute"/>), or null for uncategorized. Only read
+    /// for a grid's root nodes — the factory sets it, the grid view-model groups by it; nested nodes ignore
+    /// it.</summary>
+    public string? Category { get; internal set; }
+
+    /// <summary>The resizable list this row is an element of, or null when it isn't a list element. Set by
+    /// <see cref="ListPropertyNode"/> so the context menu can reorder/duplicate/delete the element.</summary>
+    public ListPropertyNode? OwningList { get; internal set; }
 
     /// <summary>Child rows; also raises collection-change notification when it can grow (lists).</summary>
     public IReadOnlyList<PropertyNode> Children => _children;

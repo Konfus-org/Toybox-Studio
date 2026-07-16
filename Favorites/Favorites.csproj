@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The user's starred menu items. FavoritesStore persists one JSON array per "host" (the menu bar,
+       or a named context menu) under ~/.toybox/Favorites; FavoritesManager owns the in-memory set and
+       dispatches FavoritesChanged so every open surface re-derives its stars without polling. Pure
+       domain — no UI, no engine; the menu bar and the context menus both build on it. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

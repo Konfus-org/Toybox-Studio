@@ -13,6 +13,7 @@ public sealed class SyncSlot(
     string key,
     SyncMode mode,
     int batchFrequencyMs,
+    bool bindsChildren,
     Func<object?, JToken> write,
     Func<JToken, object?> read)
 {
@@ -28,6 +29,11 @@ public sealed class SyncSlot(
     /// <summary>How often <see cref="SyncMode.Batched"/> edits go out, in milliseconds (zero = the
     /// scheduler's floor).</summary>
     public int BatchFrequencyMs { get; } = batchFrequencyMs;
+
+    /// <summary>Whether the property's value is (or contains) nested <see cref="EngineObject"/>s the
+    /// owner binds and whose edits it aggregates — so a change to it re-reconciles the owner's children
+    /// (see <see cref="EngineObject"/>). Set by the generator for EngineObject-typed synced members.</summary>
+    public bool BindsChildren { get; } = bindsChildren;
 
     /// <summary>Converts the studio value to its wire JSON.</summary>
     public Func<object?, JToken> Write { get; } = write;

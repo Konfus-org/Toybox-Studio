@@ -1,10 +1,10 @@
 using Avalonia.Input;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Toybox.Studio.Assets;
+using Newtonsoft.Json;
+using Toybox.Studio.EngineApi.Types.Assets;
 using Toybox.Studio.Events;
 using Toybox.Studio.Logging;
-using Toybox.Studio.Settings;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Keybindings;
 
@@ -19,21 +19,22 @@ namespace Toybox.Studio.Keybindings;
 /// </summary>
 public sealed class EditorKeymap
 {
-    /// <summary>The keymap file, editor-global like the rest of ~/.toybox — a valid .inputmap the
-    /// engine could load verbatim.</summary>
-    public static string FilePath { get; } =
-        Path.Combine(SettingsManager.BaseDirectory, "EditorKeybindings.inputmap");
-
     private readonly ActionRegistry _registry;
     private readonly EventDispatcher _events;
     private readonly Logger _log;
+    private readonly PathsCatalog _paths;
 
-    public EditorKeymap(ActionRegistry registry, EventDispatcher events, Logger log)
+    public EditorKeymap(ActionRegistry registry, EventDispatcher events, Logger log, PathsCatalog paths)
     {
         _registry = registry;
         _events = events;
         _log = log;
+        _paths = paths;
     }
+
+    /// <summary>The keymap file, editor-global like the rest of ~/.toybox — a valid .inputmap the
+    /// engine could load verbatim.</summary>
+    public string FilePath => _paths.EditorKeymapFile;
 
     /// <summary>The complete scheme set: every registered action, carrying the user's bindings where
     /// the file has them and the registered defaults elsewhere.</summary>
@@ -76,18 +77,18 @@ public sealed class EditorKeymap
     /// the editor's actions; only each entry's chord is editable). Land an edited list with
     /// <see cref="ApplyKeybindingsAsync"/>.
     /// </summary>
-    public IReadOnlyList<Keybinding> CreateKeybindingDrafts() =>
+    public IReadOnlyList<Keybinding> CreateKeybindings() =>
         _registry.All
-            .Select(action => new Keybinding(action.Id)
+            .Select(action => new Keybinding(
+                action.Id, action.DefaultChords.Count > 0 ? action.DefaultChords[0] : null)
             {
                 Chord = FirstChordFor(action.Id),
-                DefaultChord = action.DefaultChords.Count > 0 ? action.DefaultChords[0] : null,
             })
             .ToList()
             .AsReadOnly();
 
     /// <summary>
-    /// Commits an edited <see cref="CreateKeybindingDrafts"/> list: each entry's chord replaces its
+    /// Commits an edited <see cref="CreateKeybindings"/> list: each entry's chord replaces its
     /// action's first chord binding in the action's registered scheme (unknown names land in the
     /// global scheme); any further bindings the file carries (extra chords, mouse/controller
     /// controls) ride along untouched, and actions the list doesn't mention keep theirs.
@@ -100,11 +101,11 @@ public sealed class EditorKeymap
             if (binding.Name.Length == 0)
                 continue;
 
-            var schemeName = _registry.Find(binding.Name)?.Scheme ?? ActionSchemes.Global;
+            var schemeName = _registry.Find(binding.Name)?.Scheme ?? Scheme.Global;
             var index = schemes.FindIndex(scheme => scheme.Name == schemeName);
             var scheme = index >= 0
                 ? schemes[index]
-                : new InputScheme { Name = schemeName, IsActive = schemeName == ActionSchemes.Global };
+                : new InputScheme { Name = schemeName, IsActive = schemeName == Scheme.Global };
 
             var existing = scheme.GetAction(binding.Name)?.Bindings ?? [];
             var first = existing.FirstOrDefault(entry => entry.Control is KeyChordInputControl);
@@ -140,7 +141,7 @@ public sealed class EditorKeymap
         var json = InputSchemeListConverter.WriteDocument(schemes).ToString(Formatting.Indented);
         _events.Dispatch(new KeybindingsChanged());
 
-        Directory.CreateDirectory(SettingsManager.BaseDirectory);
+        Directory.CreateDirectory(_paths.BaseDirectory);
         await File.WriteAllTextAsync(FilePath, json).ConfigureAwait(false);
     }
 
@@ -160,7 +161,7 @@ public sealed class EditorKeymap
                 schemes.Add(new InputScheme
                 {
                     Name = action.Scheme,
-                    IsActive = action.Scheme == ActionSchemes.Global,
+                    IsActive = action.Scheme == Scheme.Global,
                 });
                 index = schemes.Count - 1;
             }

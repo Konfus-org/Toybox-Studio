@@ -1,9 +1,9 @@
-using System.Reflection;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using Toybox.Studio.Assets;
+using Avalonia;
+using System.Reflection;
+using Toybox.Studio.EngineApi.Types.Assets;
 using Toybox.Studio.Events;
 using Toybox.Studio.Input;
 using Toybox.Studio.Utils.Attributes;
@@ -81,8 +81,7 @@ public sealed class KeybindingDispatcher
     /// <summary>
     /// Refreshes the snap-hold key's held state from a key event and publishes a
     /// <see cref="SnapHoldChanged"/> when it flips — called for both key-down and key-up (the
-    /// tunneling handler feeds both) so the transform tool can mirror the engine's snap-XOR-hold
-    /// rule in its indicator. The snap-hold binding (<see cref="ActionIds.GizmoSnapHold"/>) is a
+    /// tunneling handler feeds both). The snap-hold binding (<see cref="ActionIds.GizmoSnapHold"/>) is a
     /// modifier out of the box, read from the event's authoritative modifier bitmask so a missed
     /// key-up can't stick it on; a non-modifier rebind falls back to matching the key up/down.
     /// </summary>
@@ -156,7 +155,7 @@ public sealed class KeybindingDispatcher
                 yield return scheme;
         }
 
-        foreach (var scheme in SchemeNamed(ActionSchemes.Global))
+        foreach (var scheme in SchemeNamed(Scheme.Global))
             yield return scheme;
     }
 

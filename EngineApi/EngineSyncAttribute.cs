@@ -4,7 +4,7 @@ namespace Toybox.Studio.EngineApi;
 /// Marks a partial property or partial method as engine-synced; the source generator (in the sibling
 /// <c>Generators</c> project) writes the implementation. On a <b>property</b> it generates the backing
 /// field, the setter's push to the engine (per <see cref="SyncMode"/>), and the inbound apply that keeps
-/// the value mirroring the engine; a <see cref="SyncMode.Mirror"/> property is declared get-only (or
+/// the value mirroring the engine; a <see cref="SyncMode.OneWayFromEngine"/> property is declared get-only (or
 /// with a private setter). On a <b>method</b> it generates the body as an engine command whose payload
 /// is the object's address plus the method's parameters — and with <see cref="Relay"/>, a bindable
 /// <c>FooCommand</c> alongside. A method returning <c>Task&lt;Result&lt;T&gt;&gt;</c> is a query: the

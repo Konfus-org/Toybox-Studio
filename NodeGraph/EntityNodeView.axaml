@@ -1,0 +1,190 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.NodeGraph"
+             xmlns:grid="using:Toybox.Studio.PropertyGrid"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             x:Class="Toybox.Studio.NodeGraph.EntityNodeView"
+             x:DataType="local:EntityNodeViewModel"
+             ClipToBounds="False">
+
+    <!-- One entity's node over the world view. Its size and content follow the selection-driven State: a
+         selected entity opens to the tabbed inspector card; an entity connected to the selection shows as a
+         small plug square that fades in and, clicked, selects (opens) it. The whole node renders at the VM's
+         distance-scale (a ScaleTransform from the top-left) and fades on Appearance. Hovering fans the deck. -->
+
+    <UserControl.Styles>
+        <!-- The header chevron hints the open card: points right normally, down while open. -->
+        <Style Selector="icons|IconView.chev">
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+        </Style>
+        <Style Selector="icons|IconView.chev.expanded">
+            <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+        </Style>
+
+        <!-- A reference (input plug) chip: a kind-coloured dot + its label, so a plug reads as what it points
+             at and (grouped under a component) which component owns it. -->
+        <Style Selector="Border.plugChip">
+            <Setter Property="Background" Value="{DynamicResource ThemeWellFillBrush}"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="Padding" Value="6,1"/>
+            <Setter Property="Margin" Value="0,0,4,4"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- The node box: scaled from the top-left (matching the graph's placement math), faded by Appearance
+         (so a plug fades in as it connects to the selection), and only hit-testable when shown. -->
+    <Panel Width="{Binding CardWidth}" Height="{Binding CardHeight}"
+           RenderTransformOrigin="0,0" Opacity="{Binding Appearance}"
+           IsHitTestVisible="{Binding IsShown}"
+           local:NodeHoverBehavior.Enabled="True">
+        <Panel.RenderTransform>
+            <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}"/>
+        </Panel.RenderTransform>
+        <Panel.Transitions>
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.18" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Panel.Transitions>
+
+        <!-- PLUG: a small connector square; clicking it selects/opens the entity. Its input/output plug nubs
+             are the shared ones drawn at the panel edges below. -->
+        <Border IsVisible="{Binding IsPlug}" local:NodeDragBehavior.Enabled="True"
+                ToolTip.Tip="{Binding Name}" Margin="6,10"
+                Background="{DynamicResource ThemeSurfaceBrush}"
+                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1.5" CornerRadius="10">
+            <icons:IconView Kind="{Binding Icon}" Width="24" Height="24"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Foreground="{DynamicResource ThemePrimaryBrush}"/>
+        </Border>
+
+        <!-- OPEN: the full inspector card (header drags / clicks, over the tabbed body). -->
+        <Border IsVisible="{Binding IsOpen}"
+                Background="{DynamicResource ThemeSurfaceBrush}"
+                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"
+                CornerRadius="8" ClipToBounds="True">
+            <DockPanel>
+                <!-- Header: entity icon + name; drags to move, clicks activate. Height MUST match
+                     EntityNodeViewModel's open header (a plug is a separate small square). -->
+                <Border DockPanel.Dock="Top" Height="46" Background="Transparent"
+                        BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,0,0,1"
+                        local:NodeDragBehavior.Enabled="True">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="11,0">
+                        <icons:IconView Grid.Column="0" Kind="{Binding Icon}" Width="20" Height="20"
+                                        VerticalAlignment="Center"
+                                        Foreground="{DynamicResource ThemePrimaryBrush}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="10,0"
+                                   FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource ThemeTextBrush}"/>
+                        <icons:IconView Grid.Column="2" Classes="chev expanded"
+                                        Kind="ChevronRight" Width="15" Height="15" VerticalAlignment="Center"
+                                        Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                    </Grid>
+                </Border>
+
+                <!-- Entity references (input plugs) inline, right under the header — what this entity points
+                     at. The edge input nub on the left is where their wires connect. -->
+                <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding References}"
+                              IsVisible="{Binding HasInput}" Margin="11,4,11,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:NodeReference">
+                            <Border Classes="plugChip">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                             Fill="{Binding Kind, Converter={x:Static local:ReferenceKindBrushConverter.Instance}}"/>
+                                    <TextBlock Text="{Binding Label}" FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Body: the tabbed inspector. -->
+                <TabControl Padding="0" Margin="0,2,0,0">
+                    <TabItem Header="Components" FontSize="13">
+                        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Components}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:ComponentCardViewModel">
+                                        <StackPanel Margin="4,2">
+                                            <!-- Header: icon + name, with the component's output plug on the
+                                                 right (so the component itself can be referenced). -->
+                                            <Grid ColumnDefinitions="Auto,*,Auto" Margin="4,4,4,2">
+                                                <icons:IconView Grid.Column="0" Kind="{Binding Icon}"
+                                                                Width="14" Height="14" Margin="0,0,6,0"
+                                                                VerticalAlignment="Center"
+                                                                Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                           FontWeight="SemiBold" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource ThemeTextBrush}"/>
+                                                <Ellipse Grid.Column="2" Width="9" Height="9"
+                                                         VerticalAlignment="Center"
+                                                         Fill="{DynamicResource ThemePrimaryBrush}"
+                                                         ToolTip.Tip="Component output — reference this component"/>
+                                            </Grid>
+                                            <!-- The component's own input plugs (its references), grouped under
+                                                 its header so it's obvious which plugs belong to it. -->
+                                            <ItemsControl ItemsSource="{Binding References}"
+                                                          IsVisible="{Binding HasReferences}" Margin="20,0,4,2">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="local:NodeReference">
+                                                        <Border Classes="plugChip">
+                                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                                <Ellipse Width="8" Height="8"
+                                                                         VerticalAlignment="Center"
+                                                                         Fill="{Binding Kind, Converter={x:Static local:ReferenceKindBrushConverter.Instance}}"/>
+                                                                <TextBlock Text="{Binding Label}" FontSize="11"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <grid:PropertyGridView DataContext="{Binding Grid}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </TabItem>
+                    <TabItem Header="Scripts" FontSize="13">
+                        <Panel>
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                          IsVisible="{Binding HasScripts}">
+                                <grid:PropertyGridView DataContext="{Binding Scripts}"/>
+                            </ScrollViewer>
+                            <TextBlock Text="No scripts" IsVisible="{Binding !HasScripts}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"
+                                       Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                        </Panel>
+                    </TabItem>
+                </TabControl>
+            </DockPanel>
+        </Border>
+
+        <!-- Plugs: input on the left edge, output on the right edge (their overlay points are where the
+             reference wires connect). Centered on the edge (half outside), shown only when there is a
+             connection on that side. -->
+        <Ellipse Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Center"
+                 Margin="-5.5,0,0,0" IsVisible="{Binding HasInput}"
+                 Fill="{DynamicResource ThemeInfoBrush}"
+                 Stroke="{DynamicResource ThemeSurfaceBrush}" StrokeThickness="1.5"
+                 ToolTip.Tip="Referenced by another entity"/>
+        <Ellipse Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Center"
+                 Margin="0,0,-5.5,0" IsVisible="{Binding HasOutput}"
+                 Fill="{DynamicResource ThemePrimaryBrush}"
+                 Stroke="{DynamicResource ThemeSurfaceBrush}" StrokeThickness="1.5"
+                 ToolTip.Tip="References another entity or asset"/>
+    </Panel>
+</UserControl>

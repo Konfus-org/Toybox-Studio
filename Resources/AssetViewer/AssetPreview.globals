@@ -1,0 +1,122 @@
+[
+    {
+        "id": {
+            "type": "uuid",
+            "value": 3000000030
+        },
+        "is_enabled": {
+            "type": "bool",
+            "value": true
+        },
+        "layer": {
+            "type": "string",
+            "value": ""
+        },
+        "name": {
+            "type": "string",
+            "value": "Preview Light"
+        },
+        "order": {
+            "type": "int",
+            "value": 0
+        },
+        "parent": {
+            "type": "uuid",
+            "value": 0
+        },
+        "tags": {
+            "type": "array",
+            "value": [
+                "lighting"
+            ]
+        },
+        "components": {
+            "directional_light": {
+                "id": {
+                    "type": "uuid",
+                    "value": 3000000040
+                },
+                "intensity": {
+                    "type": "float",
+                    "value": 1.5
+                },
+                "ambient": {
+                    "type": "float",
+                    "value": 0.35
+                }
+            },
+            "transform": {
+                "id": {
+                    "type": "uuid",
+                    "value": 3000000041
+                },
+                "position": {
+                    "type": "vec3",
+                    "value": [
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "rotation": {
+                    "type": "vec4",
+                    "value": [
+                        -0.353553,
+                        0.353553,
+                        -0.146447,
+                        0.853553
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "id": {
+            "type": "uuid",
+            "value": 3000000031
+        },
+        "is_enabled": {
+            "type": "bool",
+            "value": true
+        },
+        "layer": {
+            "type": "string",
+            "value": ""
+        },
+        "name": {
+            "type": "string",
+            "value": "Preview Sky"
+        },
+        "order": {
+            "type": "int",
+            "value": 1
+        },
+        "parent": {
+            "type": "uuid",
+            "value": 0
+        },
+        "tags": {
+            "type": "array",
+            "value": [
+                "environment"
+            ]
+        },
+        "components": {
+            "sky": {
+                "id": {
+                    "type": "uuid",
+                    "value": 3000000042
+                },
+                "material": {
+                    "type": "material_instance",
+                    "value": {
+                        "material": {
+                            "type": "handle",
+                            "value": 3000000002
+                        }
+                    }
+                }
+            }
+        }
+    }
+]

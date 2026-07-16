@@ -1,13 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Toybox.Studio.Ecs;
+using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
-using Toybox.Studio.Logging;
+using Toybox.Studio.Hosting;
 using Toybox.Studio.Input;
-using Toybox.Studio.AppHosting;
+using Toybox.Studio.Logging;
 using Toybox.Studio.Toolbar;
 using Toybox.Studio.Utils;
-using Toybox.Studio.Utils.Toolbars;
 
 namespace Toybox.Studio.Viewport;
 
@@ -33,7 +32,7 @@ public sealed partial class ViewportViewModel :
 {
     private readonly Logger _logger;
     private readonly ViewKind _kind;
-    private readonly WorldSelection? _selection;
+    private readonly IViewportPickHandler? _pick;
     private readonly ViewportTapTracker _taps = new();
     private ViewportStream? _stream;
 
@@ -44,23 +43,41 @@ public sealed partial class ViewportViewModel :
     public ViewportViewModel(
         EventDispatcher events,
         Logger logger,
+        Engine engine,
         ViewKind kind,
         string emptyMessage = "No world loaded.",
+        string preparingMessage = "Loading…",
         IReadOnlyList<ToolbarViewModel>? toolbars = null,
-        WorldSelection? selection = null)
+        IViewportPickHandler? pick = null,
+        object? overlay = null)
         : base(events)
     {
         _logger = logger;
         _kind = kind;
-        _selection = selection;
+        _pick = pick;
         EmptyMessage = emptyMessage;
+        PreparingMessage = preparingMessage;
         Toolbars = toolbars ?? [];
+        Overlay = overlay;
+
+        // Seed the authoritative engine state so a viewport opened while the engine is off shows the launch
+        // prompt at once (rather than waiting on a state change that a steady-off engine never dispatches),
+        // and one opened over a running engine never flashes it. The engine isn't held — later changes
+        // arrive as EngineStateChanged.
+        _engineState = engine.State;
+        _engineStatus = engine.State.StatusMessage;
+        IsEngineOff = engine.State.Phase == EnginePhase.Off;
     }
 
     /// <summary>The overlay toolbars (the transform tools, the render layers), empty for a viewport
     /// kind without them (game, asset preview). The host composes them; this panel owns their
     /// lifetimes and their layout-persisted placements.</summary>
     public IReadOnlyList<ToolbarViewModel> Toolbars { get; }
+
+    /// <summary>An optional content overlay the view hosts over the render surface, sized to the surface's
+    /// image rect (the node overlay for an editor viewport; null otherwise). Kind-agnostic — the view
+    /// resolves its view by convention. This panel owns its lifetime.</summary>
+    public object? Overlay { get; }
 
     /// <summary>The toolbars overlay only a live image (and only on a viewport that has them).</summary>
     public bool ShowToolbars => HasFrames && Toolbars.Count > 0;
@@ -80,6 +97,13 @@ public sealed partial class ViewportViewModel :
     }
 
     /// <summary>
+    /// Drops the current stream and clears the surface without binding a new one — the host is hiding this
+    /// viewport (e.g. an asset-browser hover preview whose pointer left). Stops the engine view (releasing
+    /// its preview world); a later <see cref="Prepare"/> rebinds a fresh one.
+    /// </summary>
+    public void Detach() => DropStream();
+
+    /// <summary>
     /// The engine view's shared GPU texture, imported and displayed by the view. Null while there is
     /// nothing to show (disconnected, not yet ready, or GPU sharing unavailable).
     /// </summary>
@@ -90,6 +114,7 @@ public sealed partial class ViewportViewModel :
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
     [NotifyPropertyChangedFor(nameof(ShowToolbars))]
+    [NotifyPropertyChangedFor(nameof(ShowLaunchPrompt))]
     public partial bool HasFrames { get; private set; }
 
     /// <summary>
@@ -98,45 +123,100 @@ public sealed partial class ViewportViewModel :
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
+    [NotifyPropertyChangedFor(nameof(ShowLoadingGhost))]
+    [NotifyPropertyChangedFor(nameof(ShowLaunchPrompt))]
     public partial bool InteropUnavailable { get; set; }
+
+    /// <summary>
+    /// Set true by the host while it prepares this viewport's content — the Asset Viewer building its
+    /// isolated preview world and streaming the asset in, work the engine's world-load state doesn't cover.
+    /// Drives the loading ghost so a slow open shows a spinner instead of a blank panel; it clears itself
+    /// the moment the first real frame lands (see <see cref="OnHasFramesChanged"/>).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowLoadingGhost))]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyGhost))]
+    [NotifyPropertyChangedFor(nameof(ShowLaunchPrompt))]
+    [NotifyPropertyChangedFor(nameof(LoadingMessage))]
+    public partial bool IsPreparing { get; set; }
 
     /// <summary>The empty-state ghost message ("No world loaded.", or a preview's own text).</summary>
     public string EmptyMessage { get; }
 
-    /// <summary>The phase text shown by the loading ghost (e.g. "Compiling project…").</summary>
-    [ObservableProperty]
-    public partial string LoadingMessage { get; private set; } = string.Empty;
+    /// <summary>The loading-ghost message shown while the host is <see cref="IsPreparing"/> (e.g. "Loading
+    /// asset…"), as opposed to the engine's own compile/load status.</summary>
+    public string PreparingMessage { get; }
+
+    // The engine's latest compile/load status text, copied on EngineStateChanged; surfaced through
+    // LoadingMessage when the ghost is up for an engine load rather than a host prepare.
+    private string _engineStatus = string.Empty;
+
+    /// <summary>The phase text shown by the loading ghost: the host's preparing text while preparing, else
+    /// the engine's status (e.g. "Compiling project…").</summary>
+    public string LoadingMessage => IsPreparing ? PreparingMessage : _engineStatus;
 
     /// <summary>
-    /// The loading ghost shows while compiling or loading. A play transition ("Loading into game…") is the
-    /// game's load, so only the game viewport shows it; an asset-preview viewport (its own isolated world)
-    /// never participates in the active world's load.
+    /// The loading ghost shows while the host is preparing this viewport's content, or while the engine is
+    /// compiling/loading. A play transition ("Loading into game…") is the game's load, so only the game
+    /// viewport shows that; an asset-preview viewport (its own isolated world) never participates in the
+    /// active world's load, but it does drive its own <see cref="IsPreparing"/> state. It never shows over
+    /// an unusable compositor (<see cref="InteropUnavailable"/>) — the empty ghost owns that so the
+    /// spinner can't run forever against a viewport that can never present.
     /// </summary>
     public bool ShowLoadingGhost =>
-        _kind != ViewKind.AssetPreview
-        && _engineState.IsLoading
-        && (!_engineState.IsGameLoading || _kind == ViewKind.Game);
+        !InteropUnavailable
+        && (IsPreparing
+            || (_kind != ViewKind.AssetPreview
+                && _engineState.IsLoading
+                && (!_engineState.IsGameLoading || _kind == ViewKind.Game)));
 
     /// <summary>The empty-state ghost shows when there's nothing to draw (or we can't draw it) and the
     /// loading ghost isn't up (it owns the busy state), so the two never overlap.</summary>
     public bool ShowEmptyGhost => (!HasFrames || InteropUnavailable) && !ShowLoadingGhost;
 
     /// <summary>
+    /// True when the engine is fully off (not compiling, launching, loading, or connected) — it crashed and
+    /// auto-restart gave up, it was stopped, or it was never launched. Seeded from the engine's authoritative
+    /// state at construction and kept current on <see cref="EngineStateChanged"/>; gates the launch prompt.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowLaunchPrompt))]
+    public partial bool IsEngineOff { get; private set; }
+
+    /// <summary>
+    /// The empty viewport's "Launch Engine" call-to-action: shown whenever the engine is off and the empty
+    /// ghost is up, so every viewport (editor, game, asset preview) offers to (re)start the engine rather
+    /// than sitting as a dead black panel. It rides with the empty ghost and so never overlaps the loading
+    /// spinner.
+    /// </summary>
+    public bool ShowLaunchPrompt => IsEngineOff && ShowEmptyGhost;
+
+    /// <summary>
     /// Streams a captured input snapshot (already pointer-mapped by the view) to the engine view (a
     /// no-op until a stream is bound). A snapshot completing a tap also picks: the click-select
-    /// gesture, on a viewport composed with the editor's selection.
+    /// gesture, on a viewport composed with an <see cref="IViewportPickHandler"/> (a plain viewport —
+    /// game, asset preview — hands in none, so the tap path stays inert).
     /// </summary>
     public void ForwardInput(InputSnapshot input)
     {
-        if (_selection is not null && _taps.Track(input) is { } tap)
+        if (_pick is not null && _taps.Track(input) is { } tap)
             PickAsync(tap).FireAndForget();
 
         _stream?.SendInput(input);
     }
 
-    // Asks the engine what the tap hit, then lands the gesture on the shared WorldSelection (whose
-    // synced push lights the engine's selection outline and anchors the gizmo). A gizmo-handle tap is
-    // deliberate no-op territory: clearing would drop the gizmo mid-interaction.
+    /// <summary>
+    /// Reports the viewport's on-screen size in device pixels (the view supplies it from its surface bounds
+    /// × render scaling). Forwarded to the stream so an editor view renders at its pane's resolution rather
+    /// than the full graphics resolution; a no-op until a stream is bound.
+    /// </summary>
+    public void UpdateRenderSize(int pixelWidth, int pixelHeight) =>
+        _stream?.SetRenderSize(pixelWidth, pixelHeight);
+
+    // Asks the engine what the tap hit (a generic per-view RPC), then hands the entity id to the pick
+    // handler, which applies the host's semantics (the world viewport lands it on WorldSelection). A
+    // gizmo-handle tap is deliberate no-op territory: forwarding it would disturb the gizmo the click
+    // is driving.
     private async Task PickAsync(ViewportTap tap)
     {
         if (_stream is null)
@@ -149,27 +229,7 @@ public sealed partial class ViewportViewModel :
         if (pick.Gizmo)
             return;
 
-        Dispatch.To(DispatchContext.UI, () => ApplyPick(pick.Id, tap));
-    }
-
-    private void ApplyPick(ulong? id, ViewportTap tap)
-    {
-        if (_selection is null)
-            return;
-
-        if (id is { } value)
-        {
-            if (tap.Toggle)
-                _selection.Toggle(value);
-            else if (tap.Additive)
-                _selection.Add(value);
-            else
-                _selection.Set(value);
-        }
-        else if (!tap.Toggle && !tap.Additive)
-        {
-            _selection.Clear();
-        }
+        Dispatch.To(DispatchContext.UI, () => _pick?.OnPicked(pick.Id, tap));
     }
 
     /// <summary>The workspace hands in this panel's layout-persisted toolbar placements (see
@@ -186,6 +246,7 @@ public sealed partial class ViewportViewModel :
         DropStream();
         foreach (var toolbar in Toolbars)
             toolbar.Dispose();
+        (Overlay as IDisposable)?.Dispose();
     }
 
     public void Handle(in ConnectionChanged evt)
@@ -198,9 +259,25 @@ public sealed partial class ViewportViewModel :
     public void Handle(in EngineStateChanged evt)
     {
         _engineState = evt.State;
-        LoadingMessage = evt.State.StatusMessage;
+        _engineStatus = evt.State.StatusMessage;
+        IsEngineOff = evt.State.Phase == EnginePhase.Off; // Notifies ShowLaunchPrompt.
+        OnPropertyChanged(nameof(LoadingMessage));
         OnPropertyChanged(nameof(ShowLoadingGhost));
         OnPropertyChanged(nameof(ShowEmptyGhost));
+    }
+
+    /// <summary>Builds the active project and launches its engine, from the empty viewport's call-to-action.
+    /// The viewport doesn't own the engine host: it announces the request and the Projects-layer coordinator
+    /// carries it out (the same path startup and project-switch take).</summary>
+    [RelayCommand]
+    private void LaunchEngine() => Events.Dispatch(new EngineLaunchRequested());
+
+    // A real frame on screen means the host's preparation is over — drop the loading ghost automatically so
+    // the host never has to race the surface. (A host prepare that fails before any frame clears it itself.)
+    partial void OnHasFramesChanged(bool value)
+    {
+        if (value)
+            IsPreparing = false;
     }
 
     public void Handle(in ViewSurfaceCreated evt)

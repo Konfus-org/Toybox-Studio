@@ -11,31 +11,127 @@
             <Setter Property="Width" Value="14"/>
             <Setter Property="Height" Value="14"/>
         </Style>
+
+        <!-- The per-item star: muted at rest, brightens on hover, gold when starred. Clicking it toggles
+             the favorite without running the row's command. -->
+        <Style Selector="ToggleButton.star">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="Opacity" Value="0.5"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="ToolTip.Tip" Value="Add to Favorites"/>
+        </Style>
+        <Style Selector="ToggleButton.star:pointerover, ToggleButton.star:checked">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="ToggleButton.star /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.star icons|IconView">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeForegroundBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.star:checked icons|IconView">
+            <Setter Property="Foreground" Value="#F2C94C"/>
+        </Style>
     </UserControl.Styles>
 
     <UserControl.Resources>
-        <!-- The row theme the data-driven Window and Layout menus share: icon + title, the row's own
-             command. -->
-        <ControlTheme x:Key="WindowMenuItemTheme" TargetType="MenuItem" x:DataType="local:WindowMenuItem"
+        <!-- The header for a fixed item (its own icon stays in the MenuItem.Icon slot): title + star. -->
+        <DataTemplate x:Key="FavoritableMenuHeader" x:DataType="local:MenuActionViewModel">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                <ToggleButton Classes="star" IsChecked="{Binding IsFavorite, Mode=OneWay}"
+                              Command="{Binding ToggleFavoriteCommand}">
+                    <icons:IconView Kind="Star" Width="12" Height="12"/>
+                </ToggleButton>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- The row theme the data-driven Window, Layout and Favorites menus share: icon + title + star,
+             the row's own command and shortcut hint. -->
+        <ControlTheme x:Key="FavoritableActionItemTheme" TargetType="MenuItem"
+                      x:DataType="local:MenuActionViewModel"
                       BasedOn="{StaticResource {x:Type MenuItem}}">
             <Setter Property="Header" Value="{Binding}"/>
+            <Setter Property="Command" Value="{Binding Command}"/>
+            <Setter Property="InputGesture" Value="{Binding Gesture}"/>
             <Setter Property="HeaderTemplate">
-                <DataTemplate x:DataType="local:WindowMenuItem">
+                <DataTemplate x:DataType="local:MenuActionViewModel">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <icons:IconView Kind="{Binding Icon}" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding Title}" VerticalAlignment="Center"/>
+                        <ToggleButton Classes="star" IsChecked="{Binding IsFavorite, Mode=OneWay}"
+                                      Command="{Binding ToggleFavoriteCommand}">
+                            <icons:IconView Kind="Star" Width="12" Height="12"/>
+                        </ToggleButton>
                     </StackPanel>
                 </DataTemplate>
             </Setter>
-            <Setter Property="Command" Value="{Binding OpenCommand}"/>
-            <Setter Property="InputGesture" Value="{Binding Gesture}"/>
         </ControlTheme>
     </UserControl.Resources>
 
     <Menu>
+        <MenuItem Header="File">
+            <MenuItem Header="Open">
+                <MenuItem.Icon>
+                    <icons:IconView Kind="FolderOpen"/>
+                </MenuItem.Icon>
+                <MenuItem Header="{Binding OpenProjectItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                          Command="{Binding OpenProjectItem.Command}"
+                          InputGesture="{Binding OpenProjectItem.Gesture}">
+                    <MenuItem.Icon>
+                        <icons:IconView Kind="Boxes"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Binding OpenAssetItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                          Command="{Binding OpenAssetItem.Command}"
+                          InputGesture="{Binding OpenAssetItem.Gesture}">
+                    <MenuItem.Icon>
+                        <icons:IconView Kind="Image"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Binding OpenSourceItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                          Command="{Binding OpenSourceItem.Command}"
+                          InputGesture="{Binding OpenSourceItem.Gesture}">
+                    <MenuItem.Icon>
+                        <icons:IconView Kind="FileCode"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="{Binding SaveItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                      Command="{Binding SaveItem.Command}" InputGesture="{Binding SaveItem.Gesture}">
+                <MenuItem.Icon>
+                    <icons:IconView Kind="Save"/>
+                </MenuItem.Icon>
+            </MenuItem>
+        </MenuItem>
         <MenuItem Header="Edit">
-            <MenuItem Header="Settings" Command="{Binding OpenSettingsCommand}"
-                      InputGesture="{Binding SettingsGesture}">
+            <MenuItem Header="{Binding UndoItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                      Command="{Binding UndoItem.Command}" InputGesture="{Binding UndoItem.Gesture}">
+                <MenuItem.Icon>
+                    <icons:IconView Kind="Undo2"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="{Binding RedoItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                      Command="{Binding RedoItem.Command}" InputGesture="{Binding RedoItem.Gesture}">
+                <MenuItem.Icon>
+                    <icons:IconView Kind="Redo2"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="Entity" ItemsSource="{Binding EntityItems}"
+                      ItemContainerTheme="{StaticResource FavoritableActionItemTheme}">
+                <MenuItem.Icon>
+                    <icons:IconView Kind="Boxes"/>
+                </MenuItem.Icon>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="{Binding SettingsItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                      Command="{Binding SettingsItem.Command}" InputGesture="{Binding SettingsItem.Gesture}">
                 <MenuItem.Icon>
                     <icons:IconView Kind="Settings"/>
                 </MenuItem.Icon>
@@ -46,39 +142,49 @@
                 <MenuItem.Icon>
                     <icons:IconView Kind="Hammer" Foreground="{DynamicResource ThemeSuccessBrush}"/>
                 </MenuItem.Icon>
-                <MenuItem Header="Debug" Command="{Binding BuildAppDebugCommand}"
-                          InputGesture="{Binding BuildAppDebugGesture}">
+                <MenuItem Header="{Binding BuildDebugItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                          Command="{Binding BuildDebugItem.Command}"
+                          InputGesture="{Binding BuildDebugItem.Gesture}">
                     <MenuItem.Icon>
                         <icons:IconView Kind="Bug" Foreground="{DynamicResource ThemeWarningBrush}"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="Release" Command="{Binding BuildAppReleaseCommand}"
-                          InputGesture="{Binding BuildAppReleaseGesture}">
+                <MenuItem Header="{Binding BuildReleaseItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                          Command="{Binding BuildReleaseItem.Command}"
+                          InputGesture="{Binding BuildReleaseItem.Gesture}">
                     <MenuItem.Icon>
                         <icons:IconView Kind="Package" Foreground="{DynamicResource ThemeSuccessBrush}"/>
                     </MenuItem.Icon>
                 </MenuItem>
             </MenuItem>
-            <MenuItem Header="Engine" Command="{Binding BuildEngineCommand}"
-                      InputGesture="{Binding BuildEngineGesture}">
+            <MenuItem Header="{Binding BuildEngineItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                      Command="{Binding BuildEngineItem.Command}"
+                      InputGesture="{Binding BuildEngineItem.Gesture}">
                 <MenuItem.Icon>
                     <icons:IconView Kind="Cog"/>
                 </MenuItem.Icon>
             </MenuItem>
         </MenuItem>
         <MenuItem Header="Debug">
-            <MenuItem Header="Attach To Running Build" Command="{Binding AttachToRunningBuildCommand}"
-                      InputGesture="{Binding AttachGesture}">
+            <MenuItem Header="{Binding AttachItem}" HeaderTemplate="{StaticResource FavoritableMenuHeader}"
+                      Command="{Binding AttachItem.Command}" InputGesture="{Binding AttachItem.Gesture}">
                 <MenuItem.Icon>
                     <icons:IconView Kind="Plug" Foreground="{DynamicResource ThemeInfoBrush}"/>
                 </MenuItem.Icon>
             </MenuItem>
         </MenuItem>
-        <!-- Data-driven: one row per registered [Dockable] (icon + title). -->
+        <!-- Data-driven: one row per registered [Dockable] (icon + title + star). -->
         <MenuItem Header="Window" ItemsSource="{Binding WindowItems}"
-                  ItemContainerTheme="{StaticResource WindowMenuItemTheme}"/>
+                  ItemContainerTheme="{StaticResource FavoritableActionItemTheme}"/>
         <!-- The dock-arrangement actions: save / load / reset. -->
         <MenuItem Header="Layout" ItemsSource="{Binding LayoutItems}"
-                  ItemContainerTheme="{StaticResource WindowMenuItemTheme}"/>
+                  ItemContainerTheme="{StaticResource FavoritableActionItemTheme}"/>
+        <!-- Everything the user has starred, from any menu above. -->
+        <MenuItem Header="Favorites" IsVisible="{Binding HasFavorites}" ItemsSource="{Binding Favorites}"
+                  ItemContainerTheme="{StaticResource FavoritableActionItemTheme}">
+            <MenuItem.Icon>
+                <icons:IconView Kind="Star" Foreground="#F2C94C"/>
+            </MenuItem.Icon>
+        </MenuItem>
     </Menu>
 </UserControl>

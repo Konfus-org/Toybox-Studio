@@ -1,0 +1,10 @@
+{
+    "globals": {
+        "type": "handle",
+        "value": 3000000021
+    },
+    "chunks": {
+        "type": "array",
+        "value": []
+    }
+}

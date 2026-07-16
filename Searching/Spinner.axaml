@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             xmlns:controls="using:Toybox.Studio.Searching"
+             x:Class="Toybox.Studio.Searching.Spinner"
+             x:Name="Root" Width="14" Height="14">
+
+    <!-- A tiny activity spinner with two modes driven by Progress:
+           • Progress == null → an indeterminate 3/4 ring spinning continuously.
+           • Progress in 0..1 → a static arc sweeping Progress * 360° (how far along a long query is).
+         Rotation is animated on an Ellipse (a shape, not a TextBlock), so the Avalonia transform-animator
+         caveat noted in LoadingGhostView does not apply here. -->
+    <UserControl.Resources>
+        <controls:ProgressArcConverter x:Key="ProgressArc"/>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Ellipse.spin">
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+            <Style.Animations>
+                <Animation Duration="0:0:0.9" IterationCount="INFINITE" Easing="LinearEasing">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="RotateTransform.Angle" Value="0"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="RotateTransform.Angle" Value="360"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <!-- Indeterminate: a spinning ring with a gap (dash pattern ≈ one 3/4 arc + gap per revolution). -->
+        <Ellipse Classes="spin" Width="12" Height="12"
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Stroke="{DynamicResource ThemeAccentBrush}" StrokeThickness="2"
+                 StrokeDashArray="14,4.9" StrokeLineCap="Round"
+                 IsVisible="{Binding #Root.Progress, Converter={x:Static conv:ObjectConverters.IsNull}}">
+            <Ellipse.RenderTransform>
+                <RotateTransform/>
+            </Ellipse.RenderTransform>
+        </Ellipse>
+
+        <!-- Determinate: an arc from 12 o'clock sweeping Progress * 360°. -->
+        <Path Stroke="{DynamicResource ThemeAccentBrush}" StrokeThickness="2" StrokeLineCap="Round"
+              Data="{Binding #Root.Progress, Converter={StaticResource ProgressArc}}"
+              IsVisible="{Binding #Root.Progress, Converter={x:Static conv:ObjectConverters.IsNotNull}}"/>
+    </Panel>
+</UserControl>

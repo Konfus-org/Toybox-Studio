@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.UnknownIndicatorView"
+             x:DataType="local:UnknownIndicatorViewModel">
+    <!-- Fixed width so unknown rows keep their trailing edge aligned with the state-dot rows. The
+         transparent panel background makes the whole slot hit-test for the explanatory tooltip. -->
+    <Panel Width="24" VerticalAlignment="Center" Background="Transparent"
+           ToolTip.Tip="{Binding Tip}">
+        <Border Width="16" Height="16" CornerRadius="8" HorizontalAlignment="Center"
+                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1.5">
+            <TextBlock Text="?" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       FontSize="10" FontWeight="Bold"
+                       Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+        </Border>
+    </Panel>
+</UserControl>

@@ -1,4 +1,5 @@
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Utils.Attributes;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.EngineApi;
@@ -18,7 +19,7 @@ namespace Toybox.Studio.EngineApi;
 /// attribute's <c>Address</c> template. Change notification is the editor's <see cref="IListenable"/>;
 /// anything view-bound wraps this in an explicit view model.
 /// </summary>
-public abstract class EngineObject : IListenable, ISerializable
+public abstract class EngineObject : IListenable, ISerializable, IDisposable
 {
     private SyncHub? _hub;
 
@@ -26,11 +27,25 @@ public abstract class EngineObject : IListenable, ISerializable
     // engine only streams raises someone is listening to (see AddHandler/RemoveHandler).
     private List<SyncEventSlot>? _subscribedEvents;
 
+    // The nested EngineObjects this one owns through its child-bearing synced properties (an entity's
+    // components, a world's entities): bound and unbound with their owner, and their edits/changes bubble
+    // up so the owner (an Asset) sees its whole graph go dirty. Kept in sync with the property values by
+    // ReconcileChildren.
+    private readonly List<EngineObject> _children = [];
+
     /// <summary>Raised after any synced value changes, from either side. Raised on the setter's thread
     /// for local edits and on the UI thread for engine-applied ones.</summary>
     public event Action? Changed;
 
-    /// <summary>Whether the object is bound to the engine (edits push, inbound changes apply).</summary>
+    /// <summary>Raised for a real, local synced edit (a bound, non-Mirror value changed through the
+    /// setter) — never for an inbound engine apply, an unbound assignment, or a Mirror value. Fires after
+    /// the field is written and just before <see cref="Changed"/>, carrying the edited property's wire key
+    /// so a listener can coalesce a run of edits to one property. The undo history listens here.</summary>
+    public event Action<EditInfo>? Edited;
+
+    /// <summary>Whether the object is bound to the engine (edits push, inbound changes apply). Engine
+    /// plumbing, not content — kept out of reflective UIs like the property grid.</summary>
+    [Hidden]
     public bool IsBound => _hub is not null;
 
     /// <summary>The address path the hub registers the object under (the internal accessor lets the hub
@@ -46,6 +61,16 @@ public abstract class EngineObject : IListenable, ISerializable
     protected virtual EngineAddress Address => EngineAddress.None;
 
     /// <summary>
+    /// Whether this object addresses its properties by path rather than by a separate key — an entity or a
+    /// component, whose edits go through the engine's world-qualified <c>sync.set</c> path
+    /// (<c>world/{w}/entities/{id}/components/{comp}/{key}</c>). When true, a push / reset / isDefault folds
+    /// the property's wire key into the address (<c>{Address}/{key}</c>) and sends no separate <c>key</c>;
+    /// when false (the default), the family carries <c>{address, key, value}</c>. The generator overrides
+    /// this on the path-addressed roots.
+    /// </summary>
+    protected virtual bool PathAddressed => false;
+
+    /// <summary>
     /// Connects the object to the engine: outbound edits start pushing and inbound engine changes start
     /// applying. Bind after hydration, and re-bind if <see cref="Address"/> changes (say, once an id is
     /// assigned) — registration keys on the address's value at bind time.
@@ -58,6 +83,14 @@ public abstract class EngineObject : IListenable, ISerializable
         if (_subscribedEvents is { } subscribed)
             foreach (var slot in subscribed)
                 SendSubscription(hub, EngineCommands.SyncSubscribe, slot);
+
+        // Bind the children under the same hub (each at its own address); ReconcileChildren already made
+        // the set current when the child-bearing properties last changed.
+        foreach (var child in _children)
+        {
+            PrepareChild(child);
+            child.Bind(hub);
+        }
     }
 
     /// <summary>Disconnects the object: pending pushes are dropped, further edits stay local, and the
@@ -69,11 +102,21 @@ public abstract class EngineObject : IListenable, ISerializable
         if (hub is null)
             return;
 
+        // Detach the children from the engine too (they stay owned — their edits still bubble — but stop
+        // pushing), then unregister self.
+        foreach (var child in _children)
+            child.Unbind();
+
         if (_subscribedEvents is { } subscribed)
             foreach (var slot in subscribed)
                 SendSubscription(hub, EngineCommands.SyncUnsubscribe, slot);
         hub.Unregister(this);
     }
+
+    /// <summary>Tears the object down: unbinds it (and its children) from the engine. An owner disposes to
+    /// release a whole mirror graph — a world dropping its entities and their components — in one call.
+    /// Override to add teardown (dropping event-bus registrations) and chain to the base.</summary>
+    public virtual void Dispose() => Unbind();
 
     /// <summary>Sends every staged edit — <see cref="SyncMode.Manual"/> values and any batched push
     /// still waiting on its window — as one flush.</summary>
@@ -89,8 +132,7 @@ public abstract class EngineObject : IListenable, ISerializable
         if (WireKeyFor(propertyName) is not { } key)
             return Result.Fail($"'{propertyName}' is not an engine-synced property.");
 
-        var payload = CreatePayload();
-        payload["key"] = key;
+        var payload = CreatePropertyPayload(key);
         var reply = await SendCommandAsync<JToken>(EngineCommands.SyncReset, payload, ct).ContinueOnAnyContext();
         if (!reply)
             return Result.Fail(reply.Error!);
@@ -107,12 +149,12 @@ public abstract class EngineObject : IListenable, ISerializable
         if (WireKeyFor(propertyName) is not { } key)
             return Task.FromResult(Result<bool>.Fail($"'{propertyName}' is not an engine-synced property."));
 
-        var payload = CreatePayload();
-        payload["key"] = key;
+        var payload = CreatePropertyPayload(key);
         return SendCommandAsync<bool>(EngineCommands.SyncIsDefault, payload, ct);
     }
 
-    /// <summary>Re-reads the whole object from the engine and applies every returned value.</summary>
+    /// <summary>Re-reads the whole object from the engine (by its address) and applies every returned
+    /// value — the uniform read verb, <c>sync.describe</c>.</summary>
     public async Task<Result> RefreshAsync(CancellationToken ct = default)
     {
         var reply = await SendCommandAsync<JObject>(EngineCommands.SyncDescribe, CreatePayload(), ct)
@@ -122,8 +164,8 @@ public abstract class EngineObject : IListenable, ISerializable
 
         if (reply.Value is { } body)
         {
-            // The engine's describe wraps each field in its typed envelope; the slot readers want
-            // the bare value.
+            // The engine's describe returns the body's fields at the top level, each wrapped in its typed
+            // envelope; unwrap to the bare value and apply (unknown extras like "typeName" are skipped).
             foreach (var (key, value) in body)
                 if (WireValue.Unwrap(value) is { } bare)
                     Apply(key, bare);
@@ -133,9 +175,10 @@ public abstract class EngineObject : IListenable, ISerializable
     }
 
     /// <summary>
-    /// The object's synced state as a wire-shaped body: one entry per synced property, excluding
-    /// <see cref="SyncMode.Mirror"/> values — those are engine-owned (ids and the like), so a copied
-    /// body carries content, never identity.
+    /// The object's synced state as a wire-shaped body — one entry per synced property, blanket (identity
+    /// and engine-owned values included): the studio side serializes everything, and the engine ignores
+    /// what it doesn't want (its own <c>do_not_serialize</c> governs what C++ persists). It is also what an
+    /// undo snapshot of the object is built from, so it must carry the whole state.
     /// </summary>
     public JObject Serialize()
     {
@@ -157,6 +200,36 @@ public abstract class EngineObject : IListenable, ISerializable
                 Apply(key, bare);
     }
 
+    /// <summary>
+    /// <see cref="Deserialize"/>'s push-through twin: applies a whole synced body and PUSHES each changed
+    /// value to the engine, exactly as if the user re-entered them — <see cref="OnEdited"/> fires (an
+    /// asset's dirty flag flips), <see cref="Changed"/> raises, and the edit schedules per its
+    /// <see cref="SyncMode"/>. This restores an undo snapshot, where <see cref="Deserialize"/> pastes a
+    /// clipboard body. Unchanged values are skipped by the setter's own equality test, so only real deltas
+    /// reach the wire.
+    /// </summary>
+    public virtual void RestoreFrom(JObject body)
+    {
+        foreach (var (key, value) in body)
+            if (WireValue.Unwrap(value) is { } bare)
+                PushApply(key, bare);
+    }
+
+    /// <summary>
+    /// The diff twin of <see cref="RestoreFrom"/>, driving an undo/redo step: pushes each property whose
+    /// value in <paramref name="target"/> differs from <paramref name="from"/> — the properties the step
+    /// actually changes — and leaves every other property alone. This is what undo/redo need: a blanket
+    /// <see cref="RestoreFrom"/> would also push values that merely drifted in the mirror since the snapshot
+    /// (a world's engine-owned globals the describe never carried, another entity's engine-driven motion),
+    /// driving stale state back into the live engine; the diff pushes only the edit itself.
+    /// </summary>
+    public virtual void RestoreDiff(JObject target, JObject from)
+    {
+        foreach (var (key, value) in target)
+            if (!JToken.DeepEquals(value, from[key]) && WireValue.Unwrap(value) is { } bare)
+                PushApply(key, bare);
+    }
+
     /// <summary>One inbound engine change, routed here by the hub on the UI thread.</summary>
     internal void ApplyFromEngine(string key, JToken value) =>
         Apply(key, WireValue.Unwrap(value) ?? value);
@@ -167,7 +240,7 @@ public abstract class EngineObject : IListenable, ISerializable
     /// <summary>
     /// The generated setter body: updates the field, notifies, and — when bound — schedules the push per
     /// the slot's mode. False (and no side effects) when the value is unchanged. Unbound or
-    /// <see cref="SyncMode.Mirror"/> edits stay local.
+    /// <see cref="SyncMode.OneWayFromEngine"/> edits stay local.
     /// </summary>
     protected bool Push<T>(ref T field, T value, SyncSlot slot)
     {
@@ -175,9 +248,11 @@ public abstract class EngineObject : IListenable, ISerializable
             return false;
 
         field = value;
-        var hub = slot.Mode != SyncMode.Mirror ? _hub : null;
+        if (slot.BindsChildren)
+            ReconcileChildren();
+        var hub = slot.Mode != SyncMode.OneWayFromEngine ? _hub : null;
         if (hub is not null)
-            OnEdited();
+            OnEdited(new EditInfo(slot.Key));
         RaiseChanged();
         hub?.Scheduler.Schedule(this, slot, CreateSetPayload(slot, slot.Write(value)));
         return true;
@@ -194,18 +269,71 @@ public abstract class EngineObject : IListenable, ISerializable
             return;
 
         field = incoming;
+        if (slot.BindsChildren)
+            ReconcileChildren();
         RaiseChanged();
     }
 
     /// <summary>
-    /// A bound, non-Mirror value just changed locally — a real edit heading for the engine, as opposed
-    /// to an inbound apply, an unbound assignment (constructor defaults, template authoring), or an
-    /// engine-owned Mirror value. Called before the change notification, so derived edit-state (an
-    /// asset's dirty flag) travels with it. The default does nothing.
+    /// A real edit reached this object — either one of its own bound, non-Mirror values changed through a
+    /// setter, or a nested child's edit bubbled up. As opposed to an inbound apply, an unbound assignment
+    /// (constructor defaults, template authoring), or an engine-owned Mirror value. Called before the
+    /// change notification, so derived edit-state (an asset's dirty flag) travels with it. The default
+    /// raises <see cref="Edited"/> (which re-bubbles to this object's own owner); override to add
+    /// bookkeeping and chain to the base to keep the signal.
     /// </summary>
-    protected virtual void OnEdited()
+    protected virtual void OnEdited(EditInfo edit) => Edited?.Invoke(edit);
+
+    /// <summary>Collects the nested <see cref="EngineObject"/>s reachable through this object's
+    /// child-bearing synced properties (generated override; chains to the base so an inheritance chain
+    /// contributes end to end). The owner binds them and aggregates their edits.</summary>
+    protected virtual void CollectChildren(List<EngineObject> children)
     {
     }
+
+    /// <summary>Readies a child for binding — the owner stamps whatever the child's <see cref="Address"/>
+    /// needs from it (an entity writes its id onto each component, whose address is
+    /// <c>entity/{EntityId}/{Name}</c>). Called just before the child binds, so the address resolves.
+    /// The default does nothing.</summary>
+    protected virtual void PrepareChild(EngineObject child)
+    {
+    }
+
+    // Brings the owned-child set in line with the current child-bearing property values: newly-present
+    // children start bubbling their edits/changes here (and bind if this object is bound), removed ones
+    // detach. Called when a child-bearing property changes (Push/Hydrate) and after Deserialize.
+    private void ReconcileChildren()
+    {
+        var current = new List<EngineObject>();
+        CollectChildren(current);
+
+        foreach (var child in _children)
+            if (!current.Contains(child))
+            {
+                child.Edited -= OnChildEdited;
+                child.Changed -= RaiseChanged;
+                child.Unbind();
+            }
+
+        foreach (var child in current)
+            if (!_children.Contains(child))
+            {
+                child.Edited += OnChildEdited;
+                child.Changed += RaiseChanged;
+                if (_hub is { } hub)
+                {
+                    PrepareChild(child);
+                    child.Bind(hub);
+                }
+            }
+
+        _children.Clear();
+        _children.AddRange(current);
+    }
+
+    // A child's edit is this object's edit too: run it through OnEdited so an owning asset flips dirty and
+    // the signal bubbles one more level up (to this object's own owner).
+    private void OnChildEdited(EditInfo edit) => OnEdited(edit);
 
     /// <summary>
     /// The generated add-accessor body for a synced event: the first handler subscribes the event with
@@ -249,6 +377,11 @@ public abstract class EngineObject : IListenable, ISerializable
     /// <summary>Routes one inbound wire key to its property (generated override; chains to the base so
     /// an inheritance chain applies end to end). True when the key was recognized.</summary>
     protected virtual bool Apply(string key, JToken value) => false;
+
+    /// <summary>Routes one body entry to its property THROUGH the setter/push path — the push twin of
+    /// <see cref="Apply"/> that <see cref="RestoreFrom"/> drives (generated override; chains to the base
+    /// so an inheritance chain restores end to end). True when the key was recognized.</summary>
+    protected virtual bool PushApply(string key, JToken value) => false;
 
     /// <summary>Routes one inbound event raise to its event (generated override; chains to the base so
     /// an inheritance chain raises end to end). True when the key was recognized.</summary>
@@ -310,10 +443,31 @@ public abstract class EngineObject : IListenable, ISerializable
 
     private JObject CreateSetPayload(SyncSlot slot, JToken value)
     {
+        // A path-addressed object (entity/component) carries the property in the address itself and no
+        // extras; every other family sends { address, key, value } (+ the attribute's extras).
+        if (PathAddressed)
+            return new JObject { ["address"] = KeyedAddress(slot.Key), ["value"] = value };
+
         var payload = CreatePayload();
         WriteExtras(slot.Key, payload);
         payload["key"] = slot.Key;
         payload["value"] = value;
+        return payload;
+    }
+
+    // A property's full wire address: the object's path with the property's wire key appended, the shape the
+    // engine's sync.set/reset/isDefault path verbs expect (world/{w}/entities/{id}/components/{comp}/{key}).
+    private string KeyedAddress(string key) => $"{Address}/{key}";
+
+    // A verb payload addressing one property: folded into the address for a path-addressed object, or the
+    // object address plus a separate { key } for the keyed families.
+    private JObject CreatePropertyPayload(string key)
+    {
+        if (PathAddressed)
+            return new JObject { ["address"] = KeyedAddress(key) };
+
+        var payload = CreatePayload();
+        payload["key"] = key;
         return payload;
     }
 

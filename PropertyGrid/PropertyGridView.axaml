@@ -5,23 +5,95 @@
              x:Class="Toybox.Studio.PropertyGrid.PropertyGridView"
              x:DataType="local:PropertyGridViewModel">
 
-    <!-- Every slot view-model resolves to its view here, once for the whole grid (nested node views
-         inherit these templates) — a new slot occupant is one view-model + view pair and one line below. -->
+    <!-- Compact, unified value-editor chrome so every field reads as the same recessed toy box; the styles
+         cascade down into the row and slot views hosted beneath the grid. -->
+    <UserControl.Styles>
+        <!-- Each category is a raised toy "pillow": the surface gradient, rounded, lifted off the panel by the
+             card shadow. Rows and the header sit transparent on top, so the group reads as one moulded block. -->
+        <Style Selector="Border.toyCard">
+            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+            <Setter Property="Margin" Value="2,0,2,10"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+            <Setter Property="BoxShadow" Value="{DynamicResource ThemeCardShadow}"/>
+        </Style>
+
+        <Style Selector="NumericUpDown.field">
+            <Setter Property="MinWidth" Value="56"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <!-- Advertise drag-to-scrub: the inner text box shows the resize cursor on hover, reverting to the
+             I-beam only once it is focused for typing. -->
+        <Style Selector="NumericUpDown.field /template/ TextBox#PART_TextBox">
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <Style Selector="NumericUpDown.field:focus-within /template/ TextBox#PART_TextBox">
+            <Setter Property="Cursor" Value="IBeam"/>
+        </Style>
+        <Style Selector="TextBox.field">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ComboBox.field">
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+
+        <!-- Recessed well chrome shared by the non-text editors (handle picker, script link): the well fill
+             plus an inset shadow on the rounded border, so a picker reads as the same pressed-in control. -->
+        <Style Selector="Border.fieldHost">
+            <Setter Property="Background" Value="{DynamicResource ThemeWellFillBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
+            <Setter Property="BoxShadow" Value="{DynamicResource ThemeWellInsetShadow}"/>
+            <Setter Property="MinHeight" Value="22"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Every slot view-model resolves to its view here, once for the whole grid (nested node views inherit
+         these templates) — a new slot occupant is one view-model + view pair and one line below. -->
     <UserControl.DataTemplates>
         <DataTemplate DataType="slots:TextValueViewModel">
             <slots:TextValueView/>
         </DataTemplate>
+        <DataTemplate DataType="slots:UnknownValueViewModel">
+            <slots:UnknownValueView/>
+        </DataTemplate>
         <DataTemplate DataType="slots:NumberValueViewModel">
             <slots:NumberValueView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:SliderValueViewModel">
+            <slots:SliderValueView/>
         </DataTemplate>
         <DataTemplate DataType="slots:BoolValueViewModel">
             <slots:BoolValueView/>
         </DataTemplate>
+        <DataTemplate DataType="slots:RegexValueViewModel">
+            <slots:RegexValueView/>
+        </DataTemplate>
         <DataTemplate DataType="slots:EnumValueViewModel">
             <slots:EnumValueView/>
         </DataTemplate>
+        <DataTemplate DataType="slots:ColorValueViewModel">
+            <slots:ColorValueView/>
+        </DataTemplate>
+        <!-- One view for both multi-field editors (vector + Euler rotation); matched by their shared base. -->
+        <DataTemplate DataType="slots:AxisValueViewModel">
+            <slots:AxisValueView/>
+        </DataTemplate>
         <DataTemplate DataType="slots:StateIndicatorViewModel">
             <slots:StateIndicatorView/>
+        </DataTemplate>
+        <DataTemplate DataType="slots:UnknownIndicatorViewModel">
+            <slots:UnknownIndicatorView/>
         </DataTemplate>
         <DataTemplate DataType="slots:ActionViewModel">
             <slots:ActionView/>
@@ -37,15 +109,47 @@
         </DataTemplate>
     </UserControl.DataTemplates>
 
-    <!-- The scrollbar keeps its own lane (no auto-hide overlay) so it never sits on the rows' trailing
-         slots; the margin keeps a small gap between the rows and the bar. -->
-    <ScrollViewer AllowAutoHide="False">
-        <ItemsControl ItemsSource="{Binding Nodes}" Margin="0,0,6,0">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="local:PropertyNode">
-                    <local:PropertyNodeView/>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-    </ScrollViewer>
+    <Panel>
+        <ScrollViewer AllowAutoHide="False" HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <!-- One shared-size scope so every row's label column resizes together via the splitter; the outer
+                 padding leaves room for the cards' shadows and keeps the right-hand controls clear of the
+                 overlay scrollbar. -->
+            <ItemsControl ItemsSource="{Binding Groups}" Grid.IsSharedSizeScope="True" Margin="6,6,12,2">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="local:PropertyCategoryGroup">
+                        <Border Classes="toyCard">
+                            <StackPanel>
+                                <!-- A named category gets a collapsible accent band; the uncategorized group is
+                                     header-less and just lists its rows. -->
+                                <ToggleButton Classes="sectionHeader" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                              IsVisible="{Binding HasHeader}">
+                                    <DockPanel>
+                                        <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
+                                              Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
+                                              Data="M 0,0 L 8,4 L 0,8 Z"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="Medium"
+                                                   FontSize="{DynamicResource ThemeFontSizeSmall}"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                </ToggleButton>
+                                <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsExpanded}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:PropertyNode">
+                                            <local:PropertyNodeView/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- The empty-state, shown for a target with no editable rows. -->
+        <TextBlock Text="Nothing to show here yet." IsVisible="{Binding !HasNodes}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"
+                   Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+    </Panel>
 </UserControl>

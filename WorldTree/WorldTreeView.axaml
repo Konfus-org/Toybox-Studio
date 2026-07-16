@@ -1,0 +1,250 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.WorldTree"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:behaviors="using:Toybox.Studio.Behaviors"
+             xmlns:anim="using:Toybox.Studio.Behaviors.Animations"
+             xmlns:search="using:Toybox.Studio.Searching"
+             xmlns:ghost="using:Toybox.Studio.Ghost"
+             x:Class="Toybox.Studio.WorldTree.WorldTreeView"
+             x:DataType="local:WorldTreeViewModel">
+
+    <UserControl.Styles>
+        <!-- Trees sit flush-left, transparent; the panel provides the background. -->
+        <Style Selector="TreeView.entities, ListBox.entities">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <!-- Tighter indent than Fluent's default so deep hierarchies stay readable. -->
+        <Style Selector="TreeView.entities">
+            <Style.Resources>
+                <x:Double x:Key="TreeViewItemIndent">12</x:Double>
+            </Style.Resources>
+        </Style>
+        <!-- Drop Fluent's built-in expand chevron gutter — the row draws its own twisty, so the native one
+             would double up and misalign the names. -->
+        <Style Selector="TreeView.entities TreeViewItem /template/ Panel#PART_ExpandCollapseChevronContainer">
+            <Setter Property="IsVisible" Value="False"/>
+            <Setter Property="Width" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+        <!-- Node expansion tracks the view-model (two-way) so it survives a reconcile and reveal can drive it. -->
+        <Style Selector="TreeView.entities TreeViewItem" x:DataType="local:WorldEntityViewModel">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+        </Style>
+
+        <!-- Each row lights an accent underline on hover — a moving groove that follows the pointer. -->
+        <Style Selector="Border.entityRow">
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.entityRow:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
+
+        <!-- A disabled entity (or one under a disabled ancestor) draws dimmed. -->
+        <Style Selector="TextBlock.entityDisabled">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+
+        <!-- The in-row disclosure twisty: chromeless, hugging the gutter; the glyph rotates when expanded and
+             hides (but keeps its gutter) on a leaf, so names stay aligned across depths. -->
+        <Style Selector="ToggleButton.entityExpander">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,0,6,0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ToggleButton.entityExpander /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="TreeViewItem:empty ToggleButton.entityExpander">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+
+        <!-- The per-row delete X sits quiet at rest and brightens when pointed at. -->
+        <Style Selector="Button.rowDelete">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="3,0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Opacity" Value="0.7"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.rowDelete:pointerover">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- One row template shared by both forests: [grip][twisty][globe] name [delete]. The grip starts a
+             drag (DragDrop.Handle); the body single-tap toggles the node; double-tapping the name renames it. -->
+        <TreeDataTemplate x:Key="EntityRow" DataType="local:WorldEntityViewModel" ItemsSource="{Binding Children}">
+            <Border Classes="entityRow" Background="Transparent"
+                    behaviors:ContextMenuOpener.Enabled="True"
+                    anim:ExpandNodBehavior.State="{Binding $parent[TreeViewItem].IsExpanded}">
+                <DockPanel>
+                    <Border DockPanel.Dock="Left" Cursor="SizeAll" Background="Transparent" Padding="1,0"
+                            VerticalAlignment="Stretch" local:DragDrop.Handle="True"
+                            ToolTip.Tip="Drag to reorder, reparent, or move between streamed and globals">
+                        <icons:IconView Width="12" Height="12" Kind="GripVertical" Opacity="0.45"
+                                        VerticalAlignment="Center" Foreground="{DynamicResource ThemeTextBrush}"/>
+                    </Border>
+
+                    <ToggleButton DockPanel.Dock="Left" Classes="entityExpander"
+                                  IsChecked="{Binding $parent[TreeViewItem].IsExpanded, Mode=TwoWay}"
+                                  ToolTip.Tip="Expand / collapse">
+                        <Path Classes="pgChevron" Classes.expanded="{Binding $parent[TreeViewItem].IsExpanded}"
+                              Width="8" Height="8" Stretch="Uniform" HorizontalAlignment="Left"
+                              VerticalAlignment="Center" Fill="{DynamicResource ThemeTextBrush}"
+                              Data="M 0,0 L 8,4 L 0,8 Z"/>
+                    </ToggleButton>
+
+                    <Button DockPanel.Dock="Right" Classes="rowDelete" ToolTip.Tip="Delete entity"
+                            Command="{Binding $parent[TreeView].((local:WorldTreeViewModel)DataContext).DeleteEntityCommand}"
+                            CommandParameter="{Binding}">
+                        <icons:IconView Width="12" Height="12" Kind="X" Foreground="{DynamicResource ThemeErrorBrush}"/>
+                    </Button>
+
+                    <icons:IconView DockPanel.Dock="Left" Width="12" Height="12" Kind="Globe" Opacity="0.7"
+                                    Margin="0,0,4,0" VerticalAlignment="Center" IsVisible="{Binding IsGlobal}"
+                                    ToolTip.Tip="Global entity"/>
+
+                    <Panel Background="Transparent" VerticalAlignment="Center"
+                           behaviors:ExpandOnTapBehavior.Enabled="True">
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsEditing}"
+                                   Classes.entityDisabled="{Binding !IsEffectivelyEnabled}"
+                                   behaviors:DoubleTapCommandBehavior.Command="{Binding BeginRenameCommand}"/>
+                        <TextBox Text="{Binding EditingName, Mode=TwoWay}" IsVisible="{Binding IsEditing}"
+                                 Padding="2,0" MinHeight="0"
+                                 local:RenameBoxBehavior.Active="{Binding IsEditing}"
+                                 local:RenameBoxBehavior.CommitCommand="{Binding CommitRenameCommand}">
+                            <TextBox.KeyBindings>
+                                <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}"/>
+                                <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}"/>
+                            </TextBox.KeyBindings>
+                        </TextBox>
+                    </Panel>
+                </DockPanel>
+            </Border>
+        </TreeDataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="{DynamicResource ThemePanelPadding}">
+        <!-- Search + refresh header. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" IsVisible="{Binding HasWorld}">
+            <Button DockPanel.Dock="Right" Classes="Basic" Margin="4,0,0,0" VerticalAlignment="Center"
+                    Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
+                <icons:IconView Kind="RefreshCw" Width="13" Height="13"
+                                Foreground="{DynamicResource ThemeInfoBrush}"/>
+            </Button>
+            <search:SearchBox Text="{Binding EntitySearch, Mode=TwoWay}" Watermark="Search entities…"/>
+        </DockPanel>
+
+        <!-- The tree / results / empty-state layers. The whole surface is context-menu enabled so the blank
+             space below the sections is right-clickable (add / paste). -->
+        <Panel>
+            <ScrollViewer IsVisible="{Binding ShowTree}" Background="Transparent"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                          behaviors:ContextMenuOpener.Enabled="True">
+                <StackPanel Spacing="4" Margin="0,0,10,0">
+                    <!-- GLOBALS: collapsed by default; the whole section is the promote-to-global drop zone. -->
+                    <StackPanel local:DragDrop.GlobalsZone="True">
+                        <ToggleButton x:Name="GlobalsToggle" Classes="sectionHeader" IsChecked="False">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Button Classes="rowDelete" Command="{Binding AddGlobalEntityCommand}"
+                                            ToolTip.Tip="Add global entity">
+                                        <icons:IconView Kind="Plus" Width="13" Height="13"
+                                                        Foreground="{DynamicResource ThemeSuccessBrush}"/>
+                                    </Button>
+                                    <TextBlock Text="{Binding Globals.Count, StringFormat='{}{0} items'}"
+                                               VerticalAlignment="Center" Margin="0,0,4,0"
+                                               Foreground="{DynamicResource ThemeMutedTextBrush}"
+                                               FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                                </StackPanel>
+                                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
+                                      Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
+                                      Data="M 0,0 L 8,4 L 0,8 Z"/>
+                                <TextBlock Text="Globals" FontWeight="Medium" VerticalAlignment="Center"
+                                           FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                            </DockPanel>
+                        </ToggleButton>
+                        <Panel IsVisible="{Binding #GlobalsToggle.IsChecked}" Margin="0,2,0,0">
+                            <TextBlock Text="Drag entities here to make them global." Opacity="0.45"
+                                       Margin="8,4" TextWrapping="Wrap" IsVisible="{Binding !HasGlobals}"
+                                       Foreground="{DynamicResource ThemeMutedTextBrush}"
+                                       FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                            <TreeView Classes="entities" ItemsSource="{Binding Globals}"
+                                      local:WorldTreeSelection.Selection="{Binding Selection}"
+                                      ItemTemplate="{StaticResource EntityRow}"/>
+                        </Panel>
+                    </StackPanel>
+
+                    <!-- STREAMED: expanded by default. -->
+                    <StackPanel>
+                        <ToggleButton x:Name="StreamedToggle" Classes="sectionHeader" IsChecked="True">
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Button Classes="rowDelete" Command="{Binding AddStreamedEntityCommand}"
+                                            ToolTip.Tip="Add entity">
+                                        <icons:IconView Kind="Plus" Width="13" Height="13"
+                                                        Foreground="{DynamicResource ThemeSuccessBrush}"/>
+                                    </Button>
+                                    <TextBlock Text="{Binding Streamed.Count, StringFormat='{}{0} items'}"
+                                               VerticalAlignment="Center" Margin="0,0,4,0"
+                                               Foreground="{DynamicResource ThemeMutedTextBrush}"
+                                               FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                                </StackPanel>
+                                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8"
+                                      Stretch="Uniform" Margin="2,0,8,0" VerticalAlignment="Center"
+                                      Data="M 0,0 L 8,4 L 0,8 Z"/>
+                                <TextBlock Text="Streamed" FontWeight="Medium" VerticalAlignment="Center"
+                                           FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                            </DockPanel>
+                        </ToggleButton>
+                        <Panel IsVisible="{Binding #StreamedToggle.IsChecked}" Margin="0,2,0,0">
+                            <TextBlock Text="No streamed entities. Click + to add one, or drag a global here."
+                                       Opacity="0.45" Margin="8,4" TextWrapping="Wrap"
+                                       IsVisible="{Binding !HasStreamed}"
+                                       Foreground="{DynamicResource ThemeMutedTextBrush}"
+                                       FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                            <TreeView Classes="entities" ItemsSource="{Binding Streamed}"
+                                      local:WorldTreeSelection.Selection="{Binding Selection}"
+                                      ItemTemplate="{StaticResource EntityRow}"/>
+                        </Panel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Flat, name-filtered results (search mode). -->
+            <ListBox Classes="entities" IsVisible="{Binding ShowResults}" ItemsSource="{Binding SearchResults}"
+                     local:WorldTreeSelection.Selection="{Binding Selection}" Margin="0,0,10,0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:WorldEntityViewModel">
+                        <TextBlock Text="{Binding Name}" Background="Transparent"
+                                   Classes.entityDisabled="{Binding !IsEffectivelyEnabled}"
+                                   behaviors:ContextMenuOpener.Enabled="True"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <ghost:GhostView Message="No world loaded." IsVisible="{Binding !HasWorld}"/>
+            <ghost:GhostView Message="No matching entities." IsVisible="{Binding ShowNoResults}"/>
+        </Panel>
+    </DockPanel>
+</UserControl>

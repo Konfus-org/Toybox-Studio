@@ -1,5 +1,5 @@
-using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Avalonia.Controls;
 
 namespace Toybox.Studio.Dialogs;
 

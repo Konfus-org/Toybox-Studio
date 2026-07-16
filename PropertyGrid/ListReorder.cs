@@ -1,7 +1,7 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using Avalonia;
 using Toybox.Studio.PropertyGrid.Slots;
 
 namespace Toybox.Studio.PropertyGrid;

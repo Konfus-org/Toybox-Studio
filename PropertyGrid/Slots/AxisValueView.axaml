@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             xmlns:grid="using:Toybox.Studio.PropertyGrid"
+             xmlns:behaviors="using:Toybox.Studio.Behaviors"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.AxisValueView"
+             x:DataType="local:AxisValueViewModel">
+    <!-- A row of equal-width labeled fields, one per axis. Drag a field to scrub, or click to type;
+         MinWidth=0 lets the equal columns shrink cleanly when the value column is narrow instead of the
+         fields overflowing their axis labels. -->
+    <ItemsControl ItemsSource="{Binding Components}" IsEnabled="{Binding !IsReadOnly}"
+                  HorizontalAlignment="Stretch">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <UniformGrid Rows="1"/>
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="local:VectorAxisViewModel">
+                <DockPanel Margin="0,0,4,0">
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding Label}" FontSize="11"
+                               FontWeight="SemiBold" Width="11" TextAlignment="Center"
+                               Margin="0,0,3,0" VerticalAlignment="Center"
+                               Foreground="{Binding Label,
+                                   Converter={x:Static grid:AxisLabelToBrushConverter.Instance}}"/>
+                    <NumericUpDown ShowButtonSpinner="False" FormatString="0.######" MinWidth="0"
+                                   Value="{Binding Value}"
+                                   behaviors:NumberScrubBehavior.Enabled="True"/>
+                </DockPanel>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

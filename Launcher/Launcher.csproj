@@ -2,13 +2,13 @@
 
   <!-- The executable: the app's bootstrap and composition root. Launcher.LaunchAsync boots Avalonia,
        configures the service provider, and runs the startup flow — project picker, splash while the
-       project compiles and its engine launches, then the studio window (from the Shell library). -->
+       project compiles and its engine launches, then the studio window (from the App library). -->
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>Toybox.Studio</AssemblyName>
     <!-- A type must not share its namespace leaf (a Toybox.Studio.Launcher namespace would shadow the
-         Launcher type), so this app-frame assembly joins the Shell in the root namespace. -->
+         Launcher type), so this app-frame assembly joins the App library in the root namespace. -->
     <RootNamespace>Toybox.Studio</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
@@ -20,22 +20,27 @@
     <ProjectReference Include="..\Settings\Settings.csproj" />
     <ProjectReference Include="..\Themes\Themes.csproj" />
     <ProjectReference Include="..\Resources\Resources.csproj" />
-    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\Hosting\Hosting.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
-    <ProjectReference Include="..\Gizmos\Gizmos.csproj" />
-    <ProjectReference Include="..\Assets\Assets.csproj" />
-    <ProjectReference Include="..\Ecs\Ecs.csproj" />
-    <ProjectReference Include="..\Worlds\Worlds.csproj" />
+    <ProjectReference Include="..\Favorites\Favorites.csproj" />
+    <ProjectReference Include="..\Git\Git.csproj" />
+    <ProjectReference Include="..\WorldTree\WorldTree.csproj" />
+    <ProjectReference Include="..\WorldViewer\WorldViewer.csproj" />
+    <ProjectReference Include="..\NodeGraph\NodeGraph.csproj" />
     <ProjectReference Include="..\Projects\Projects.csproj" />
     <ProjectReference Include="..\Console\Console.csproj" />
+    <ProjectReference Include="..\LogConsole\LogConsole.csproj" />
+    <ProjectReference Include="..\ContextMenu\ContextMenu.csproj" />
     <ProjectReference Include="..\Status\Status.csproj" />
     <ProjectReference Include="..\Viewport\Viewport.csproj" />
     <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
     <ProjectReference Include="..\MenuBar\MenuBar.csproj" />
-    <ProjectReference Include="..\SettingsEditor\SettingsEditor.csproj" />
+    <ProjectReference Include="..\AssetBrowser\AssetBrowser.csproj" />
+    <ProjectReference Include="..\AssetViewer\AssetViewer.csproj" />
+    <ProjectReference Include="..\GameViewer\GameViewer.csproj" />
     <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
-    <ProjectReference Include="..\Workspaces\Workspaces.csproj" />
-    <ProjectReference Include="..\Shell\App.csproj" />
+    <ProjectReference Include="..\Docking\Docking.csproj" />
+    <ProjectReference Include="..\App\App.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,5 +50,18 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
+
+  <!-- Vendors the Roslyn C# language server (Microsoft.CodeAnalysis.LanguageServer) into the app output under
+       Roslyn/, restored from nuget.org as the official roslyn-language-server .NET tool — so C# IntelliSense
+       works without a separate install. Runs once (skipped when the folder is present) and never fails the
+       build: offline, the editor falls back to highlight-only (or an installed VS Code C# server). -->
+  <PropertyGroup>
+    <RoslynLanguageServerVersion>5.9.0-1.26303.1</RoslynLanguageServerVersion>
+  </PropertyGroup>
+  <Target Name="VendorRoslynLanguageServer" AfterTargets="Build" Condition="!Exists('$(OutDir)Roslyn')">
+    <Message Importance="high" Text="Vendoring Roslyn C# language server $(RoslynLanguageServerVersion) into $(OutDir)Roslyn ..." />
+    <Exec Command="dotnet tool install --tool-path &quot;$(OutDir)Roslyn&quot; roslyn-language-server --version $(RoslynLanguageServerVersion)"
+          ContinueOnError="true" />
+  </Target>
 
 </Project>

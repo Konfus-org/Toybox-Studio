@@ -34,7 +34,7 @@ internal static class WireCodecs
             "System.Numerics.Vector4" => Simple("ReadVector4"),
             "System.Numerics.Quaternion" => Simple("ReadQuaternion"),
             "Avalonia.Media.Color" => Simple("ReadColor"),
-            "Toybox.Studio.EngineApi.Handle" => Simple("ReadHandle"),
+            "Toybox.Studio.EngineApi.Types.Handle" => Simple("ReadHandle"),
             _ => null,
         };
     }

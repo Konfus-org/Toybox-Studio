@@ -2,108 +2,166 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:icons="using:Toybox.Studio.Resources"
              xmlns:local="using:Toybox.Studio.PropertyGrid"
+             xmlns:anim="using:Toybox.Studio.Behaviors.Animations"
+             xmlns:util="using:Toybox.Studio.Behaviors"
              x:Class="Toybox.Studio.PropertyGrid.PropertyNodeView"
              x:DataType="local:PropertyNode">
 
     <UserControl.Styles>
-        <!-- The expander chevron turns to point down as its node expands. -->
-        <Style Selector="ToggleButton.expander icons|IconView">
-            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="ToggleButton.expander:checked icons|IconView">
-            <Setter Property="RenderTransform" Value="rotate(90deg)"/>
-        </Style>
-
-        <!-- Every node raises a touch on hover (the intensity-scaled header token, so it tracks the
-             animation setting) and lights a primary underline. The underline thickness is always
-             reserved — only its brush changes — so hover never shifts layout. -->
+        <!-- Leaf / nested rows are flat (the card surface shows through), separated only by a pressed toy
+             groove: a faint dark hairline along the bottom with a 1px light highlight beneath it (the crisp,
+             blur-less BoxShadow). Hover paints the groove in the primary accent — a moving underline that
+             follows the pointer, eased by the BrushTransition. -->
         <Style Selector="Border.node">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
-            <Setter Property="RenderTransform" Value="{DynamicResource ThemeControlRestTransform}"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeGrooveBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BoxShadow" Value="0 1 0 0 #2EFFFFFF"/>
+            <Setter Property="MinHeight" Value="26"/>
             <Setter Property="Transitions">
                 <Transitions>
-                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" Easing="CubicEaseOut"/>
                     <BrushTransition Property="BorderBrush" Duration="0:0:0.12"/>
                 </Transitions>
             </Setter>
         </Style>
         <Style Selector="Border.node:pointerover">
-            <Setter Property="RenderTransform" Value="{DynamicResource ThemeHeaderHoverTransform}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ThemePrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
         </Style>
 
-        <!-- Headers are full-width tinted separator bands; their label and icon carry the accent ink. -->
-        <Style Selector="Border.header">
-            <Setter Property="Background" Value="{DynamicResource ThemeHeaderBrush}"/>
-            <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}"/>
-            <Setter Property="Margin" Value="0,2"/>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}"/>
+            <Setter Property="Opacity" Value="0.85"/>
         </Style>
-        <Style Selector="Border.header TextBlock.label">
-            <Setter Property="Foreground" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+
+        <!-- The disclosure twisty for a nested composite/list row (the top-level ones use the accent band's
+             own chevron). A chromeless button filling the reserved gutter so the whole gutter toggles. -->
+        <Style Selector="ToggleButton.pgTwisty">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
-        <Style Selector="Border.header ToggleButton.expander icons|IconView">
-            <Setter Property="Foreground" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        <Style Selector="ToggleButton.pgTwisty /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- The drag splitter that resizes the shared label column for every row at once: a transparent grab
+             strip that brightens to the accent on hover/drag; a 1px hairline marks the actual column edge. -->
+        <Style Selector="GridSplitter.pgSplit">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="SizeWestEast"/>
+        </Style>
+        <Style Selector="GridSplitter.pgSplit:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ThemeAccentSolidBrush}"/>
         </Style>
     </UserControl.Styles>
 
     <StackPanel>
-        <!-- The collapsible separator band a composite or list renders as. -->
-        <Border Classes="node header" IsVisible="{Binding IsHeader}" MinHeight="30" Padding="4,2">
-            <Grid ColumnDefinitions="18,Auto,Auto,*,Auto,Auto">
-                <ToggleButton Grid.Column="0" Classes="Basic expander" Padding="2" VerticalAlignment="Center"
-                              IsVisible="{Binding HasChildren}" IsChecked="{Binding IsExpanded}">
-                    <icons:IconView Kind="ChevronRight" Width="10" Height="10"/>
-                </ToggleButton>
-                <ContentControl Grid.Column="1" Content="{Binding Left}" VerticalAlignment="Center"/>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <icons:IconView Kind="{Binding Icon}" IsVisible="{Binding HasIcon}"
-                                    Width="14" Height="14" VerticalAlignment="Center"
-                                    Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
-                    <TextBlock Classes="label" VerticalAlignment="Center"
-                               Text="{Binding Label, Converter={x:Static local:DisplayNameConverter.Instance}}"/>
+        <!-- TOP-LEVEL COMPOSITE / LIST → a collapsible accent section band (the shared ToggleButton.sectionHeader),
+             full-width and flush; its label + icon carry the accent, its detail / add / indicator sit right. -->
+        <ToggleButton x:Name="Band" Classes="sectionHeader" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                      util:ContextMenuOpener.Enabled="True">
+            <ToggleButton.IsVisible>
+                <MultiBinding Converter="{x:Static local:AllTrueConverter.Instance}">
+                    <Binding Path="IsHeader"/>
+                    <Binding Path="Depth" RelativeSource="{RelativeSource AncestorType=local:PropertyNodeView}"
+                             Converter="{x:Static local:DepthIsZeroConverter.Instance}"/>
+                </MultiBinding>
+            </ToggleButton.IsVisible>
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Detail}" Margin="0,0,6,0" VerticalAlignment="Center"
+                               IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               Foreground="{DynamicResource ThemeMutedTextBrush}"
+                               FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                    <ContentControl Content="{Binding Right}" VerticalAlignment="Center"/>
+                    <ContentControl Content="{Binding Indicator}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock Grid.Column="4" Text="{Binding Detail}" VerticalAlignment="Center" Margin="0,0,8,0"
-                           IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Foreground="{DynamicResource ThemeMutedTextBrush}"
-                           FontSize="{DynamicResource ThemeFontSizeSmall}"/>
-                <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <ContentControl Content="{Binding Right}"/>
-                    <ContentControl Content="{Binding Indicator}"/>
+                <Path DockPanel.Dock="Left" Classes="sectionChevron" Width="8" Height="8" Stretch="Uniform"
+                      Margin="2,0,8,0" VerticalAlignment="Center" Data="M 0,0 L 8,4 L 0,8 Z"/>
+                <icons:IconView DockPanel.Dock="Left" Kind="{Binding Icon}" IsVisible="{Binding HasIcon}"
+                                Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center"
+                                Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
+                <TextBlock Text="{Binding Label, Converter={x:Static local:DisplayNameConverter.Instance}}"
+                           FontWeight="Medium" VerticalAlignment="Center"/>
+            </DockPanel>
+        </ToggleButton>
+
+        <!-- LEAF or NESTED COMPOSITE/LIST → an ordinary row: [grip][twisty gutter][icon] label | splitter |
+             value | [detail][add/delete][indicator]. Shown whenever it isn't the top-level band. -->
+        <Border Classes="node" IsVisible="{Binding !#Band.IsVisible}" Padding="0,1"
+                util:ContextMenuOpener.Enabled="True"
+                anim:ExpandNodBehavior.State="{Binding IsExpanded}">
+            <Grid Background="{Binding Depth, RelativeSource={RelativeSource AncestorType=local:PropertyNodeView},
+                                       Converter={x:Static local:DepthToBrushConverter.Instance}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="PgLabel" MinWidth="24"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Label gutter. ClipToBounds so a narrowed column never spills into the value well; the
+                     DockPanel fill child (label) is what makes CharacterEllipsis trigger. Indent lives inside
+                     the gutter (depth * 14) so the shared value column stays aligned across every depth. -->
+                <Border Grid.Column="0" Background="Transparent" ClipToBounds="True">
+                    <DockPanel LastChildFill="True" VerticalAlignment="Center"
+                               Margin="{Binding Depth, RelativeSource={RelativeSource AncestorType=local:PropertyNodeView},
+                                                Converter={x:Static local:DepthToIndentConverter.Instance}}">
+                        <ContentControl DockPanel.Dock="Left" Content="{Binding Left}" VerticalAlignment="Center"/>
+                        <Panel DockPanel.Dock="Left" Width="14" VerticalAlignment="Stretch">
+                            <ToggleButton Classes="pgTwisty" IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                          IsVisible="{Binding HasChildren}" ToolTip.Tip="Expand / collapse">
+                                <Path Classes="pgChevron" Classes.expanded="{Binding IsExpanded}"
+                                      Width="8" Height="8" Stretch="Uniform" HorizontalAlignment="Left"
+                                      VerticalAlignment="Center" Fill="{DynamicResource ThemeTextBrush}"
+                                      Data="M 0,0 L 8,4 L 0,8 Z"/>
+                            </ToggleButton>
+                        </Panel>
+                        <icons:IconView DockPanel.Dock="Left" Kind="{Binding Icon}" IsVisible="{Binding HasIcon}"
+                                        Width="15" Height="15" Margin="4,0,6,0" VerticalAlignment="Center"
+                                        Foreground="{DynamicResource ThemeAccentSolidBrush}"/>
+                        <TextBlock Classes="label" VerticalAlignment="Center" Margin="4,0,8,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   Text="{Binding Label, Converter={x:Static local:DisplayNameConverter.Instance}}"/>
+                    </DockPanel>
+                </Border>
+
+                <!-- Column-edge hairline + the wider transparent grab strip over it. -->
+                <Border Grid.Column="1" Width="1" HorizontalAlignment="Center" IsHitTestVisible="False"
+                        Background="{DynamicResource ThemeBorderBrush}"/>
+                <GridSplitter Grid.Column="1" Classes="pgSplit" Width="7" ResizeDirection="Columns"/>
+
+                <!-- Value well: the per-type editor hosted as the row's value. -->
+                <Border Grid.Column="2" Padding="9,2,4,2">
+                    <ContentControl Content="{Binding Value}" VerticalAlignment="Center"
+                                    HorizontalAlignment="Stretch"/>
+                </Border>
+
+                <!-- Trailing: a list's item count, the add/delete affordance, then the state/reset indicator. -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Detail}" Margin="0,0,4,0" VerticalAlignment="Center"
+                               IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               Foreground="{DynamicResource ThemeMutedTextBrush}"
+                               FontSize="{DynamicResource ThemeFontSizeSmall}"/>
+                    <ContentControl Content="{Binding Right}" VerticalAlignment="Center"/>
+                    <ContentControl Content="{Binding Indicator}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- The label/value row a leaf renders as: [left] label | [value] [right][indicator]. -->
-        <Border Classes="node" IsVisible="{Binding !IsHeader}" MinHeight="28" Padding="4,1">
-            <Grid ColumnDefinitions="Auto,150,1,*,Auto">
-                <ContentControl Grid.Column="0" Content="{Binding Left}" VerticalAlignment="Center"
-                                Margin="0,0,4,0"/>
-                <TextBlock Grid.Column="1" Classes="label" VerticalAlignment="Center"
-                           Text="{Binding Label, Converter={x:Static local:DisplayNameConverter.Instance}}"
-                           Margin="4,0,8,0" TextTrimming="CharacterEllipsis"/>
-                <Rectangle Grid.Column="2" Width="1" Fill="{DynamicResource ThemeGrooveBrush}" Margin="0,3"/>
-                <ContentControl Grid.Column="3" Content="{Binding Value}" VerticalAlignment="Center"
-                                Margin="8,0,4,0"/>
-                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                    <ContentControl Content="{Binding Right}"/>
-                    <ContentControl Content="{Binding Indicator}"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- Children indent under the row, shown while expanded; each renders as this same view. -->
-        <ItemsControl ItemsSource="{Binding Children}" IsVisible="{Binding IsExpanded}" Margin="18,0,0,0">
+        <!-- Children flow beneath, flat (no outer indent — each row indents its own label by depth), shown
+             while expanded. A child binds its depth to this row's depth + 1. -->
+        <ItemsControl ItemsSource="{Binding Children}" IsVisible="{Binding IsExpanded}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="local:PropertyNode">
-                    <local:PropertyNodeView/>
+                    <local:PropertyNodeView
+                        Depth="{Binding Depth, RelativeSource={RelativeSource AncestorType=local:PropertyNodeView},
+                                        Converter={x:Static local:DepthIncrementConverter.Instance}}"/>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

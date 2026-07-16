@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Asset Viewer dockable: previews one asset (model / material / texture) in its own isolated
+       engine preview world, opened from File ▸ Open ▸ Asset. Reuses the Viewport pane's GPU-texture
+       surface; builds the previewed entity in the preview world by full sync path (the generated
+       Entity/Component mirrors address the active world only). The launcher + type-router live here too. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Coding\Coding.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\AssetOwners\AssetOwners.csproj" />
+    <ProjectReference Include="..\PropertyGrid\PropertyGrid.csproj" />
+    <ProjectReference Include="..\Viewport\Viewport.csproj" />
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\Docking\Docking.csproj" />
+    <ProjectReference Include="..\Projects\Projects.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

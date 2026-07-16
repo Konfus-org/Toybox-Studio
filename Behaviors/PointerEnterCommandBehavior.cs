@@ -1,7 +1,7 @@
-using System.Windows.Input;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia;
+using System.Windows.Input;
 
 namespace Toybox.Studio.Behaviors;
 

@@ -6,6 +6,9 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <!-- ActivatorUtilities (used by the ViewModelFactory) lives in the DI abstractions; the foundation
+         takes only the abstractions, never the container implementation. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 

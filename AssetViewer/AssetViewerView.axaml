@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.AssetViewer"
+             xmlns:grid="using:Toybox.Studio.PropertyGrid"
+             xmlns:viewport="using:Toybox.Studio.Viewport"
+             xmlns:behaviors="using:Toybox.Studio.Behaviors"
+             x:Class="Toybox.Studio.AssetViewer.AssetViewerView"
+             x:DataType="local:AssetViewerViewModel">
+
+    <!-- The asset-handle picker isn't one of the grid's built-in slots; registering its template here
+         puts it in scope for the inspector below (a material's base + texture-binding handles). -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="local:HandleValueViewModel">
+            <local:HandleValueView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:MaterialValueViewModel">
+            <local:MaterialValueView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <!-- The asset editor: the property inspector over the hosted mirror on the left, the 3D preview
+         surface on the right, and the owner's Undo/Redo + Cancel/Save chrome anchored beneath both. An
+         identity-only asset (a model) exposes no editable rows — the inspector, its splitter, and the
+         edit chrome all hide (IsEditable), leaving the preview the whole panel. -->
+    <DockPanel Margin="8">
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0"
+              IsVisible="{Binding IsEditable}">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Button Content="Undo" Command="{Binding UndoCommand}"/>
+                <Button Content="Redo" Command="{Binding RedoCommand}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+                <Button Classes="action" Content="Save" Command="{Binding SaveCommand}"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid ColumnDefinitions="1.1*,Auto,2*"
+              behaviors:CollapsibleColumnBehavior.Column="0"
+              behaviors:CollapsibleColumnBehavior.Visible="{Binding IsEditable}">
+            <ContentControl Grid.Column="0" IsVisible="{Binding IsEditable}">
+                <grid:PropertyGridView DataContext="{Binding Inspector}"/>
+            </ContentControl>
+            <GridSplitter Grid.Column="1" Width="6" Background="Transparent"
+                          ResizeDirection="Columns" HorizontalAlignment="Center"
+                          IsVisible="{Binding IsEditable}"/>
+            <viewport:ViewportView Grid.Column="2" DataContext="{Binding Viewport}"/>
+        </Grid>
+    </DockPanel>
+</UserControl>

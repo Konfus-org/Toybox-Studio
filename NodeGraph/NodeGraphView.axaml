@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.NodeGraph"
+             x:Class="Toybox.Studio.NodeGraph.NodeGraphView"
+             x:DataType="local:NodeGraphViewModel"
+             ClipToBounds="True" Background="{x:Null}">
+
+    <!-- The viewport node overlay: a tail layer (speech-bubble pointers from each node to its entity) and a
+         link layer (reference lines between nodes) beneath the node layer, which places each entity's card at
+         the position this view-model drives from the engine projection. All layers share the overlay's pixel
+         space. No Background anywhere (x:Null, not Transparent) so empty areas stay hit-transparent and
+         pointer events fall through to the viewport's input surface — only the node cards capture. -->
+
+    <UserControl.Styles>
+        <!-- Reference wires: a rounded Bézier from an output plug to an input plug (built by the edge VM). -->
+        <Style Selector="Path.link">
+            <Setter Property="Stroke" Value="{DynamicResource ThemePrimaryBrush}"/>
+            <Setter Property="StrokeThickness" Value="1.5"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="Opacity" Value="0.75"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel Background="{x:Null}">
+        <!-- Tail layer: a filled speech-bubble triangle per node, pointing at its entity. -->
+        <ItemsControl ItemsSource="{Binding Tails}" Background="{x:Null}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas Background="{x:Null}"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:TailViewModel">
+                    <Path Data="{Binding Geometry}" IsVisible="{Binding IsVisible}"
+                          Fill="{DynamicResource ThemeSurfaceBrush}"
+                          Stroke="{DynamicResource ThemeBorderBrush}" StrokeThickness="1" Opacity="0.9"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Link layer: reference lines between nodes. -->
+        <ItemsControl ItemsSource="{Binding Links}" Background="{x:Null}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas Background="{x:Null}"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:OverlayEdgeViewModel">
+                    <Path Classes="link" Data="{Binding Geometry}" IsVisible="{Binding IsVisible}"/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Node layer: each card placed on the canvas by its projected X/Y (in overlay pixels), z-ordered
+             so nearer / hovered cards draw on top. -->
+        <ItemsControl ItemsSource="{Binding Nodes}" Background="{x:Null}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas Background="{x:Null}"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+                <Style Selector="ContentPresenter" x:DataType="local:EntityNodeViewModel">
+                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                    <Setter Property="ZIndex" Value="{Binding ZIndex}"/>
+                    <Setter Property="IsVisible" Value="{Binding IsNodeVisible}"/>
+                </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="local:EntityNodeViewModel">
+                    <local:EntityNodeView/>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Panel>
+</UserControl>

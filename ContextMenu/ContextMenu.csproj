@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The type-routed context-menu system: a ContextMenu<T> per right-clickable view-model, discovered by
+       the ContextMenuCatalog and shown as a searchable, favoritable flyout (ContextMenuOpener.Enabled="True"
+       opts a control in). Favorites persist one file per menu under ~/.toybox/Favorites. Menus whose 2.0
+       subsystems don't exist yet (asset-create dialogs, the world tree/viewport target, components) are kept
+       in the folder but excluded from the build until those land. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Favorites\Favorites.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Searching\Searching.csproj" />
+    <ProjectReference Include="..\Console\Console.csproj" />
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\PropertyGrid\PropertyGrid.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\AssetBrowser\AssetBrowser.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
+    <ProjectReference Include="..\WorldTree\WorldTree.csproj" />
+    <ProjectReference Include="..\Projects\Projects.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+  </ItemGroup>
+
+  <!-- Deferred menus: they target 2.0 subsystems that don't exist yet (asset-create prompts,
+       ComponentViewModel, and the viewport billboard menu surface). Kept in the tree as the design
+       reference; excluded so the system builds. The world tree menu (WorldContextMenu) is live — its
+       target types now live in the WorldTree project. -->
+  <ItemGroup>
+    <Compile Remove="AssetCreateContextMenu.cs" />
+    <Compile Remove="ComponentContextMenu.cs" />
+    <Compile Remove="MenuOpenBehavior.cs" />
+    <Compile Remove="ViewportMenuTarget.cs" />
+  </ItemGroup>
+
+</Project>

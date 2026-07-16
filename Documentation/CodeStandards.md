@@ -64,7 +64,7 @@ Engineering standards for the C#/Avalonia editor. These complement the engine's 
 
 - **Dependency injection.** Services are registered as singletons in `App.ConfigureServices` (the composition root). Don't `new` a service that the container owns — inject it. Dockable view models auto-register via the `[Dockable]` attribute; don't register them by hand.
 
-- **Styles are split and aggregated.** Shared styles live in focused sheets under `Shell/Styles/` and are pulled together by `AppStyles.axaml`. Theme-derived brushes are computed from published `Theme*Color` resources in XAML; keep resource-precedence-sensitive overrides where they already live.
+- **Styles are split and aggregated.** Shared styles live in focused sheets under `App/Styles/` and are pulled together by `AppStyles.axaml`. Theme-derived brushes are computed from published `Theme*Color` resources in XAML; keep resource-precedence-sensitive overrides where they already live.
 
 ## Documentation
 

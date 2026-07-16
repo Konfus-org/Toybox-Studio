@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The world editor viewport: the dockable (WorldViewerView/VM) built from the generic viewport
+       split grid, wired for world editing — the transform tool (WorldViewerTool) + its gizmo looks,
+       the render layers, the two overlay toolbars, click-select (WorldPickHandler), and the world
+       viewport's own action registrations (WorldViewerToolbarActions, scoped to this panel). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Hosting\Hosting.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\AssetOwners\AssetOwners.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Viewport\Viewport.csproj" />
+    <ProjectReference Include="..\Toolbar\Toolbar.csproj" />
+    <ProjectReference Include="..\WorldTree\WorldTree.csproj" />
+    <ProjectReference Include="..\NodeGraph\NodeGraph.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

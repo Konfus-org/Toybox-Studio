@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
 using Toybox.Studio.PropertyGrid;
+using Toybox.Studio.Utils.Composition;
 
 namespace Toybox.Studio.Dialogs;
 
@@ -10,10 +11,10 @@ namespace Toybox.Studio.Dialogs;
 /// </summary>
 public sealed partial class FormPopupViewModel : PopupViewModel<bool>
 {
-    public FormPopupViewModel(string title, object subject, string confirmText = "OK")
+    public FormPopupViewModel(ViewModelFactory viewModels, string title, object subject, string confirmText = "OK")
         : base(title)
     {
-        Grid = new PropertyGridViewModel(new ReflectionPropertyNodeFactory());
+        Grid = viewModels.Create<PropertyGridViewModel>(new ReflectionPropertyNodeFactory(viewModels));
         Grid.Show(subject);
         Buttons =
         [

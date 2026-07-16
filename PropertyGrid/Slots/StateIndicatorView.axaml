@@ -16,10 +16,14 @@
                 IsVisible="{Binding !IsReadOnly}"
                 Command="{Binding ResetCommand}" ToolTip.Tip="{Binding Tip}">
             <Panel>
-                <Ellipse Width="11" Height="11" IsVisible="{Binding IsModified}"
-                         Fill="{DynamicResource ThemeAccentSolidBrush}"/>
-                <Ellipse Width="11" Height="11" IsVisible="{Binding IsDefault}"
-                         Stroke="{DynamicResource ThemeBorderBrush}" StrokeThickness="1.5"/>
+                <!-- Modified → a flat accent dot; at-default → a hollow ring pressed into the surface (well
+                     fill + inset shadow + a muted outline that guarantees contrast on flat themes). -->
+                <Border Width="11" Height="11" CornerRadius="6" IsVisible="{Binding IsModified}"
+                        Background="{DynamicResource ThemeAccentSolidBrush}"/>
+                <Border Width="11" Height="11" CornerRadius="6" IsVisible="{Binding IsDefault}"
+                        Background="{DynamicResource ThemeWellFillBrush}"
+                        BorderBrush="{DynamicResource ThemeMutedTextBrush}" BorderThickness="1.5"
+                        BoxShadow="{DynamicResource ThemeWellInsetShadow}"/>
             </Panel>
         </Button>
     </Panel>

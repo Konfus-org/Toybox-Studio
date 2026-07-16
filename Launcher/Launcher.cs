@@ -1,40 +1,54 @@
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using Dock.Settings;
 using Microsoft.Extensions.DependencyInjection;
-using Toybox.Studio.AppHosting;
-using Toybox.Studio.Assets;
+using System.Diagnostics;
+using Toybox.Studio.AssetBrowser;
+using Toybox.Studio.AssetViewer;
+using Toybox.Studio.Behaviors;
 using Toybox.Studio.Behaviors.Animations;
+using Toybox.Studio.Clipboards;
 using Toybox.Studio.CMake;
+using Toybox.Studio.Coding;
+using Toybox.Studio.ContextMenu;
 using Toybox.Studio.Dialogs;
-using Toybox.Studio.Ecs;
+using Toybox.Studio.Docking;
 using Toybox.Studio.EngineApi;
+using Toybox.Studio.EngineApi.Types.Assets;
+using Toybox.Studio.EngineApi.Types.Gizmos;
+using Toybox.Studio.EngineApi.Types.Physics;
+using Toybox.Studio.EngineApi.Types.Worlds;
 using Toybox.Studio.Events;
-using Toybox.Studio.Gizmos;
+using Toybox.Studio.Favorites;
+using Toybox.Studio.GameViewer;
+using Toybox.Studio.Git;
+using Toybox.Studio.Hosting;
 using Toybox.Studio.Keybindings;
+using Toybox.Studio.LogConsole;
 using Toybox.Studio.Logging;
 using Toybox.Studio.MenuBar;
+using Toybox.Studio.Monaco;
 using Toybox.Studio.Projects;
 using Toybox.Studio.Settings;
-using Toybox.Studio.SettingsEditor;
-using Toybox.Studio.Shell;
 using Toybox.Studio.Status;
 using Toybox.Studio.Themes;
 using Toybox.Studio.Toolbar;
 using Toybox.Studio.Utils;
+using Toybox.Studio.Utils.Composition;
 using Toybox.Studio.Viewport;
-using Toybox.Studio.Workspaces;
-using Toybox.Studio.Worlds;
+using Toybox.Studio.NodeGraph;
+using Toybox.Studio.WorldTree;
+using Toybox.Studio.WorldViewer;
 
 namespace Toybox.Studio;
 
 /// <summary>
 /// The app's bootstrap and composition root. <see cref="LaunchAsync"/> is the one endpoint: it boots
 /// Avalonia, configures the service provider (every service registered against exactly what it asks
-/// for in its constructor — nothing ever takes the provider itself), and runs the startup flow: the
+/// for in its constructor — the <see cref="ViewModelFactory"/> is the one type that holds the provider,
+/// and it exists so view-models don't have to be hand-wired here), and runs the startup flow: the
 /// project picker, then the splash narrating the picked project's compile + engine launch, then the
 /// studio window, which takes over the app's lifetime.
 /// </summary>
@@ -56,11 +70,17 @@ public sealed class Launcher
 
     private readonly SettingsManager _settings;
     private readonly Project _project;
+    private readonly ProjectPaths _projectPaths;
     private readonly ProjectLoader _projectLoader;
     private readonly ProjectFactory _projectFactory;
     private readonly EngineCoordinator _coordinator;
+    private readonly EngineSourceLocator _engineLocator;
+    private readonly GitClient _git;
+    private readonly Popups _popups;
     private readonly EditorKeymap _keymap;
+    private readonly EventDispatcher _events;
     private readonly Logger _log;
+    private readonly ViewModelFactory _viewModels;
     private readonly MainWindowViewModel _mainViewModel;
     private readonly SplashViewModel _splashViewModel;
     private readonly SplashWindow _splash;
@@ -71,24 +91,34 @@ public sealed class Launcher
     public Launcher(
         SettingsManager settings,
         Project project,
+        ProjectPaths projectPaths,
         ProjectLoader projectLoader,
         ProjectFactory projectFactory,
         EngineCoordinator coordinator,
+        EngineSourceLocator engineLocator,
+        GitClient git,
+        Popups popups,
         EditorKeymap keymap,
+        EventDispatcher events,
         Logger log,
-        SplashViewModel splashViewModel,
-        MainWindowViewModel mainViewModel)
+        ViewModelFactory viewModels)
     {
         _settings = settings;
         _project = project;
+        _projectPaths = projectPaths;
         _projectLoader = projectLoader;
         _projectFactory = projectFactory;
         _coordinator = coordinator;
+        _engineLocator = engineLocator;
+        _git = git;
+        _popups = popups;
         _keymap = keymap;
+        _events = events;
         _log = log;
-        _mainViewModel = mainViewModel;
-        _splashViewModel = splashViewModel;
-        _splash = new SplashWindow { DataContext = splashViewModel };
+        _viewModels = viewModels;
+        _splashViewModel = viewModels.Create<SplashViewModel>();
+        _mainViewModel = viewModels.Create<MainWindowViewModel>();
+        _splash = new SplashWindow { DataContext = _splashViewModel };
     }
 
     [STAThread]
@@ -96,7 +126,24 @@ public sealed class Launcher
     {
         try
         {
-            LaunchAsync(args).GetAwaiter().GetResult();
+            using var lifetime = new ClassicDesktopStyleApplicationLifetime
+            {
+                Args = args,
+                // Nothing owns the app's lifetime until the studio window exists, so shutdown stays
+                // explicit for now — closing the splash or picker mid-launch must not end the app.
+                // RunAsync hands the lifetime to the studio window when it opens.
+                ShutdownMode = ShutdownMode.OnExplicitShutdown,
+            };
+            BuildAvaloniaApp().SetupWithLifetime(lifetime);
+
+            var services = ConfigureServices();
+            Boot(services);
+            lifetime.Exit += (_, _) => Shutdown(services);
+
+            // The flow is interactive (windows, dialogs), so it is posted to run once Start() enters the loop.
+            var launcher = services.GetRequiredService<Launcher>();
+            Dispatcher.UIThread.Post(() => launcher.RunAsync(lifetime).FireAndForget());
+            lifetime.Start();
         }
         catch (Exception exception)
         {
@@ -105,33 +152,6 @@ public sealed class Launcher
             CrashGuard.ReportFatal(exception);
             throw;
         }
-    }
-
-    /// <summary>
-    /// Boots the whole studio: builds the Avalonia app, configures the service provider, and runs the
-    /// startup flow inside the UI loop. The returned task completes when the app exits.
-    /// </summary>
-    public static Task LaunchAsync(string[] args)
-    {
-        using var lifetime = new ClassicDesktopStyleApplicationLifetime
-        {
-            Args = args,
-            // Nothing owns the app's lifetime until the studio window exists, so shutdown stays
-            // explicit for now — closing the splash or picker mid-launch must not end the app.
-            // RunAsync hands the lifetime to the studio window when it opens.
-            ShutdownMode = ShutdownMode.OnExplicitShutdown,
-        };
-        BuildAvaloniaApp().SetupWithLifetime(lifetime);
-
-        var services = ConfigureServices();
-        Boot(services);
-        lifetime.Exit += (_, _) => Shutdown(services);
-
-        // The flow is interactive (windows, dialogs), so it is posted to run once Start() enters the loop.
-        var launcher = services.GetRequiredService<Launcher>();
-        Dispatcher.UIThread.Post(() => launcher.RunAsync(lifetime).FireAndForget());
-        lifetime.Start();
-        return Task.CompletedTask;
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.
@@ -144,11 +164,16 @@ public sealed class Launcher
     /// <summary>
     /// The composition root: every service the studio is composed of, registered as a singleton taking
     /// exactly what it uses in its constructor. Plain values (settings knobs, ports) are supplied by
-    /// the factory lambdas here — no class ever sees the provider.
+    /// the factory lambdas here. View-models aren't registered — the <see cref="ViewModelFactory"/> (the
+    /// one type given the provider) builds them on demand, resolving their services automatically.
     /// </summary>
     private static ServiceProvider ConfigureServices()
     {
         var services = new ServiceCollection();
+
+        // The registry of every well-known filesystem path (~/.toybox data + bundled templates);
+        // injected wherever a path is needed, so nothing hard-codes a folder or file name.
+        services.AddSingleton<PathsCatalog>();
 
         // Settings — nearly everything below reads them — and the theme derived from them.
         services.AddSingleton<SettingsManager>();
@@ -157,7 +182,9 @@ public sealed class Launcher
         // Unified logging: TbxStudio.log, with the engine console's colours tracking the active theme
         // via the ThemeLogSource adapter.
         services.AddSingleton(sp =>
-            new Logger(new LogFile(), new ThemeLogSource(sp.GetRequiredService<ThemeManager>())));
+            new Logger(
+                new LogFile(sp.GetRequiredService<PathsCatalog>()),
+                new ThemeLogSource(sp.GetRequiredService<ThemeManager>())));
 
         // The event bus every domain signal flows through — publishers dispatch typed structs,
         // handlers register; nobody holds anybody.
@@ -171,15 +198,33 @@ public sealed class Launcher
         services.AddSingleton<EditorKeymap>();
         services.AddSingleton<KeybindingDispatcher>();
 
+        // The user's starred menu items: the disk store (one file per surface under ~/.toybox/Favorites)
+        // and the manager the menu bar and context menus both toggle through, dispatching FavoritesChanged.
+        services.AddSingleton<FavoritesStore>();
+        services.AddSingleton<FavoritesManager>();
+
+        // The JSON-over-OS clipboard shared by the context menus (copy/paste of values and asset handles).
+        services.AddSingleton<Clipboard>();
+
+        // The type-routed context menus: the catalog discovers every ContextMenu<T> in the ContextMenu
+        // assembly and the adapter shows the built menu in a flyout. Both are published to their statics in
+        // Boot so the low ContextMenuOpener attach-behavior (opted in per view) can reach them. The asset
+        // menu's CRUD verbs act through AssetOperations (file moves under the project root + engine coordination).
+        services.AddSingleton<AssetOperations>();
+        ContextMenuCatalog.Register(services);
+        services.AddSingleton<ContextMenuOpenerAdapter>();
+
         // The active project — pure data, populated by the launch flow through the loader once the
         // user picks one — and the build/ship services callers compose around it. Both builders share
         // the one locator and build runner, so the engine path and build settings are read live from
         // the settings, and at most one native build runs across the two.
         services.AddSingleton<Project>();
+        services.AddSingleton<ProjectPaths>();
         services.AddSingleton<ProjectLoader>();
         services.AddSingleton<ProjectFactory>();
         services.AddSingleton<CommandRunner>();
         services.AddSingleton<CMakeCompiler>();
+        services.AddSingleton<GitClient>();
         services.AddSingleton<EngineSourceLocator>();
         services.AddSingleton<BuildRunner>();
         services.AddSingleton<ProjectBuilder>();
@@ -223,14 +268,14 @@ public sealed class Launcher
             return selection;
         });
 
-        // The editor's transform tool: the active gizmo mode + snapping the viewport toolbars and
-        // the Q/W/E/R keybindings drive; it registers its actions at construction and pushes the
-        // active handle set to the engine on every change and (re)connect.
-        services.AddSingleton<GizmoTool>();
+        // The world viewport's transform tool: the active gizmo mode + snapping the viewport toolbars
+        // and the Q/W/E/R keybindings drive; a pure handler that pushes the active handle set to the
+        // engine on every change and (re)connect (its actions are registered by WorldViewerToolbarActions).
+        services.AddSingleton<WorldViewerTool>();
 
-        // The editor's render layers: the collider wireframe modes, post-processing toggle, and
-        // render-stage debug view the viewport's render-layers toolbar drives; it registers its
-        // actions at construction and pushes the state to the engine on every change and (re)connect.
+        // The world viewport's render layers: the collider wireframe modes, post-processing toggle, and
+        // render-stage debug view the render-layers toolbar drives; a pure handler that pushes the state to
+        // the engine on every change and (re)connect (actions registered by WorldViewerToolbarActions).
         services.AddSingleton<RenderLayers>();
 
         // The asset domain: the catalog mirrors the engine's registered assets, refreshing itself as
@@ -261,84 +306,75 @@ public sealed class Launcher
                 sp.GetRequiredService<EventDispatcher>());
         });
 
-        // The docking workspace: the catalog scans the feature assemblies for [Dockable] Views, and the
-        // composition root authors each panel's view-model factory here — view-models are never
-        // service-registered; a panel's lifetime belongs to the workspace. The viewport factory builds
-        // a fresh view-model per opened panel (each spawns its own editor-camera stream into the
-        // engine's world, disposed when the panel closes); Settings closes over one lazily-created
-        // instance, so its panel survives close/reopen. Popups is the app-wide modal service.
-        services.AddSingleton(sp =>
-        {
-            SettingsViewModel? settings = null;
-            return new DockableFactories()
-                .Add(() =>
-                {
-                    var viewport = new ViewportViewModel(
-                        sp.GetRequiredService<EventDispatcher>(),
-                        sp.GetRequiredService<Logger>(),
-                        ViewKind.Editor,
-                        toolbars:
-                        [
-                            new TransformToolbarViewModel(
-                                sp.GetRequiredService<GizmoTool>(),
-                                sp.GetRequiredService<ActionRegistry>(),
-                                sp.GetRequiredService<EditorKeymap>(),
-                                sp.GetRequiredService<EventDispatcher>()),
-                            new RenderLayersToolbarViewModel(
-                                sp.GetRequiredService<RenderLayers>(),
-                                sp.GetRequiredService<ActionRegistry>(),
-                                sp.GetRequiredService<EditorKeymap>(),
-                                sp.GetRequiredService<EventDispatcher>()),
-                        ],
-                        selection: sp.GetRequiredService<WorldSelection>());
-                    viewport.Prepare(new ViewportStream(
-                        sp.GetRequiredService<Engine>(), sp.GetRequiredService<EventDispatcher>(), ViewKind.Editor));
-                    return viewport;
-                })
-                .Add(() => settings ??= new SettingsViewModel(
-                    sp.GetRequiredService<SettingsManager>(),
-                    sp.GetRequiredService<EditorKeymap>(),
-                    sp.GetRequiredService<EventDispatcher>()));
-        });
+        // The world viewport's click-select (lands taps on the shared selection). The World Viewer panel
+        // itself mints each fully-wired pane (viewport + its overlay toolbars + pick handler + engine
+        // stream) from these editor collaborators, so there is no separate pane-factory service.
+        services.AddSingleton<WorldPickHandler>();
+
+        // The world viewport's action registrations — the gizmo tools (Q/W/E/R + snap) and the render-layer
+        // toggles, scoped to the world viewport panel (Scheme.For<WorldViewerViewModel>()). Registered
+        // here rather than by the executing tools, so the viewport owns its own keybindings; eager-resolved
+        // in Boot before the keymap reload so its actions exist when the keymap builds.
+        services.AddSingleton<WorldViewerToolbarActions>();
+
+        // The active editing world (published by the World Viewer, read by the Hierarchy panel and the
+        // entity ops), the shared entity edit verbs (copy/cut/paste/duplicate/delete/global/enabled, on the
+        // current selection), and the Hierarchy panel's action registrations (Ctrl+C/X/V, Ctrl+D, Del, F2,
+        // scoped to Scheme.For<WorldTreeViewModel>()) — eager-resolved in Boot before the keymap builds.
+        services.AddSingleton<GameState>();
+        services.AddSingleton<EntityOperations>();
+        services.AddSingleton<WorldTreeActions>();
+
+        // The viewport node overlay's per-project node layout (positions/collapse), keyed by world under the
+        // project's .toybox/nodes folder. Shared by every open pane; the NodeGraphViewModel itself is built
+        // fresh per pane by the ViewModelFactory.
+        services.AddSingleton<NodeLayoutStore>();
+        services.AddSingleton<NodeLayoutManager>();
+
+        // The code editor's shared services: the loopback server that hosts the vendored Monaco bundle, the
+        // open-document buffer store, and the open-into-Coder launcher (companion pairing + reuse-or-spawn).
+        // The Coder panel view-model itself is built fresh by the ViewModelFactory on open, not a service.
+        services.AddSingleton<MonacoAssetServer>();
+        services.AddSingleton<ScriptService>();
+        services.AddSingleton<CoderLauncher>();
+
+        // The one type that holds the provider: it builds any view-model on demand, resolving the services
+        // its constructor asks for and taking runtime arguments positionally. Every view-model is built
+        // fresh — none is a service — so a panel that must survive close/reopen keeps its state in a service
+        // the fresh view-model reads back (Settings ← SettingsManager, the Log Console ← the logger's
+        // backlog), not in a kept-alive instance.
+        services.AddSingleton<ViewModelFactory>();
+
+        // The docking workspace: the catalog scans the feature assemblies for [Dockable] Views and builds
+        // each panel's view-model through the ViewModelFactory on open — nothing here hand-wires a per-panel
+        // factory. The world viewport dockable mints one editor viewport per pane itself and splits/joins
+        // them Blender-style, disposing panes as they close. Popups is the app-wide modal service.
         services.AddSingleton(sp => new DockableCatalog(
-            sp.GetRequiredService<DockableFactories>(),
+            sp.GetRequiredService<ViewModelFactory>(),
             sp.GetRequiredService<Logger>(),
-            typeof(ViewportView).Assembly, typeof(SettingsView).Assembly));
+            typeof(WorldViewerView).Assembly,
+            typeof(SettingsView).Assembly,
+            typeof(AssetViewerView).Assembly,
+            typeof(AssetBrowserView).Assembly,
+            typeof(GameViewerView).Assembly,
+            typeof(LogConsoleView).Assembly,
+            typeof(CoderPanelView).Assembly,
+            typeof(WorldTreeView).Assembly));
         services.AddSingleton<Popups>();
 
-        // The launch flow, carrying the window view-model graph it drives. View-models are composed
-        // here — parents construct (or receive) their children; none is a service, so no panel or
-        // window state is injectable. (The project picker's view-model is the one construct built
-        // later, in the flow: it needs the picker window's own storage provider for its Browse dialog.)
-        services.AddSingleton(sp =>
-        {
-            var workspace = new WorkspaceViewModel(
-                sp.GetRequiredService<DockableCatalog>(),
-                sp.GetRequiredService<Popups>(),
-                sp.GetRequiredService<Logger>());
-            var menuBar = new MenuBarViewModel(
-                sp.GetRequiredService<Project>(),
-                sp.GetRequiredService<ProjectBuilder>(),
-                sp.GetRequiredService<EngineBuilder>(),
-                sp.GetRequiredService<AppHost<Engine>>(),
-                workspace,
-                sp.GetRequiredService<ActionRegistry>(),
-                sp.GetRequiredService<EditorKeymap>(),
-                sp.GetRequiredService<Logger>(),
-                sp.GetRequiredService<EventDispatcher>());
-            var status = new StatusViewModel(sp.GetRequiredService<EventDispatcher>());
-            return new Launcher(
-                sp.GetRequiredService<SettingsManager>(),
-                sp.GetRequiredService<Project>(),
-                sp.GetRequiredService<ProjectLoader>(),
-                sp.GetRequiredService<ProjectFactory>(),
-                sp.GetRequiredService<EngineCoordinator>(),
-                sp.GetRequiredService<EditorKeymap>(),
-                sp.GetRequiredService<Logger>(),
-                new SplashViewModel(sp.GetRequiredService<EventDispatcher>()),
-                new MainWindowViewModel(
-                    menuBar, status, workspace, sp.GetRequiredService<KeybindingDispatcher>()));
-        });
+        // The docking workspace face (registered so the app-frame view-models and the asset-viewer
+        // launcher share the one instance), the asset-open pipeline (the reuse-or-new launcher + the
+        // type-router), and the in-process project switcher for File ▸ Open.
+        services.AddSingleton<WorkspaceViewModel>();
+        services.AddSingleton<AssetViewerLauncher>();
+        services.AddSingleton<AssetOpener>();
+        services.AddSingleton<ProjectSwitcher>();
+
+        // The launch flow. Every dependency it takes is a service (the ViewModelFactory among them, which it
+        // uses to build the window view-model graph it drives), so it registers like any other — no factory
+        // lambda. (The project picker's view-model is the one construct built later, in the flow: it needs
+        // the picker window's own storage provider for its Browse dialog.)
+        services.AddSingleton<Launcher>();
 
         return services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
@@ -351,9 +387,32 @@ public sealed class Launcher
     /// </summary>
     private static void Boot(ServiceProvider services)
     {
+
+        var log = services.GetRequiredService<Logger>();
+
+        // Dock's own docking diagnostics flow into the studio log: a drag logs which drop control was
+        // considered and why it was rejected, so a failing drag-and-drop names the check that rejected it
+        // instead of failing silently. But Dock also traces every global-adorner add/remove/evaluate on
+        // each drag — pure per-frame chatter that buried the console — so we drop the adorner lines and keep
+        // the rest of the diagnostics.
+        DockSettings.EnableDiagnosticsLogging = true;
+        DockSettings.DiagnosticsLogHandler = message =>
+        {
+            if (message.Contains("adorner", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            log.Info(message);
+        };
+
+        // From here on no crash is silent: UI exceptions log and are survived, fatal ones leave a
+        // synchronous crash file beside the logs.
+        CrashGuard.Install(log);
+
         // Theme loading runs before the logger exists, so its warnings are flushed once the logger does.
         var theme = services.GetRequiredService<ThemeManager>();
         theme.ApplySavedTheme();
+        foreach (var warning in theme.LoadWarnings)
+            log.Warning(warning);
 
         // Publish the motion tokens before any window exists: they gate EVERY animation (the splash's
         // rock/spin/nod and the micro-animation behaviors all read the AnimationIntensity resource, and
@@ -361,34 +420,27 @@ public sealed class Launcher
         // intensity value is edited.
         MotionTokens.Publish(services.GetRequiredService<SettingsManager>().Editor.Accessibility.AnimationIntensity);
 
-        var log = services.GetRequiredService<Logger>();
-
-        // Dock's own docking diagnostics flow into the studio log: a drag logs which drop control was
-        // considered and why adorners were (or weren't) shown, so a failing drag-and-drop names the
-        // check that rejected it instead of failing silently.
-        DockSettings.EnableDiagnosticsLogging = true;
-        DockSettings.DiagnosticsLogHandler = message => log.Info(message);
-
-        // From here on no crash is silent: UI exceptions log and are survived, fatal ones leave a
-        // synchronous crash file beside the logs.
-        CrashGuard.Install(log);
-
-        foreach (var warning in theme.LoadWarnings)
-            log.Warning(warning);
-
-        // Purely event-driven services nobody injects — resolved so they exist and subscribe. The
-        // gizmo tool must exist before RunAsync's keymap reload so its action registrations are in.
+        // Purely event-driven services nobody injects — resolved so they exist and subscribe.
+        // WorldViewerToolbarActions must exist before RunAsync's keymap reload so the world viewport's
+        // action registrations are in; the tools it registers for exist to handle their invocations.
         services.GetRequiredService<SyncHub>();
         services.GetRequiredService<Gizmo>();
         services.GetRequiredService<WorldSelection>();
-        services.GetRequiredService<GizmoTool>();
+        services.GetRequiredService<WorldViewerTool>();
         services.GetRequiredService<RenderLayers>();
+        services.GetRequiredService<WorldViewerToolbarActions>();
+        services.GetRequiredService<WorldTreeActions>();
         services.GetRequiredService<AssetCatalog>();
         services.GetRequiredService<OwnedAppWatchdog>().Start();
 
         // Assets are constructed, not injected, so their lifecycle services are wired statically once.
         Asset.Configure(
             services.GetRequiredService<SyncHub>(), services.GetRequiredService<AssetCatalog>(), log);
+
+        // Publish the context-menu system to the statics the low attach-behavior reaches: the catalog that
+        // routes a right-clicked object to its menu, and the adapter that builds + shows the flyout.
+        ContextMenuCatalog.Current = services.GetRequiredService<ContextMenuCatalog>();
+        ContextMenuOpener.Current = services.GetRequiredService<ContextMenuOpenerAdapter>();
     }
 
     /// <summary>
@@ -415,11 +467,16 @@ public sealed class Launcher
         services.GetRequiredService<EngineCoordinator>().Dispose();
         services.GetRequiredService<OwnedAppWatchdog>().Dispose();
         services.GetRequiredService<AssetCatalog>().Dispose();
-        services.GetRequiredService<GizmoTool>().Dispose();
+
+        // Stop the code editor's loopback asset server (its HttpListener). Any clangd it spawned was already
+        // killed above with the Coder panel's view-model (DisposeWorkspacePanels).
+        services.GetRequiredService<MonacoAssetServer>().Dispose();
+        services.GetRequiredService<WorldViewerTool>().Dispose();
         services.GetRequiredService<RenderLayers>().Dispose();
         services.GetRequiredService<WorldSelection>().Dispose();
         services.GetRequiredService<Gizmo>().Dispose();
         services.GetRequiredService<SyncHub>().Dispose();
+
         // Run the async teardown on the thread pool: blocking the UI thread on code that resumes
         // via its SynchronizationContext would deadlock.
         Task.Run(async () =>
@@ -455,6 +512,10 @@ public sealed class Launcher
             _splash.Show();
             var timer = Stopwatch.StartNew();
 
+            // Before anything tries to build or launch, make sure there is an engine to build against —
+            // offering to download one if not (the splash owns the prompt, the main window isn't up yet).
+            await EnsureEngineAsync().ContinueOnSameContext();
+
             if (_settings.Editor.Engine.AutoLaunchEngine)
             {
                 await _coordinator.StartEngineAsync().ContinueOnSameContext();
@@ -462,7 +523,7 @@ public sealed class Launcher
             else
             {
                 _log.Info("Engine auto-launch is disabled in the editor settings; not launching.");
-                _splashViewModel.Status = "Engine auto-launch is off.";
+                _splashViewModel.Announce("Engine auto-launch is off.");
             }
 
             var remaining = SplashMinimumDuration - timer.Elapsed;
@@ -476,7 +537,7 @@ public sealed class Launcher
             // the message.
             if (!_splash.IsVisible)
                 _splash.Show();
-            _splashViewModel.Status = $"Launch failed: {exception.Message}";
+            _splashViewModel.Announce($"Launch failed: {exception.Message}");
             await Task.Delay(TimeSpan.FromSeconds(3)).ContinueOnSameContext();
         }
 
@@ -498,6 +559,122 @@ public sealed class Launcher
     }
 
     /// <summary>
+    /// The startup engine check: if no engine checkout can be located (neither the settings path nor a
+    /// checkout beside the project), offers to download one over the splash and, on yes, clones the
+    /// configured engine repo (asking for its URL the first time) beside the project, then records the
+    /// fetched checkout as the engine source path so the build finds it. Declining — or a failed
+    /// download — is non-fatal: the studio still opens, and the user can point at (or fix) the engine
+    /// path in Settings. Every branch narrates to the log.
+    /// </summary>
+    private async Task EnsureEngineAsync()
+    {
+        if (_engineLocator.Locate(_project.Path))
+            return;
+
+        _log.Warning("No Toybox engine checkout was found to build against.");
+        _splashViewModel.Announce("No engine found.");
+
+        var download = await _popups
+            .ConfirmAsync(
+                "Engine not found",
+                "Toybox couldn't find an engine checkout to build against. Download it now with Git?",
+                _splash)
+            .ContinueOnSameContext();
+        if (download != Confirmation.Yes)
+        {
+            _log.Info("Engine download declined; set the engine source path in Settings to build.");
+            return;
+        }
+
+        var repoUrl = await ResolveEngineRepoUrlAsync().ContinueOnSameContext();
+        if (repoUrl is null)
+        {
+            _log.Info("No engine repository URL was given; skipping the download.");
+            return;
+        }
+
+        var target = EngineDownloadTarget();
+        _splashViewModel.Announce("Downloading the engine…");
+
+        // Drive the splash's activity bar for the download: announce the job so the bar shows with its
+        // caption, feed git's transfer fraction into it, and clear it in a finally so a failure still
+        // takes the bar down. This is the same LaunchActivity mechanism the build runner uses for compiles.
+        var cloned = await WithActivityAsync(
+            LaunchActivity.Downloading,
+            progress => _git.CloneAsync(repoUrl, target, progress)).ContinueOnSameContext();
+        if (!cloned)
+        {
+            _log.Error(cloned.Error!);
+            _splashViewModel.Announce("Engine download failed.");
+            await _popups
+                .ErrorAsync(
+                    "Engine download failed",
+                    $"{cloned.Error}\n\nThe studio will open without an engine — check the URL and your "
+                        + "connection, then download it again, or set the engine source path, from Settings.",
+                    _splash)
+                .ContinueOnSameContext();
+            return;
+        }
+
+        // Remember both the URL used and where the checkout landed, so the next launch and every build
+        // find the engine without asking again.
+        _settings.Editor.Engine.RepoUrl = repoUrl;
+        _settings.Editor.Engine.SourcePath = target;
+        await _settings.ApplyAsync().ContinueOnSameContext();
+        _log.Info($"Engine downloaded to '{target}'.");
+    }
+
+    /// <summary>
+    /// Runs a launch <paramref name="activity"/> (a git transfer, here) with the splash's activity bar
+    /// shown for its duration: dispatches the started/finished <see cref="LaunchActivityChanged"/> pair
+    /// (the finish in a finally, so a failure still clears the bar) and hands the operation an
+    /// <see cref="IProgress{T}"/> that feeds the bar via <see cref="LaunchActivityProgress"/>.
+    /// </summary>
+    private async Task<T> WithActivityAsync<T>(
+        LaunchActivity activity, Func<IProgress<double>, Task<T>> operation)
+    {
+        var progress = new DelegateProgress<double>(
+            fraction => _events.Dispatch(new LaunchActivityProgress(fraction)));
+
+        _events.Dispatch(new LaunchActivityChanged(activity, true));
+        try
+        {
+            return await operation(progress).ContinueOnSameContext();
+        }
+        finally
+        {
+            _events.Dispatch(new LaunchActivityChanged(activity, false));
+        }
+    }
+
+    /// <summary>The engine repo URL to clone: the configured one, or asked for (and null when the user
+    /// dismisses the prompt without giving one). The caller persists a freshly-entered URL on success.</summary>
+    private async Task<string?> ResolveEngineRepoUrlAsync()
+    {
+        var configured = _settings.Editor.Engine.RepoUrl;
+        if (!string.IsNullOrWhiteSpace(configured))
+            return configured;
+
+        var entered = await _popups
+            .ShowAsync(
+                _viewModels.Create<TextPromptPopupViewModel>(
+                    "Engine repository", "https://…/Engine.git", "", false, "Download"),
+                _splash)
+            .ContinueOnSameContext();
+        return string.IsNullOrWhiteSpace(entered) ? null : entered;
+    }
+
+    /// <summary>Where a downloaded engine checkout lands: an <c>Engine</c> folder beside the project (a
+    /// Toybox root holds the engine alongside its projects), which is also where the locator's
+    /// ancestor-climb looks.</summary>
+    private string EngineDownloadTarget()
+    {
+        var parent = Directory.GetParent(Path.TrimEndingDirectorySeparator(_project.Path))?.FullName
+            ?? _project.Path;
+        return Path.Combine(parent, "Engine");
+    }
+
+    /// <summary>
     /// Hands the screen to the studio window: flips the splash to Ready so its icon takes the bow (the
     /// nod — the engine's own Ready state usually lands only after this handoff, so the flow declares
     /// it), lets it land while the studio window paints its first frame behind the topmost splash, then
@@ -515,6 +692,10 @@ public sealed class Launcher
         _splashViewModel.Dismiss();
         await Task.WhenAny(closed.Task, Task.Delay(TimeSpan.FromSeconds(2))).ContinueOnSameContext();
         _splash.Close();
+
+        // The splash is done: drop its event handlers and (in a Debug build) its log console's subscription
+        // to the log stream, so nothing here outlives the handoff to the studio window.
+        _splashViewModel.Dispose();
     }
 
     /// <summary>
@@ -526,8 +707,9 @@ public sealed class Launcher
     private async Task<StartupChoice> PromptForProjectAsync()
     {
         var picker = new ProjectPickerWindow();
-        var viewModel = new ProjectPickerViewModel(
-            _settings, _projectLoader, _projectFactory, picker.StorageProvider);
+        // Settings/loader/factory resolve from the provider; the picker window's own storage provider (for
+        // the Browse dialog) is the runtime argument.
+        var viewModel = _viewModels.Create<ProjectPickerViewModel>(picker.StorageProvider);
         picker.DataContext = viewModel;
         // Closing the window without choosing (the title-bar X) is a dismissal, not a choice.
         picker.Closed += (_, _) => viewModel.Dismiss();
@@ -540,6 +722,11 @@ public sealed class Launcher
 
         RememberProject(root);
         _projectLoader.Load(root, _project);
+        // Point the project-path registry at the newly opened project (its .toybox is where the layout,
+        // node layouts, and project settings live), then read its project-scoped editor settings onto the
+        // live settings before anything downstream reads them.
+        _projectPaths.Root = _project.Path;
+        _settings.LoadProjectSettings();
         _splashViewModel.ShowProject(_project);
         return StartupChoice.Project;
     }
@@ -557,16 +744,8 @@ public sealed class Launcher
     /// <summary>Records the opened project as the last-opened and front of the recents (capped) list.</summary>
     private void RememberProject(string root)
     {
-        const int maxRecent = 10;
-
-        var projects = _settings.Editor.Projects;
-        projects.LastOpened = root;
-        projects.Recent.RemoveAll(p => string.Equals(p, root, StringComparison.OrdinalIgnoreCase));
-        projects.Recent.Insert(0, root);
-        if (projects.Recent.Count > maxRecent)
-            projects.Recent.RemoveRange(maxRecent, projects.Recent.Count - maxRecent);
-
-        _settings.SaveAsync().FireAndForget();
+        RecentProjects.Remember(_settings.Editor.Projects, root);
+        _settings.ApplyAsync().FireAndForget();
     }
 
     /// <summary>Disposes every open panel view-model (each viewport's engine view stops). Run first in

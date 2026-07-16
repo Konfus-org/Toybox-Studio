@@ -18,8 +18,9 @@ public sealed class ProjectFactory
     // Files the token is stamped in; everything else copies byte-for-byte.
     private static readonly string[] StampedExtensions = [".txt", ".json", ".h", ".cpp"];
 
-    private static readonly string TemplateRoot =
-        Path.Combine(AppContext.BaseDirectory, "Templates", "Projects", "Default");
+    private readonly PathsCatalog _paths;
+
+    public ProjectFactory(PathsCatalog paths) => _paths = paths;
 
     /// <summary>
     /// Copies the template into <paramref name="root"/> — an empty (or not-yet-existing) folder whose
@@ -28,6 +29,7 @@ public sealed class ProjectFactory
     /// </summary>
     public Result<string> Create(string root)
     {
+        var templateRoot = _paths.DefaultProjectTemplate;
         root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         var name = Path.GetFileName(root);
         if (!Regex.IsMatch(name, "^[A-Za-z_][A-Za-z0-9_]*$"))
@@ -35,17 +37,17 @@ public sealed class ProjectFactory
                 $"'{name}' can't name a project — use letters, digits and underscores "
                 + "(the name becomes the project's CMake target and app class).");
 
-        if (!Directory.Exists(TemplateRoot))
-            return Result<string>.Fail($"The bundled project template is missing ('{TemplateRoot}').");
+        if (!Directory.Exists(templateRoot))
+            return Result<string>.Fail($"The bundled project template is missing ('{templateRoot}').");
 
         if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any())
             return Result<string>.Fail($"'{root}' isn't empty — a new project needs a fresh folder.");
 
         try
         {
-            foreach (var file in Directory.EnumerateFiles(TemplateRoot, "*", SearchOption.AllDirectories))
+            foreach (var file in Directory.EnumerateFiles(templateRoot, "*", SearchOption.AllDirectories))
             {
-                var target = Path.Combine(root, Path.GetRelativePath(TemplateRoot, file));
+                var target = Path.Combine(root, Path.GetRelativePath(templateRoot, file));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 if (StampedExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
                     File.WriteAllText(target, File.ReadAllText(file).Replace(TemplateToken, name));

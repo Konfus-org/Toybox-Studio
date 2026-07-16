@@ -22,6 +22,28 @@ public static class EnumExtensions
         return Humanize(name);
     }
 
+    /// <summary>
+    /// The display label for a boxed enum value — the non-generic twin of
+    /// <see cref="GetDisplayName{TEnum}(TEnum)"/>, for callers that only have an
+    /// <see cref="Enum"/> (e.g. the property grid iterating <see cref="Enum.GetValues(Type)"/>).
+    /// </summary>
+    public static string GetDisplayName(this Enum value)
+    {
+        var name = value.ToString();
+        if (value.GetType().GetField(name)?.GetCustomAttribute<DisplayNameAttribute>() is { } displayName)
+            return displayName.Name;
+        return Humanize(name);
+    }
+
+    /// <summary>
+    /// The <see cref="TooltipAttribute"/> text for an enum member, or null when it declares none.
+    /// </summary>
+    public static string? GetTooltip(this Enum value)
+    {
+        var name = value.ToString();
+        return value.GetType().GetField(name)?.GetCustomAttribute<TooltipAttribute>()?.Text;
+    }
+
     private static string Humanize(string name)
     {
         var text = new StringBuilder(name.Length + 4);

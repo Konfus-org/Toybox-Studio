@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Monaco editor integration: the WebView host control (MonacoEditorControl), the JS-bridge session
+       protocol (MonacoSession), and the loopback asset server that serves the vendored web bundle
+       (MonacoAssetServer). Kept separate from the Coding dockable so the editor surface stays reusable and the
+       heavy WebView/Monaco payload is isolated. The vendored Monaco bundle lives in Monaco/ and is served over
+       loopback HTTP because Monaco spins up web workers that need a trustworthy http:// origin, not file://. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Avalonia.Controls.WebView" />
+  </ItemGroup>
+
+  <!-- The vendored Monaco web bundle copies to the output preserving its Monaco/ path (no Link), because
+       MonacoAssetServer reads the real files off disk from BaseDirectory/Monaco and serves them over a
+       loopback origin. This flows transitively to the consuming app's output via the project reference. -->
+  <ItemGroup>
+    <None Remove="Monaco\**" />
+    <None Include="Monaco\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

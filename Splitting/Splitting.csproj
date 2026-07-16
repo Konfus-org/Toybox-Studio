@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The reusable Blender-style split grid: the persistable split tree (SplitLayout / SplitLeaf / … with
+       ISplitHost / IPaneSource) plus the Avalonia controls that render and manipulate it (SplitContainer,
+       SplitDivider, and the corner split/join behavior). A pane leaf carries its per-pane overlay-toolbar
+       placements, so this references the Toolbar contracts (IToolbarHost / ToolbarDockStates). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Toolbar\Toolbar.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+  </ItemGroup>
+
+</Project>

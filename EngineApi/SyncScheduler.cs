@@ -5,7 +5,7 @@ using Toybox.Studio.Utils;
 namespace Toybox.Studio.EngineApi;
 
 /// <summary>
-/// Applies each <see cref="SyncMode"/>'s outbound timing. <see cref="SyncMode.Live"/> sends at once.
+/// Applies each <see cref="SyncMode"/>'s outbound timing. <see cref="SyncMode.TwoWay"/> sends at once.
 /// <see cref="SyncMode.Batched"/> sends the leading edge immediately, then coalesces follow-ups into
 /// one trailing send per batch frequency (latest value wins), so a gizmo drag feels live without
 /// flooding the wire. <see cref="SyncMode.Manual"/> stages until the owner's flush. Sends are
@@ -37,7 +37,8 @@ public sealed class SyncScheduler
     {
         switch (slot.Mode)
         {
-            case SyncMode.Live:
+            case SyncMode.TwoWay:
+            case SyncMode.OneWayFromStudio:
                 Send(slot, payload);
                 break;
             case SyncMode.Batched:

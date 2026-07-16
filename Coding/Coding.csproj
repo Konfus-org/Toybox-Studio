@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Coder dockable: a Monaco-based code editor for C++ scripts (header + source as tabs), GLSL/OpenGL
+       shaders, and JSON. The generic CoderView is embeddable anywhere (an inspector strip later); the panel
+       host just wraps one and is [Dockable]. clangd backs C++ with F12/hover/semantic type colouring; the
+       Monaco light/dark base + primary accent follow the active theme. The Monaco editor surface itself (the
+       WebView control, session bridge, and vendored bundle) lives in the sibling Monaco project. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Themes\Themes.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\Projects\Projects.csproj" />
+    <ProjectReference Include="..\Docking\Docking.csproj" />
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\Monaco\Monaco.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

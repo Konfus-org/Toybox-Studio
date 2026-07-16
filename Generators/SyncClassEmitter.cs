@@ -49,8 +49,10 @@ internal static class SyncClassEmitter
         EmitEvents(source, model);
         EmitMethods(source, model);
         EmitApply(source, model);
+        EmitPushApply(source, model);
         EmitRaise(source, model);
         EmitCollectInto(source, model);
+        EmitCollectChildren(source, model);
         EmitWireKeyFor(source, model);
         EmitWriteExtras(source, model);
 
@@ -82,6 +84,7 @@ internal static class SyncClassEmitter
             source.Append("        ").Append(SyncMode).Append('.').Append(property.Mode).AppendLine(",");
             source.Append("        ").Append(property.BatchFrequencyMs.ToString(CultureInfo.InvariantCulture))
                 .AppendLine(",");
+            source.Append("        ").Append(property.IsChildBearing ? "true" : "false").AppendLine(",");
             source.Append("        static value => ").Append(property.WriteCall).AppendLine(",");
             source.Append("        static token => ").Append(property.ReadCall).AppendLine(");");
         }
@@ -162,6 +165,12 @@ internal static class SyncClassEmitter
         {
             source.Append("    protected override ").Append(EngineAddress).Append(" Address => new(")
                 .Append(address).AppendLine(");");
+            source.AppendLine();
+        }
+
+        if (model.PathAddressed)
+        {
+            source.AppendLine("    protected override bool PathAddressed => true;");
             source.AppendLine();
         }
     }
@@ -247,6 +256,35 @@ internal static class SyncClassEmitter
         source.AppendLine();
     }
 
+    // RestoreFrom()'s per-class contribution: the push twin of Apply — each settable, non-Mirror key
+    // routes back through Push (the setter path), so restoring an undo snapshot pushes to the engine and
+    // flips the dirty flag. Matches the keys CollectInto serializes, so a restored body lands whole.
+    private static void EmitPushApply(StringBuilder source, SyncedClass model)
+    {
+        var settable = model.Properties.Where(property => !property.IsReadOnly && property.HasSetter).ToList();
+        if (settable.Count == 0)
+            return;
+
+        source.Append("    protected override bool PushApply(string key, ").Append(JToken).AppendLine(" value)");
+        source.AppendLine("    {");
+        source.AppendLine("        switch (key)");
+        source.AppendLine("        {");
+        foreach (var property in settable)
+        {
+            source.Append("            case ").Append(Quote(property.Key)).AppendLine(":");
+            source.Append("                Push(ref ").Append(property.FieldName).Append(", (")
+                .Append(property.TypeDisplay).Append(')').Append(property.SlotName).Append(".Read(value)!, ")
+                .Append(property.SlotName).AppendLine(");");
+            source.AppendLine("                return true;");
+        }
+
+        source.AppendLine("            default:");
+        source.AppendLine("                return base.PushApply(key, value);");
+        source.AppendLine("        }");
+        source.AppendLine("    }");
+        source.AppendLine();
+    }
+
     private static void EmitRaise(StringBuilder source, SyncedClass model)
     {
         if (model.Events.Count == 0)
@@ -271,11 +309,12 @@ internal static class SyncClassEmitter
         source.AppendLine();
     }
 
-    // Serialize()'s per-class contribution: every synced value except Mirror ones — those are
-    // engine-owned (ids and the like), and a copied body must carry content, never identity.
+    // Serialize()'s per-class contribution: every synced value, blanket — the studio side serializes
+    // everything (identity included) and the engine ignores what it doesn't want (its own do_not_serialize
+    // governs what C++ persists). This is what puts a world's entities into its undo snapshot.
     private static void EmitCollectInto(StringBuilder source, SyncedClass model)
     {
-        var serialized = model.Properties.Where(property => !property.IsMirror).ToList();
+        var serialized = model.Properties;
         if (serialized.Count == 0)
             return;
 
@@ -285,6 +324,42 @@ internal static class SyncClassEmitter
         foreach (var property in serialized)
             source.Append("        body[").Append(Quote(property.Key)).Append("] = ")
                 .Append(property.SlotName).Append(".Write(").Append(property.Name).AppendLine(");");
+        source.AppendLine("    }");
+        source.AppendLine();
+    }
+
+    // CollectChildren()'s per-class contribution: the nested EngineObjects reachable through this class's
+    // child-bearing synced properties (a single one, or each element of a collection), which the base
+    // binds and whose edits it aggregates.
+    private static void EmitCollectChildren(StringBuilder source, SyncedClass model)
+    {
+        var children = model.Properties.Where(property => property.IsChildBearing).ToList();
+        if (children.Count == 0)
+            return;
+
+        source.Append("    protected override void CollectChildren(global::System.Collections.Generic.List<")
+            .Append(EngineObject).AppendLine("> children)");
+        source.AppendLine("    {");
+        source.AppendLine("        base.CollectChildren(children);");
+        foreach (var property in children)
+        {
+            var local = property.FieldName + "Value";
+            if (property.IsChildCollection)
+            {
+                source.Append("        if (").Append(property.FieldName).Append(" is { } ").Append(local)
+                    .AppendLine(")");
+                source.Append("            foreach (var child in ").Append(local).AppendLine(")");
+                source.AppendLine("                if (child is not null)");
+                source.AppendLine("                    children.Add(child);");
+            }
+            else
+            {
+                source.Append("        if (").Append(property.FieldName).Append(" is { } ").Append(local)
+                    .AppendLine(")");
+                source.Append("            children.Add(").Append(local).AppendLine(");");
+            }
+        }
+
         source.AppendLine("    }");
         source.AppendLine();
     }

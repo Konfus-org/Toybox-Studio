@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Game Viewer dockable: a single-pane viewport showing the running game (ViewKind.Game mirrors
+       the game camera) with a play / pause / stop / next-frame transport that drives the engine run
+       state. Reuses the Viewport pane's GPU-texture surface; owns no world state — play mode is a
+       sandbox the engine snapshots and restores, so gameplay edits never persist. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Viewport\Viewport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+</Project>

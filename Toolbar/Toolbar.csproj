@@ -1,15 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The viewport's movable overlay toolbar: the transform-tool radio buttons + snapping toggle
-       (action-driven — clicks publish the same EditorActionInvoked the keybindings do), dockable
-       against any viewport edge by dragging its grip; the edge persists with the dock layout. -->
+  <!-- A generic, reusable movable overlay toolbar: a dockable row of action-driven buttons + an
+       optional number field (clicks publish the same EditorActionInvoked the keybindings do), dockable
+       against any host edge by dragging its grip; the edge persists with the dock layout. The concrete
+       toolbars that fill it live with their feature (e.g. WorldViewer's transform/render toolbars). -->
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
-    <ProjectReference Include="..\Assets\Assets.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
     <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
     <ProjectReference Include="..\Resources\Resources.csproj" />
-    <ProjectReference Include="..\Worlds\Worlds.csproj" />
   </ItemGroup>
 
   <ItemGroup>

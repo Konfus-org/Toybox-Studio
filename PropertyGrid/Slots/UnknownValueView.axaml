@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.UnknownValueView"
+             x:DataType="local:UnknownValueViewModel">
+    <!-- The raw-JSON fallback for a type without a dedicated editor: a multi-line monospaced box that
+         validates as you type. Malformed JSON reddens the border and shows the parser's complaint below,
+         and is held back from the value until it parses — so an unsupported type stays editable without a
+         broken draft silently corrupting it. -->
+    <StackPanel Spacing="2">
+        <TextBox Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 IsEnabled="{Binding !IsReadOnly}"
+                 AcceptsReturn="True" TextWrapping="NoWrap" MaxHeight="180"
+                 FontFamily="{DynamicResource ThemeMonoFontFamily}"
+                 ToolTip.Tip="{Binding Error}"
+                 Classes.invalid="{Binding !IsValid}">
+            <TextBox.Styles>
+                <!-- Redden the templated border in every interaction state so invalid JSON stays flagged
+                     whether or not the field is hovered/focused. -->
+                <Style Selector="TextBox.invalid /template/ Border#PART_BorderElement">
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeErrorBrush}"/>
+                </Style>
+                <Style Selector="TextBox.invalid:pointerover /template/ Border#PART_BorderElement">
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeErrorBrush}"/>
+                </Style>
+                <Style Selector="TextBox.invalid:focus /template/ Border#PART_BorderElement">
+                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeErrorBrush}"/>
+                </Style>
+            </TextBox.Styles>
+        </TextBox>
+        <TextBlock Text="{Binding Error}" IsVisible="{Binding !IsValid}"
+                   Foreground="{DynamicResource ThemeErrorBrush}"
+                   FontSize="11" TextWrapping="Wrap"/>
+    </StackPanel>
+</UserControl>

@@ -12,12 +12,14 @@ internal sealed class SyncedProperty(
     string key,
     string mode,
     int batchFrequencyMs,
-    bool isMirror,
+    bool isReadOnly,
     bool hasSetter,
     string setterModifier,
     string? converterDisplay,
     string writeCall,
     string readCall,
+    bool isChildBearing,
+    bool isChildCollection,
     List<SyncedExtra> extras)
 {
     public string Name { get; } = name;
@@ -38,9 +40,9 @@ internal sealed class SyncedProperty(
 
     public int BatchFrequencyMs { get; } = batchFrequencyMs;
 
-    /// <summary>Mirror properties never push; declared get-only, or with a private setter so the class
-    /// can assign its own engine-owned state locally.</summary>
-    public bool IsMirror { get; } = isMirror;
+    /// <summary>A OneWayFromEngine property never pushes; declared get-only, or with a private setter so
+    /// the class can assign its own engine-owned state locally.</summary>
+    public bool IsReadOnly { get; } = isReadOnly;
 
     public bool HasSetter { get; } = hasSetter;
 
@@ -56,6 +58,14 @@ internal sealed class SyncedProperty(
 
     /// <summary>The slot's read expression over the <c>token</c> parameter.</summary>
     public string ReadCall { get; } = readCall;
+
+    /// <summary>Whether the property's value is (or contains) nested <see cref="EngineObject"/>s the
+    /// owner binds and aggregates — an entity's components, a world's entities.</summary>
+    public bool IsChildBearing { get; } = isChildBearing;
+
+    /// <summary>Whether the child-bearing value is a collection of EngineObjects (vs. a single one), so
+    /// the emitted <c>CollectChildren</c> iterates it.</summary>
+    public bool IsChildCollection { get; } = isChildCollection;
 
     public List<SyncedExtra> Extras { get; } = extras;
 

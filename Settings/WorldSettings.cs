@@ -1,4 +1,6 @@
+using Toybox.Studio.EngineApi.Types;
 using Toybox.Studio.EngineApi;
+using Toybox.Studio.Utils.Attributes;
 
 namespace Toybox.Studio.Settings;
 
@@ -10,6 +12,7 @@ namespace Toybox.Studio.Settings;
 public sealed record WorldSettings
 {
     /// <summary>The world the app opens into (a <c>.world</c> asset).</summary>
+    [AssetType("world")]
     public Handle StartupWorld { get; init; }
 
     /// <summary>The world-space size of a streamed chunk's cube.</summary>

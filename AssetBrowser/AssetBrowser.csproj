@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Asset Browser dockable: a searchable, category-filtered grid of the project's assets over the
+       typed AssetCatalog. Double-tapping a tile opens it through the shared AssetOpener (previewable
+       assets land in the Asset Viewer editor); the empty-space menu authors new assets through the typed
+       Asset lifecycle. It touches no JSON or RPC — only the catalog rows and the typed Asset API. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\AssetViewer\AssetViewer.csproj" />
+    <ProjectReference Include="..\Viewport\Viewport.csproj" />
+    <ProjectReference Include="..\Projects\Projects.csproj" />
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Overlays\Overlays.csproj" />
+    <ProjectReference Include="..\Searching\Searching.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Generic Git driving: cloning and pulling checkouts (the engine source, first of all) through the
+       shared CMake CommandRunner, so git is invoked the same shell-free way as every other tool. Knows
+       nothing about Toybox beyond running git; callers decide what to clone and where. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\CMake\CMake.csproj" />
+  </ItemGroup>
+
+</Project>

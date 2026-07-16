@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Toolbar"
+             xmlns:behaviors="using:Toybox.Studio.Behaviors"
+             x:Class="Toybox.Studio.Toolbar.ToolbarNumberFieldView"
+             x:DataType="local:ToolbarNumberField"
+             IsVisible="{Binding IsVisible, FallbackValue=False}">
+
+    <UserControl.Styles>
+        <!-- The snap-amount spinner as a compact toolbar chip, sized to sit level with the tool buttons:
+             no spinner buttons (the button-drag would fatten it) and transparent so the chip's own
+             fill/border frame it. The inner text box shrinks to its number and centres, leaving a margin
+             of bare control all around it — that margin is the scrub grip: press a corner/edge and drag
+             left (down) or right (up), exactly the NumberScrubBehavior the property grid fields use. The
+             text box keeps click-to-caret and typing. -->
+        <Style Selector="NumericUpDown.snap">
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="NumericUpDown.snap /template/ TextBox">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Drag a corner/edge left or right to scrub the value down or up, or click in and type — the same
+         NumberScrubBehavior the property grid's number fields use (here with the spinner buttons hidden,
+         so only the frame drags). The unit reads as flanking labels (× scaling, ° rotating). -->
+    <Border Background="{DynamicResource ThemeMenuHighlightBrush}"
+            BorderBrush="{DynamicResource ThemeAccentSolidBrush}" BorderThickness="1"
+            CornerRadius="{DynamicResource ControlCornerRadius}"
+            Padding="3,1" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Prefix}" IsVisible="{Binding HasPrefix}"
+                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+            <NumericUpDown Value="{Binding Value}"
+                           Increment="{Binding Increment}"
+                           Minimum="0"
+                           FormatString="0.###"
+                           ShowButtonSpinner="False"
+                           Classes="snap"
+                           behaviors:NumberScrubBehavior.Enabled="True"/>
+            <TextBlock Text="{Binding Suffix}" IsVisible="{Binding HasSuffix}"
+                       FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -18,8 +18,16 @@ public sealed class Logger : IDisposable
 {
     private const string StudioCategory = "Studio";
 
+    // The console scrollback lives here, not in its (fresh-per-open) view-model: every line flows through
+    // Emit from the first startup line, so a console opened at any time replays the whole session. The
+    // ring is bounded so a long-running or chatty session can't grow it without limit.
+    private const int BacklogCapacity = 5000;
+
     private readonly LogFile _file;
     private readonly ILogTheme _theme;
+
+    private readonly object _gate = new();
+    private readonly List<LogEntry> _backlog = [];
 
     private Func<string, string, Task>? _engineForwarder;
     private Func<string, string, string, CancellationToken, Task>? _logColorSink;
@@ -37,9 +45,26 @@ public sealed class Logger : IDisposable
     }
 
     /// <summary>
-    /// Raised for every log line, on the calling thread. Subscribers marshal as needed.
+    /// Raised for every log line, on the calling thread. Subscribers marshal as needed. A consumer that
+    /// also needs the lines logged before it subscribed (the console) should use <see cref="Subscribe"/>,
+    /// which hands back the current backlog and starts the subscription atomically.
     /// </summary>
     public event Action<LogEntry>? Logged;
+
+    /// <summary>
+    /// Starts <paramref name="handler"/> receiving future lines and returns the current backlog, both under
+    /// one lock so no line is missed or delivered twice across the seam: a line logged concurrently either
+    /// lands in the returned snapshot or is delivered to the handler, never both and never neither. The
+    /// caller replays the snapshot, then relies on the event for new lines; unsubscribe with <c>Logged -=</c>.
+    /// </summary>
+    public IReadOnlyList<LogEntry> Subscribe(Action<LogEntry> handler)
+    {
+        lock (_gate)
+        {
+            Logged += handler;
+            return _backlog.ToArray();
+        }
+    }
 
     /// <summary>
     /// Unsubscribes from the theme so this logger doesn't outlive its registration via the theme's event
@@ -89,6 +114,14 @@ public sealed class Logger : IDisposable
         Emit(new LogEntry(level, message), forwardRaw: null);
 
     /// <summary>
+    /// Surfaces an already-tagged line (as <see cref="Log(LogLevel, string)"/>) that also carries its
+    /// originating source location, so a console can link its "[file:line]" prefix to the real file.
+    /// Used for engine lines, whose full source path rides alongside the message over the wire.
+    /// </summary>
+    public void Log(LogLevel level, string message, LogSource? source) =>
+        Emit(new LogEntry(level, message, source), forwardRaw: null);
+
+    /// <summary>
     /// Sets (or clears) the sink that pushes editor lines into the engine's unified log. The session wires
     /// this to the live RPC client on connect and clears it on disconnect.
     /// </summary>
@@ -112,14 +145,29 @@ public sealed class Logger : IDisposable
         var composed = string.IsNullOrEmpty(name)
             ? $"[{StudioCategory}] {message}"
             : $"[{StudioCategory}][{name}:{line}] {message}";
-        // Forward the raw message; the engine re-tags it under its own "[Studio]" scope.
-        Emit(new LogEntry(level, composed), forwardRaw: message);
+        // The message only carries the bare file name, so ride the full caller path along on the entry: a
+        // console can then link the "[name:line]" prefix to the real file. Forward the raw message; the
+        // engine re-tags it under its own "[Studio]" scope.
+        var source = string.IsNullOrEmpty(file) ? (LogSource?)null : new LogSource(file, line);
+        Emit(new LogEntry(level, composed, source), forwardRaw: message);
     }
 
     private void Emit(LogEntry entry, string? forwardRaw)
     {
         _file.Write(entry);
-        Logged?.Invoke(entry);
+
+        // Append to the backlog and capture the subscriber list under the same lock Subscribe takes, so the
+        // snapshot-and-subscribe seam stays exactly-once (see Subscribe). Invoke outside the lock — a
+        // subscriber must never run while we hold it.
+        Action<LogEntry>? handlers;
+        lock (_gate)
+        {
+            _backlog.Add(entry);
+            if (_backlog.Count > BacklogCapacity)
+                _backlog.RemoveRange(0, _backlog.Count - BacklogCapacity);
+            handlers = Logged;
+        }
+        handlers?.Invoke(entry);
 
         if (forwardRaw is not null)
             ForwardToEngine(entry.Level, forwardRaw);

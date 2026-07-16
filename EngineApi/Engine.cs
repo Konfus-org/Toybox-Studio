@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
-using Toybox.Studio.AppHosting;
 using Toybox.Studio.Events;
+using Toybox.Studio.Hosting;
 using Toybox.Studio.Input;
 using Toybox.Studio.Logging;
 using Toybox.Studio.Rpc;
@@ -24,6 +24,12 @@ public sealed record EngineLaunchInfo(
     bool HideWindow = true) : AppLaunchInfo
 {
     public override string Name => ModuleName;
+
+    /// <summary>The project root to register as an extra asset search root. The settings file lives in the
+    /// project's <c>.toybox</c> folder, and the engine roots assets at the settings file's own folder — so
+    /// without this the project's <c>Assets/</c> (a sibling of <c>.toybox</c>, not a child) wouldn't
+    /// resolve. Empty adds no extra root.</summary>
+    public string AssetRoot { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -158,7 +164,9 @@ public sealed class Engine : OwnedApp,
     protected override async Task<Result> GreetAsync(CancellationToken ct)
     {
         var hello = await SendCommandAsync<Hello>(
-                EngineCommands.EditorHello, new { ProtocolVersion = 1, Client = "Toybox Studio" }, ct)
+                EngineCommands.EditorHello,
+                new { ProtocolVersion = 1, Client = "Toybox Studio", ResourcesPath = EditorResourcesPath() },
+                ct)
             .ContinueOnAnyContext();
         if (hello is not { Success: true, Value: { } greeting })
             return Result.Fail(hello.Error ?? "The engine sent no hello reply.");
@@ -172,6 +180,16 @@ public sealed class Engine : OwnedApp,
             $"Connected to {greeting.Engine} (app '{greeting.App}', protocol v{greeting.ProtocolVersion}).");
         return Result.Ok();
     }
+
+    /// <summary>
+    /// The editor's bundled asset directory — the Asset Viewer's preview sky texture, sky material, and
+    /// the preview world/globals — deployed beside the running Studio executable. The engine adds it as
+    /// an asset search root at the hello handshake so the preview world's dependencies resolve; without
+    /// it they resolve against the loaded project's root, 404, and the first asset preview blocks the UI
+    /// thread on the failing load.
+    /// </summary>
+    private static string EditorResourcesPath() =>
+        System.IO.Path.Combine(AppContext.BaseDirectory, "AssetViewer");
 
     /// <summary>
     /// Launches an engine process: starts the launcher with the RPC port exposed via the environment,
@@ -197,6 +215,11 @@ public sealed class Engine : OwnedApp,
 
         startInfo.ArgumentList.Add($"{EngineCommands.AppArgument}={engineLaunch.ModuleName}");
         startInfo.ArgumentList.Add($"{EngineCommands.SettingsArgument}={engineLaunch.AppSettingsPath}");
+
+        // The settings file sits in the project's .toybox folder, so the engine's own settings-folder asset
+        // root won't see the project's Assets/. Register the project root explicitly so they resolve.
+        if (!string.IsNullOrEmpty(engineLaunch.AssetRoot))
+            startInfo.ArgumentList.Add($"{EngineCommands.RegisterAssetsArgument}={engineLaunch.AssetRoot}");
 
         if (engineLaunch.HideWindow)
             startInfo.ArgumentList.Add(EngineCommands.HiddenArgument);
@@ -236,7 +259,10 @@ public sealed class Engine : OwnedApp,
     {
         handlers.On(
             EngineCommands.EngineLog,
-            (string level, string message) => _log.Log(LogLevels.Parse(level), message));
+            (string level, string message, string file, int line) => _log.Log(
+                LogLevels.Parse(level),
+                message,
+                string.IsNullOrEmpty(file) ? null : new LogSource(file, line)));
         handlers.On(
             EngineCommands.ViewSurface,
             (string name, long sharedHandle, int width, int height, string format) =>
@@ -252,6 +278,10 @@ public sealed class Engine : OwnedApp,
             EngineCommands.SyncEvent,
             (string address, string key, Newtonsoft.Json.Linq.JToken args) =>
                 Events.Dispatch(new SyncEventRaised(address, key, args)));
+        handlers.On(
+            EngineCommands.EditTransaction,
+            (string phase) => Events.Dispatch(new EditTransactionChanged(
+                phase == "commit" ? EditTransactionPhase.Commit : EditTransactionPhase.Begin)));
     }
 
     // The allowed run-state transitions: play from editing, pause only while playing, resume or stop
@@ -370,6 +400,25 @@ public sealed class Engine : OwnedApp,
         Dispatch.To(DispatchContext.UI, () => { _playing = isPlaying; _playLoading = false; RecomputeState(); });
         _log.Info(isPlaying ? "Game started." : "Game stopped.");
         return Result.Ok();
+    }
+
+    /// <summary>
+    /// Advances the paused simulation by exactly one fixed tick — the game view's next-frame button.
+    /// A no-op unless the engine is paused: an editing or freely-running engine has nothing to step,
+    /// so the request is rejected rather than silently doing something surprising.
+    /// </summary>
+    public async Task<Result> StepAsync()
+    {
+        if (!IsConnected)
+            return Result.Fail("The engine is not connected.");
+        if (RunState != EngineRunState.Paused)
+            return Result.Fail("The engine can only step a frame while paused.");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await SendCommandAsync(EngineCommands.EngineStep, null, cts.Token).ContinueOnAnyContext();
+        if (!result.Success)
+            _log.Error($"Step request failed: {result.Error}");
+        return result;
     }
 
     private async Task<Result> ShutdownAsync()

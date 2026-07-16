@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Toybox.Studio.Utils;
+
 namespace Toybox.Studio.Logging;
 
 /// <summary>
@@ -9,12 +11,6 @@ namespace Toybox.Studio.Logging;
 /// </summary>
 public sealed class LogFile : IDisposable
 {
-    /// <summary>
-    /// The ~/.toybox/Logs folder that holds the editor's TbxStudio.log files.
-    /// </summary>
-    public static readonly string LogsDirectory =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".toybox", "Logs");
-
     private const string BaseName = "TbxStudio";
     private const string Extension = ".log";
     private const int MaxHistory = 10;
@@ -23,13 +19,15 @@ public sealed class LogFile : IDisposable
     // most this much tail, long enough that a log flood doesn't thrash the disk.
     private static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(250);
 
+    private readonly PathsCatalog _paths;
     private readonly object _sync = new();
     private readonly BlockingCollection<string> _queue = new();
     private readonly Thread _consumer;
     private StreamWriter? _writer;
 
-    public LogFile()
+    public LogFile(PathsCatalog paths)
     {
+        _paths = paths;
         OpenFreshLog();
         _consumer = new Thread(ConsumeLoop)
         {
@@ -124,7 +122,7 @@ public sealed class LogFile : IDisposable
         lock (_sync)
         {
             CloseWriter();
-            var path = Rotate(LogsDirectory, BaseName, Extension, MaxHistory);
+            var path = Rotate(_paths.LogsDirectory, BaseName, Extension, MaxHistory);
             CurrentFilePath = path;
             // AutoFlush is off: the background consumer flushes on a short interval and on shutdown, so the
             // producer never pays a synchronous per-line disk flush.

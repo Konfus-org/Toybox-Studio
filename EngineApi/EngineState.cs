@@ -1,4 +1,4 @@
-using Toybox.Studio.AppHosting;
+using Toybox.Studio.Hosting;
 
 namespace Toybox.Studio.EngineApi;
 

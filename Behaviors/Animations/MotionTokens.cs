@@ -1,6 +1,6 @@
-using System.Globalization;
-using Avalonia;
 using Avalonia.Media.Transformation;
+using Avalonia;
+using System.Globalization;
 
 namespace Toybox.Studio.Behaviors.Animations;
 

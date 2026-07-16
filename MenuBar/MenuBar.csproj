@@ -6,14 +6,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Favorites\Favorites.csproj" />
     <ProjectReference Include="..\Resources\Resources.csproj" />
     <ProjectReference Include="..\Logging\Logging.csproj" />
-    <ProjectReference Include="..\AppHosting\AppHosting.csproj" />
+    <ProjectReference Include="..\Hosting\Hosting.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
     <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
     <ProjectReference Include="..\Projects\Projects.csproj" />
-    <ProjectReference Include="..\SettingsEditor\SettingsEditor.csproj" />
-    <ProjectReference Include="..\Workspaces\Workspaces.csproj" />
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\Coding\Coding.csproj" />
+    <ProjectReference Include="..\AssetViewer\AssetViewer.csproj" />
+    <ProjectReference Include="..\Settings\Settings.csproj" />
+    <ProjectReference Include="..\Docking\Docking.csproj" />
   </ItemGroup>
 
   <ItemGroup>

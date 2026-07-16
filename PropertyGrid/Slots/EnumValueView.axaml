@@ -3,8 +3,15 @@
              xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
              x:Class="Toybox.Studio.PropertyGrid.Slots.EnumValueView"
              x:DataType="local:EnumValueViewModel">
-    <ComboBox ItemsSource="{Binding Choices}"
+    <ComboBox Classes="field"
+              ItemsSource="{Binding Choices}"
               SelectedItem="{Binding Value}"
               IsEnabled="{Binding !IsReadOnly}"
-              HorizontalAlignment="Stretch"/>
+              HorizontalAlignment="Stretch">
+        <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="local:EnumChoice">
+                <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Tooltip}"/>
+            </DataTemplate>
+        </ComboBox.ItemTemplate>
+    </ComboBox>
 </UserControl>

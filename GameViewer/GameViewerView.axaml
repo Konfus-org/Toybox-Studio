@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.GameViewer"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:viewport="using:Toybox.Studio.Viewport"
+             x:Class="Toybox.Studio.GameViewer.GameViewerView"
+             x:DataType="local:GameViewerViewModel">
+
+    <!-- Pressing Escape while the game panel is focused leaves play, mirroring the usual game-exit key. -->
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding StopCommand}"/>
+    </UserControl.KeyBindings>
+
+    <!-- The transport bar (play / pause / stop / next-frame) over the running game surface. The buttons
+         are the theme's "toy" popout buttons; each is enabled only in the run states its command allows,
+         so the bar reads the engine's play state at a glance. -->
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="6"
+                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                <Button Classes="toy" Command="{Binding PlayCommand}" ToolTip.Tip="Play">
+                    <icons:IconView Kind="Play" Width="14" Height="14"
+                                    Foreground="{DynamicResource ThemePlayButtonBrush}"/>
+                </Button>
+                <Button Classes="toy" Command="{Binding PauseCommand}" ToolTip.Tip="Pause">
+                    <icons:IconView Kind="Pause" Width="14" Height="14"/>
+                </Button>
+                <Button Classes="toy" Command="{Binding StopCommand}" ToolTip.Tip="Stop">
+                    <icons:IconView Kind="Square" Width="14" Height="14"
+                                    Foreground="{DynamicResource ThemeStopButtonBrush}"/>
+                </Button>
+                <Border Width="1" Margin="4,2" Background="{DynamicResource ThemeBorderBrush}"/>
+                <Button Classes="toy" Command="{Binding StepFrameCommand}" ToolTip.Tip="Next Frame">
+                    <icons:IconView Kind="StepForward" Width="14" Height="14"/>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <viewport:ViewportView DataContext="{Binding Viewport}"/>
+    </DockPanel>
+</UserControl>

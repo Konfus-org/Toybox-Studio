@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
-using Toybox.Studio.AppHosting;
+using Toybox.Studio.Hosting;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Status;

@@ -5,14 +5,19 @@
              x:DataType="local:AssetOwnerViewModel">
 
     <!-- The owner chrome every asset-owning panel shares: the owned body fills the panel, with the
-         Save/Cancel pair anchored beneath it. The concrete owner's view wraps this and supplies the
-         DataTemplate that resolves Body to its view. -->
+         Undo/Redo pair (left) and Save/Cancel pair (right) anchored beneath it. The concrete owner's
+         view wraps this and supplies the DataTemplate that resolves Body to its view. -->
     <DockPanel>
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
-                    Spacing="8" Margin="0,8,0,0">
-            <Button Content="Cancel" Command="{Binding CancelCommand}"/>
-            <Button Classes="action" Content="Save" Command="{Binding SaveCommand}"/>
-        </StackPanel>
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Button Content="Undo" Command="{Binding UndoCommand}"/>
+                <Button Content="Redo" Command="{Binding RedoCommand}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+                <Button Classes="action" Content="Save" Command="{Binding SaveCommand}"/>
+            </StackPanel>
+        </Grid>
 
         <ContentControl Content="{Binding Body}"/>
     </DockPanel>

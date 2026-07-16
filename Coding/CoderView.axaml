@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:coder="using:Toybox.Studio.Coding"
+             xmlns:monaco="using:Toybox.Studio.Monaco"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             x:Class="Toybox.Studio.Coding.CoderView"
+             x:DataType="coder:CoderViewModel">
+
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource ThemeBackgroundBrush}">
+
+        <!-- Tab strip (one tab per open document) with the hot-reload bolt pinned at the far right. -->
+        <Border Grid.Row="0" Background="{DynamicResource ThemeHeaderBrush}" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource ThemeBorderBrush}"
+                IsVisible="{Binding HasTabs}">
+            <DockPanel>
+                <ToggleButton DockPanel.Dock="Right" Margin="4,0,6,0" Padding="6,2"
+                              Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                              IsChecked="{Binding HotReload.Enabled, Mode=TwoWay}"
+                              ToolTip.Tip="Hot reload scripts on save">
+                    <icons:IconView Width="15" Height="15" Kind="Zap"
+                                    Foreground="{DynamicResource ThemeWarningBrush}"/>
+                </ToggleButton>
+                <ListBox ItemsSource="{Binding Tabs}"
+                         SelectedItem="{Binding ActiveTab, Mode=TwoWay}"
+                         Background="Transparent" Padding="0" BorderThickness="0">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="coder:CoderTabViewModel">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource ThemeTextBrush}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="●" Foreground="{DynamicResource ThemeWarningBrush}"
+                                           FontSize="{DynamicResource ThemeFontSizeSmall}" VerticalAlignment="Center"
+                                           IsVisible="{Binding IsDirty}"/>
+                                <Button Command="{Binding CloseCommand}"
+                                        Content="✕" FontSize="{DynamicResource ThemeFontSizeSmall}" Padding="4,0"
+                                        MinWidth="0" MinHeight="0"
+                                        Background="Transparent" BorderThickness="0"
+                                        Foreground="{DynamicResource ThemeMutedTextBrush}"
+                                        VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- Editor surface plus its ghost/error overlays. The WebView is a native overlay (it always paints
+             on top), so it's shown only once a document is open AND the page has loaded — otherwise its blank
+             buffer would cover the ASCII ghost. -->
+        <Panel Grid.Row="1">
+            <monaco:MonacoEditorControl Session="{Binding Session}" IsVisible="{Binding EditorVisible}"/>
+
+            <StackPanel IsVisible="{Binding ShowGhost}" Spacing="18"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- ASCII ghost for the empty / loading editor. Monospace + tight line height + left-aligned
+                     within a centred block so the art keeps its shape. -->
+                <TextBlock Text="{Binding EmptyGhost}"
+                           FontFamily="{DynamicResource ThemeMonoFontFamily}" FontSize="10" LineHeight="11"
+                           Foreground="{DynamicResource ThemeMutedTextBrush}" Opacity="0.6"
+                           HorizontalAlignment="Center" TextAlignment="Left"/>
+                <TextBlock Foreground="{DynamicResource ThemeMutedTextBrush}" HorizontalAlignment="Center"
+                           TextAlignment="Center" MaxWidth="320"
+                           Text="{Binding GhostCaption}"/>
+            </StackPanel>
+
+            <TextBlock IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" Foreground="{DynamicResource ThemeErrorBrush}" MaxWidth="360"
+                       Text="{Binding ErrorMessage}"/>
+        </Panel>
+
+        <!-- Status bar: language + language-server state, cursor position, encoding. -->
+        <Border Grid.Row="2" Background="{DynamicResource ThemeAccentSolidBrush}" Padding="10,3">
+            <DockPanel LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left" Foreground="{DynamicResource ThemeOnColorTextBrush}"
+                           Text="{Binding LanguageStatus}"/>
+                <TextBlock DockPanel.Dock="Right" Foreground="{DynamicResource ThemeOnColorTextBrush}"
+                           Text="UTF-8" Margin="14,0,0,0"/>
+                <TextBlock DockPanel.Dock="Right" Foreground="{DynamicResource ThemeOnColorTextBrush}"
+                           Text="{Binding CursorText}"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

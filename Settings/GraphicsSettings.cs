@@ -1,3 +1,4 @@
+using Toybox.Studio.EngineApi.Types;
 using Toybox.Studio.EngineApi;
 
 namespace Toybox.Studio.Settings;

@@ -1,11 +1,11 @@
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Toybox.Studio.Generators;
 
@@ -67,7 +67,7 @@ internal static class SyncClassParser
                 SyncDiagnostics.ClassNotPartial, declaration.Identifier.GetLocation(), symbol.Name));
             return Model(
                 symbol, injectBase: false, isRooted: false, null, null, [], [], [], diagnostics,
-                emit: false);
+                pathAddressed: false, emit: false);
         }
 
         var baseType = symbol.BaseType;
@@ -138,9 +138,14 @@ internal static class SyncClassParser
         if (SyncAttributeConfig.On(symbol) is { Address: { } template } ownConfig && isRooted)
             addressExpression = AddressExpression(symbol, template, ownConfig.Location, diagnostics);
 
+        // A path-addressed root (an entity, a component) folds each property into the address on push; its
+        // derived types inherit the base override, so only the base-injecting root emits it.
+        var pathAddressed =
+            injectBase && properties.Any(property => property.Command == PathAddressedCommand);
+
         return Model(
             symbol, injectBase, isRooted, addressExpression, engineMember,
-            properties, events, methods, diagnostics, emit: true);
+            properties, events, methods, diagnostics, pathAddressed, emit: true);
     }
 
     private static SyncedProperty? ParseProperty(
@@ -160,19 +165,19 @@ internal static class SyncClassParser
             return null;
         }
 
-        // Mirror values never push, so an editable setter would lie; a private one is fine — it lets
-        // the class assign its own engine-owned state locally. Every other mode needs a real setter.
+        // A OneWayFromEngine value never pushes, so an editable setter would lie; a private one is fine —
+        // it lets the class assign its own engine-owned state locally. Every other mode needs a real setter.
         var mode = (SyncModeValue)(config.Mode ?? 0);
-        var isMirror = mode == SyncModeValue.Mirror;
+        var isReadOnly = mode == SyncModeValue.OneWayFromEngine;
         var setter = property.SetMethod;
-        var setterAllowed = isMirror
+        var setterAllowed = isReadOnly
             ? setter is null || setter.DeclaredAccessibility == Accessibility.Private
             : setter is not null;
         if (!setterAllowed)
         {
             diagnostics.Add(new DiagnosticInfo(
                 SyncDiagnostics.MirrorAccessorMismatch, Location(property), property.Name,
-                isMirror ? "get-only or with a private setter" : "with get and set", mode.ToString()));
+                isReadOnly ? "get-only or with a private setter" : "with get and set", mode.ToString()));
             return null;
         }
 
@@ -189,9 +194,9 @@ internal static class SyncClassParser
         }
         else if (WireCodecs.Find(property.Type) is { } codec)
         {
-            writeCall = isMirror
-                ? "global::Newtonsoft.Json.Linq.JValue.CreateNull()"
-                : codec.WriteInvocation($"({typeDisplay})value!");
+            // Every synced value serializes for real (blanket serialization — the engine ignores what it
+            // doesn't want); a OneWayFromEngine value simply never has its write invoked for a push.
+            writeCall = codec.WriteInvocation($"({typeDisplay})value!");
             readCall = codec.ReadInvocation("token");
         }
         else
@@ -202,16 +207,17 @@ internal static class SyncClassParser
         }
 
         var extras = ParseExtras(owner, property, config, diagnostics);
+        var (isChildBearing, isChildCollection) = ClassifyChildren(property.Type);
         return new SyncedProperty(
             property.Name,
             AccessibilityText(property.DeclaredAccessibility),
             typeDisplay,
             property.Type.IsReferenceType,
             command,
-            config.Key ?? CamelCase(property.Name),
+            config.Key ?? DefaultKey(command, property.Name),
             mode.ToString(),
             config.BatchFrequencyMs ?? 0,
-            isMirror,
+            isReadOnly,
             setter is not null,
             setter is not null && setter.DeclaredAccessibility != property.DeclaredAccessibility
                 ? AccessibilityText(setter.DeclaredAccessibility) + " "
@@ -219,6 +225,8 @@ internal static class SyncClassParser
             converterDisplay,
             writeCall,
             readCall,
+            isChildBearing,
+            isChildCollection,
             extras);
     }
 
@@ -561,7 +569,7 @@ internal static class SyncClassParser
     private static SyncedClass Model(
         INamedTypeSymbol symbol, bool injectBase, bool isRooted, string? addressExpression,
         string? engineMember, List<SyncedProperty> properties, List<SyncedEvent> events,
-        List<SyncedMethod> methods, List<DiagnosticInfo> diagnostics, bool emit)
+        List<SyncedMethod> methods, List<DiagnosticInfo> diagnostics, bool pathAddressed, bool emit)
     {
         var ns = symbol.ContainingNamespace.IsGlobalNamespace
             ? string.Empty
@@ -571,7 +579,7 @@ internal static class SyncClassParser
             : "<" + string.Join(", ", symbol.TypeParameters.Select(parameter => parameter.Name)) + ">";
         return new SyncedClass(
             ns, symbol.Name, typeParameters, injectBase, isRooted, addressExpression, engineMember,
-            properties, events, methods, diagnostics, emit);
+            properties, events, methods, diagnostics, pathAddressed, emit);
     }
 
     // A field-like event's declaring syntax is the variable declarator inside the event declaration,
@@ -617,14 +625,101 @@ internal static class SyncClassParser
         _ => "private",
     };
 
+    // Classifies a synced property by whether its value is (or holds) nested EngineObjects the owner must
+    // bind and aggregate: (isChildBearing, isChildCollection). A single EngineObject property is a child;
+    // an IEnumerable<T> of EngineObjects is a child collection; anything else is neither.
+    //
+    // "Is an EngineObject" must go through IsRooted, not the bare base chain: a nested Entity or Component
+    // gets its EngineObject base INJECTED by this generator, so at generation time its source base is still
+    // object — a plain base-chain walk would miss it and the owner would never bind it (leaving a world's
+    // entities and their components unbound, so inbound engine changes to them route nowhere). IsRooted
+    // treats a sync-marked, object-based class as rooted, matching what the injection will produce.
+    private static (bool IsChildBearing, bool IsChildCollection) ClassifyChildren(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol named && IsRooted(named))
+            return (true, false);
+
+        if (ElementOfEnumerable(type) is INamedTypeSymbol element && IsRooted(element))
+            return (true, true);
+
+        return (false, false);
+    }
+
+    // The element type T of the nearest IEnumerable<T> the type is (or implements), or null when it is not
+    // an enumerable of a single element type (a string, a dictionary, a non-generic sequence).
+    private static ITypeSymbol? ElementOfEnumerable(ITypeSymbol type)
+    {
+        if (type.SpecialType == SpecialType.System_String)
+            return null;
+
+        var candidates = type is INamedTypeSymbol { IsGenericType: true } named
+                         && named.ConstructedFrom.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+            ? new[] { named }
+            : type.AllInterfaces
+                .Where(i => i.ConstructedFrom.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+                .ToArray();
+        return candidates.Length == 1 ? candidates[0].TypeArguments[0] : null;
+    }
+
     private static string CamelCase(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
+
+    // The reflected write families: a push through asset.set (a whole asset body) or sync.set (a
+    // world-qualified entity/component path) round-trips through the target type's generated serialize, so
+    // the engine matches the wire key against the serialized field name — hence snake_case keys. For
+    // sync.set the key is the final path segment (…/components/transform/{key}). Every other family
+    // (gizmos.set, selection.set, …) is a hand-written engine handler with its own key vocabulary. Kept in
+    // sync with EngineApi.EngineCommands (the generator can't reference that project). See
+    // [[wire-vocabulary-ssot]].
+    private static readonly HashSet<string> ReflectedWriteCommands =
+        new() { "asset.set", "sync.set" };
+
+    // The path-addressed family: sync.set carries the property in the address itself (…/{key}), with no
+    // separate key field. An object whose pushes use it (an entity, a component) emits PathAddressed so the
+    // sync base folds the key into the address on set/reset/isDefault.
+    private const string PathAddressedCommand = "sync.set";
+
+    // A synced property's default wire key. For the reflected write families the engine serializes each
+    // field in snake_case (its C++ member name — half_extents, is_kinematic) and matches the key against
+    // that on both the outbound push and the inbound apply, so the key must be snake_case; a member whose
+    // engine field name isn't the plain snake_case of its C# name (an acronym, a deliberate rename) sets
+    // Key= explicitly. Bespoke-handler families keep the historical camelCase member name.
+    private static string DefaultKey(string command, string name) =>
+        ReflectedWriteCommands.Contains(command) ? SnakeCase(name) : CamelCase(name);
+
+    // Converts a PascalCase member name to the snake_case wire key the reflected families use.
+    private static string SnakeCase(string name)
+    {
+        var builder = new StringBuilder(name.Length + 4);
+        for (var index = 0; index < name.Length; index++)
+        {
+            var character = name[index];
+            if (char.IsUpper(character))
+            {
+                // Break at a lower/digit → upper boundary (fooBar → foo_bar) and at the end of an acronym
+                // run (HTTPServer → http_server: an upper preceded by an upper but followed by a lower).
+                if (index > 0
+                    && (!char.IsUpper(name[index - 1])
+                        || (index + 1 < name.Length && char.IsLower(name[index + 1]))))
+                {
+                    builder.Append('_');
+                }
+                builder.Append(char.ToLowerInvariant(character));
+            }
+            else
+            {
+                builder.Append(character);
+            }
+        }
+        return builder.ToString();
+    }
 
     // Mirrors Toybox.Studio.EngineApi.SyncMode's member order.
     private enum SyncModeValue
     {
-        Live,
+        TwoWay,
         Batched,
         Manual,
-        Mirror,
+        OneWayFromEngine,
+        OneWayFromStudio,
     }
 }

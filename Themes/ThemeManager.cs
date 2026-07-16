@@ -12,12 +12,13 @@ namespace Toybox.Studio.Themes;
 public sealed class ThemeManager
 {
     private readonly SettingsManager _settings;
-    private readonly ThemeRepository _repository = new();
+    private readonly ThemeRepository _repository;
     private readonly ThemeApplier _applier = new();
 
-    public ThemeManager(SettingsManager settings)
+    public ThemeManager(SettingsManager settings, PathsCatalog paths)
     {
         _settings = settings;
+        _repository = new ThemeRepository(paths);
     }
 
     /// <summary>Raised after a theme is applied so dependents (e.g. the engine) can re-sync.</summary>
@@ -64,7 +65,7 @@ public sealed class ThemeManager
 
         _settings.Editor.Theme.Active = theme.Name;
         // Persist off the UI thread: the JSON snapshot is taken synchronously here, only the disk write defers.
-        _settings.SaveAsync().FireAndForget();
+        _settings.ApplyAsync().FireAndForget();
         _applier.Apply(theme);
     }
 

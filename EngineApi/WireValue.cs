@@ -1,6 +1,7 @@
-using System.Numerics;
 using Avalonia.Media;
 using Newtonsoft.Json.Linq;
+using System.Numerics;
+using Toybox.Studio.EngineApi.Types;
 
 namespace Toybox.Studio.EngineApi;
 

@@ -1,34 +1,60 @@
 <Solution>
-  <Project Path="AppHosting/AppHosting.csproj" />
-  <Project Path="AssetOwners/AssetOwners.csproj" />
-  <Project Path="Assets/Assets.csproj" />
-  <Project Path="Behaviors/Behaviors.csproj" />
-  <Project Path="CMake/CMake.csproj" />
-  <Project Path="Console/Console.csproj" />
-  <Project Path="Dialogs/Dialogs.csproj" />
-  <Project Path="Ecs/Ecs.csproj" />
-  <Project Path="EngineApi/EngineApi.csproj" />
-  <Project Path="Generators/Generators.csproj" />
-  <Project Path="Gizmos/Gizmos.csproj" />
-  <Project Path="Input/Input.csproj" />
-  <Project Path="Keybindings/Keybindings.csproj" />
-  <Project Path="KeybindingsEditor/KeybindingsEditor.csproj" />
-  <Project Path="Launcher/Launcher.csproj" Id="2aacafed-e699-4184-a23e-fbbcb1996fad" />
-  <Project Path="Logging/Logging.csproj" />
-  <Project Path="MenuBar/MenuBar.csproj" />
-  <Project Path="Overlays/Overlays.csproj" />
-  <Project Path="Projects/Projects.csproj" />
-  <Project Path="PropertyGrid/PropertyGrid.csproj" />
-  <Project Path="Resources/Resources.csproj" />
-  <Project Path="Rpc/Rpc.csproj" />
-  <Project Path="Settings/Settings.csproj" />
-  <Project Path="SettingsEditor/SettingsEditor.csproj" />
-  <Project Path="Shell/App.csproj" />
-  <Project Path="Status/Status.csproj" />
-  <Project Path="Themes/Themes.csproj" />
-  <Project Path="Toolbar/Toolbar.csproj" />
-  <Project Path="Utils/Utils.csproj" />
-  <Project Path="Viewport/Viewport.csproj" />
-  <Project Path="Workspaces/Workspaces.csproj" />
-  <Project Path="Worlds/Worlds.csproj" />
+  <Folder Name="/Core/">
+    <Project Path="Utils/Utils.csproj" />
+    <Project Path="Logging/Logging.csproj" />
+    <Project Path="Resources/Resources.csproj" />
+    <Project Path="Behaviors/Behaviors.csproj" />
+    <Project Path="Generators/Generators.csproj" />
+    <Project Path="Input/Input.csproj" />
+    <Project Path="Overlays/Overlays.csproj" />
+    <Project Path="Rpc/Rpc.csproj" />
+    <Project Path="Hosting/Hosting.csproj" />
+    <Project Path="EngineApi/EngineApi.csproj" />
+  </Folder>
+  <Folder Name="/Projects &amp; Build/">
+    <Project Path="Projects/Projects.csproj" />
+    <Project Path="CMake/CMake.csproj" />
+    <Project Path="Git/Git.csproj" />
+  </Folder>
+  <Folder Name="/Assets/">
+    <Project Path="AssetOwners/AssetOwners.csproj" />
+    <Project Path="AssetBrowser/AssetBrowser.csproj" />
+    <Project Path="AssetViewer/AssetViewer.csproj" />
+  </Folder>
+  <Folder Name="/Viewports/">
+    <Project Path="Viewport/Viewport.csproj" />
+    <Project Path="WorldTree/WorldTree.csproj" />
+    <Project Path="WorldViewer/WorldViewer.csproj" />
+    <Project Path="NodeGraph/NodeGraph.csproj" />
+    <Project Path="GameViewer/GameViewer.csproj" />
+  </Folder>
+  <Folder Name="/Code Editing/">
+    <Project Path="Coding/Coding.csproj" />
+    <Project Path="Monaco/Monaco.csproj" />
+  </Folder>
+  <Folder Name="/Console/">
+    <Project Path="Console/Console.csproj" />
+    <Project Path="LogConsole/LogConsole.csproj" />
+  </Folder>
+  <Folder Name="/Settings/">
+    <Project Path="Settings/Settings.csproj" />
+    <Project Path="Themes/Themes.csproj" />
+  </Folder>
+  <Folder Name="/UI Framework/">
+    <Project Path="Docking/Docking.csproj" />
+    <Project Path="Splitting/Splitting.csproj" />
+    <Project Path="Toolbar/Toolbar.csproj" />
+    <Project Path="MenuBar/MenuBar.csproj" />
+    <Project Path="ContextMenu/ContextMenu.csproj" />
+    <Project Path="Dialogs/Dialogs.csproj" />
+    <Project Path="Favorites/Favorites.csproj" />
+    <Project Path="Keybindings/Keybindings.csproj" />
+    <Project Path="PropertyGrid/PropertyGrid.csproj" />
+    <Project Path="Searching/Searching.csproj" />
+  </Folder>
+  <Folder Name="/Shell/">
+    <Project Path="App/App.csproj" />
+    <Project Path="Launcher/Launcher.csproj" Id="2aacafed-e699-4184-a23e-fbbcb1996fad" />
+    <Project Path="Status/Status.csproj" />
+  </Folder>
 </Solution>

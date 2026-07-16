@@ -1,8 +1,8 @@
-using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
-using Toybox.Studio.Utils;
+using Avalonia;
 using Toybox.Studio.Utils.Extensions;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Themes;
 

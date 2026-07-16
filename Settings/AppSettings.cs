@@ -1,5 +1,7 @@
-using Toybox.Studio.Assets;
+using Toybox.Studio.EngineApi.Types.Assets;
+using Toybox.Studio.EngineApi.Types;
 using Toybox.Studio.EngineApi;
+using Toybox.Studio.Utils.Attributes;
 
 namespace Toybox.Studio.Settings;
 
@@ -34,6 +36,7 @@ public sealed partial class AppSettings : Asset
     /// <summary>The app's window/taskbar icon (a texture asset); the engine falls back to its built-in
     /// Toybox icon while the handle is unset.</summary>
     [EngineSync]
+    [AssetType("png", "jpg", "jpeg", "bmp", "tga", "dds", "hdr", "exr", "ktx", "ktx2")]
     public partial Handle Icon { get; set; }
 
     /// <summary>The app's display name (the window title). Wired to the engine's <c>name</c> field —

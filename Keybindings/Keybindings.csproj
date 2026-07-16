@@ -1,23 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The editor's rebindable action layer: the ActionRegistry (every invokable editor action, with
-       its title/icon/default chords), the EditorKeymap (the actions' bindings as a real .inputmap —
-       the same asset format the engine loads for game input — stored in ~/.toybox), and the
-       KeybindingDispatcher that matches window key chords against the keymap and publishes
-       EditorActionInvoked through the event bus. Menus publish the same event, so keyboard and menu
-       are one invocation path. -->
+  <!-- The editor's rebindable action layer plus its chord-editing UI. The action layer: the
+       ActionRegistry (every invokable editor action, with its title/icon/default chords), the
+       EditorKeymap (the actions' bindings as a real .inputmap — the same asset format the engine loads
+       for game input — stored in ~/.toybox), and the KeybindingDispatcher that matches window key
+       chords against the keymap and publishes EditorActionInvoked through the event bus (menus publish
+       the same event, so keyboard and menu are one invocation path). The UI: the ChordCaptureBox
+       control and the ChordValueViewModel/View + ChordValueEditor that plug chord editing into any
+       ReflectionPropertyNodeFactory (how the Settings window's Keybindings section and any grid over an
+       .inputmap edit chords), which is why this reaches the PropertyGrid layer. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
-    <ProjectReference Include="..\Assets\Assets.csproj" />
     <ProjectReference Include="..\Input\Input.csproj" />
-    <ProjectReference Include="..\Settings\Settings.csproj" />
     <ProjectReference Include="..\Logging\Logging.csproj" />
+    <ProjectReference Include="..\PropertyGrid\PropertyGrid.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="IconPacks.Avalonia.Lucide" />
     <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>

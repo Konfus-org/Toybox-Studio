@@ -1,8 +1,8 @@
 using Newtonsoft.Json.Serialization;
 using StreamJsonRpc;
 using System.Diagnostics;
-using System.Net;
 using System.Net.Sockets;
+using System.Net;
 using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Rpc;

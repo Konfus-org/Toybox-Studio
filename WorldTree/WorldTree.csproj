@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The World Tree (Hierarchy) dockable: the active world's entities as a parented, sibling-ordered tree.
+       Home of the entity edit verbs (copy/cut/paste/duplicate/delete/rename), run through the shared
+       EntityOperations so keybindings, the Edit menu, and the world context menu are one path. Publishes/
+       consumes the active world through GameState. Entities are inspected through the NodeGraph overlay. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
+    <ProjectReference Include="..\Searching\Searching.csproj" />
+    <ProjectReference Include="..\Overlays\Overlays.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="IconPacks.Avalonia.Lucide" />
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+</Project>

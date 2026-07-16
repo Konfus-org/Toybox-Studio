@@ -1,5 +1,5 @@
-using System.Collections;
 using IconPacks.Avalonia.Lucide;
+using System.Collections;
 
 namespace Toybox.Studio.PropertyGrid;
 
@@ -37,7 +37,7 @@ public sealed class ListPropertyNode : PropertyNode
         _createElementNode = createElementNode;
         _createElement = createElement;
         for (var i = 0; i < items.Count; i++)
-            AddChild(createElementNode(this));
+            AddElementRow();
         RefreshChrome();
 
         // A descendant edit may have renamed an element; keep the row labels honest.
@@ -52,10 +52,19 @@ public sealed class ListPropertyNode : PropertyNode
     public void AddNew()
     {
         _items.Add(_createElement());
-        AddChild(_createElementNode(this));
+        AddElementRow();
         RefreshChrome();
         IsExpanded = true;
         NotifyEdited();
+    }
+
+    // Builds an element row and tags it with its owning list, so the context menu on that row can reorder or
+    // remove it through this node.
+    private void AddElementRow()
+    {
+        var node = _createElementNode(this);
+        node.OwningList = this;
+        AddChild(node);
     }
 
     public void Remove(PropertyNode element)

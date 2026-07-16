@@ -1,6 +1,6 @@
-using Toybox.Studio.AppHosting;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Events;
+using Toybox.Studio.Hosting;
 using Toybox.Studio.Logging;
 using Toybox.Studio.Utils;
 
@@ -17,7 +17,8 @@ public sealed class EngineCoordinator :
     EventSubscriber,
     IEventHandler<AppInstanceDetected>,
     IEventHandler<AppStoppedResponding>,
-    IEventHandler<AppResumedResponding>
+    IEventHandler<AppResumedResponding>,
+    IEventHandler<EngineLaunchRequested>
 {
     private readonly Project _project;
     private readonly ProjectBuilder _builder;
@@ -26,6 +27,11 @@ public sealed class EngineCoordinator :
     private readonly bool _hideEngineWindow;
     private readonly int _connectTimeoutSeconds;
     private readonly Logger _log;
+
+    // One build-and-launch at a time: the startup/switch callers never overlap, but a viewport's "Launch
+    // Engine" call-to-action can be clicked repeatedly before the state leaves Off, so a second request is
+    // turned away here rather than racing a concurrent build.
+    private readonly ReentrancyGuard _launchGate = new();
 
     // Cancelled on dispose so an in-flight build/launch dies with the app instead of orphaning CMake/Ninja.
     private readonly CancellationTokenSource _lifetime = new();
@@ -56,6 +62,12 @@ public sealed class EngineCoordinator :
     /// </summary>
     public async Task StartEngineAsync(CancellationToken ct = default)
     {
+        // Bail if a launch is already underway (e.g. a rapid second click on the viewport call-to-action,
+        // before the compile flips the engine out of its Off state and retracts the prompt).
+        using var launchScope = _launchGate.TryEnter();
+        if (launchScope is null)
+            return;
+
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetime.Token);
         // A Debug Studio drives a Debug engine, a Release Studio a Release engine.
         var build = await _builder.BuildAsync(_project, StudioBuild.Mode, linked.Token).ContinueOnAnyContext();
@@ -65,10 +77,11 @@ public sealed class EngineCoordinator :
             return;
         }
 
-        var appSettings = Path.Combine(_project.Path, ProjectLoader.SettingsFileName);
+        var appSettings = ProjectLoader.SettingsPathFor(_project.Path);
         var launch = new EngineLaunchInfo(build.Value!, _project.Module, appSettings, _hideEngineWindow)
         {
             ConnectTimeoutSeconds = _connectTimeoutSeconds,
+            AssetRoot = _project.Path,
         };
         await _host.StartAsync(launch, linked.Token).ContinueOnAnyContext();
     }
@@ -76,6 +89,10 @@ public sealed class EngineCoordinator :
     /// <summary>An already-running engine appeared: attach to it instead of launching our own. A no-op
     /// while a session is already starting or live; the sighting repeats, so a failed attach retries.</summary>
     public void Handle(in AppInstanceDetected evt) => _host.AttachAsync(evt.Port).FireAndForget();
+
+    /// <summary>A viewport's "Launch Engine" call-to-action was invoked while the engine was off: build the
+    /// active project and launch its engine, the same path the startup and project-switch flows take.</summary>
+    public void Handle(in EngineLaunchRequested evt) => StartEngineAsync().FireAndForget();
 
     // There is no dialog layer to ask the user yet, so a frozen engine is logged and waited out; the
     // snooze re-arms the watchdog to warn again if it stays frozen for another full threshold.

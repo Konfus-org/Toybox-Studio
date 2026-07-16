@@ -1,9 +1,9 @@
 <Project>
 
   <PropertyGroup>
-    <!-- Project files are named by their folder alone (Utils, Shell, …) since the repo IS
+    <!-- Project files are named by their folder alone (Utils, App, …) since the repo IS
          Toybox.Studio; the produced assemblies and namespaces keep the full Toybox.Studio.* form.
-         (The Launcher exe overrides both to plain "Toybox.Studio"; the Shell library joins it in
+         (The Launcher exe overrides both to plain "Toybox.Studio"; the App library joins it in
          the root namespace.) -->
     <AssemblyName>Toybox.Studio.$(MSBuildProjectName)</AssemblyName>
     <RootNamespace>Toybox.Studio.$(MSBuildProjectName)</RootNamespace>

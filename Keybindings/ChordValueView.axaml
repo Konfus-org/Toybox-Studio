@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Keybindings"
+             x:Class="Toybox.Studio.Keybindings.ChordValueView"
+             x:DataType="local:ChordValueViewModel">
+    <local:ChordCaptureBox Chord="{Binding Value, Mode=TwoWay}" IsEnabled="{Binding !IsReadOnly}"
+                           MinWidth="150" HorizontalAlignment="Left" HorizontalContentAlignment="Center"/>
+</UserControl>

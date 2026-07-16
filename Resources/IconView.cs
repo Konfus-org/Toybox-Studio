@@ -1,10 +1,10 @@
-using System.Globalization;
-using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using Avalonia;
 using IconPacks.Avalonia.Lucide.Converter;
+using System.Globalization;
 
 namespace Toybox.Studio.Resources;
 

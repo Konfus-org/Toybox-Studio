@@ -2,35 +2,30 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Console"
              xmlns:ghost="using:Toybox.Studio.Ghost"
+             xmlns:behaviors="using:Toybox.Studio.Behaviors"
+             xmlns:search="using:Toybox.Studio.Searching"
              x:Class="Toybox.Studio.Console.ConsoleView"
              x:DataType="local:ConsoleViewModel"
              x:Name="Root">
 
     <UserControl.Styles>
-        <Style Selector="TextBlock.consoleLine">
+        <!-- One selectable text stream, mono + compact, wrapping long lines. -->
+        <Style Selector="local|ConsoleTextView">
             <Setter Property="FontFamily" Value="{DynamicResource ThemeMonoFontFamily}"/>
             <Setter Property="FontSize" Value="{DynamicResource ThemeFontSizeSmall}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
-        </Style>
-        <Style Selector="TextBlock.consoleLine.warning">
-            <Setter Property="Foreground" Value="{DynamicResource ThemeWarningBrush}"/>
-        </Style>
-        <Style Selector="TextBlock.consoleLine.error">
-            <Setter Property="Foreground" Value="{DynamicResource ThemeErrorBrush}"/>
-        </Style>
-        <Style Selector="TextBlock.consoleLine.accent">
-            <Setter Property="Foreground" Value="{DynamicResource ThemeInfoBrush}"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
         </Style>
 
-        <!-- Compact, console-like rows. (:is matches the ConsoleListBox subclass too.) -->
-        <Style Selector=":is(ListBox).consoleList">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-        </Style>
-        <Style Selector=":is(ListBox).consoleList ListBoxItem">
-            <Setter Property="Padding" Value="4,0"/>
+        <!-- Compact severity filter chips; a filter that's off (unchecked = severity hidden) dims. -->
+        <Style Selector="ToggleButton.severityFilter">
+            <Setter Property="Padding" Value="7,3"/>
             <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ToggleButton.severityFilter:not(:checked)">
+            <Setter Property="Opacity" Value="0.4"/>
         </Style>
     </UserControl.Styles>
 
@@ -39,37 +34,54 @@
                    IsVisible="{Binding #Root.ShowToolbar}">
             <Button DockPanel.Dock="Right" Classes="toy" Content="Clear" VerticalAlignment="Center"
                     Margin="6,0,0,0" Command="{Binding ClearCommand}"/>
+
+            <!-- Severity filters: toggle each weight on/off, with its held count. -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
+                        VerticalAlignment="Center" Margin="8,0,0,0">
+                <ToggleButton Classes="severityFilter" ToolTip.Tip="Show info"
+                              IsChecked="{Binding ShowInfo, Mode=TwoWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="{DynamicResource ThemeInfoBrush}"/>
+                        <TextBlock VerticalAlignment="Center" Text="{Binding InfoCount}"/>
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton Classes="severityFilter" ToolTip.Tip="Show warnings"
+                              IsChecked="{Binding ShowWarnings, Mode=TwoWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="{DynamicResource ThemeWarningBrush}"/>
+                        <TextBlock VerticalAlignment="Center" Text="{Binding WarningCount}"/>
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton Classes="severityFilter" ToolTip.Tip="Show errors"
+                              IsChecked="{Binding ShowErrors, Mode=TwoWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="{DynamicResource ThemeErrorBrush}"/>
+                        <TextBlock VerticalAlignment="Center" Text="{Binding ErrorCount}"/>
+                    </StackPanel>
+                </ToggleButton>
+            </StackPanel>
+
             <TextBlock DockPanel.Dock="Right" Text="{Binding MatchSummary}"
                        Opacity="0.6" VerticalAlignment="Center" Margin="8,0,0,0"/>
-            <TextBox PlaceholderText="Search…" MinWidth="280"
-                     HorizontalAlignment="Stretch"
-                     Text="{Binding SearchText, Mode=TwoWay}"/>
+
+            <search:SearchBox Watermark="Search log…" HorizontalAlignment="Stretch"
+                              Text="{Binding SearchText, Mode=TwoWay}"
+                              IsBusy="{Binding Search.IsBusy}"
+                              Progress="{Binding Search.Progress}"/>
         </DockPanel>
 
         <Panel>
-            <local:ConsoleListBox Name="LineList" Classes="consoleList"
-                                  ItemsSource="{Binding VisibleLines}"
-                                  SelectionMode="Multiple">
-                <ListBox.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Copy" InputGesture="Ctrl+C"
-                                  Command="{Binding #LineList.CopySelectionCommand}"/>
-                        <MenuItem Header="Select All" InputGesture="Ctrl+A"
-                                  Command="{Binding #LineList.SelectAllCommand}"/>
-                        <Separator/>
-                        <MenuItem Header="Clear" Command="{Binding ClearCommand}"/>
-                    </ContextMenu>
-                </ListBox.ContextMenu>
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="local:ConsoleLine">
-                        <TextBlock Classes="consoleLine"
-                                   Classes.warning="{Binding IsWarning}"
-                                   Classes.error="{Binding IsError}"
-                                   Classes.accent="{Binding IsAccent}"
-                                   Text="{Binding Text}"/>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </local:ConsoleListBox>
+            <ScrollViewer Name="Scroll"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <local:ConsoleTextView Name="LineText"
+                                       ItemsSource="{Binding VisibleLines}"
+                                       LinkCommand="{Binding #Root.LinkCommand}"
+                                       behaviors:ContextMenuOpener.Enabled="True"/>
+            </ScrollViewer>
 
             <ghost:GhostView Message="No output yet." IsVisible="{Binding IsEmpty}"/>
         </Panel>

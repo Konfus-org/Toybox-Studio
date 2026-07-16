@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Toybox.Studio.Logging;
 using Toybox.Studio.Utils;
@@ -42,6 +43,12 @@ public sealed class CMakeCompiler
         @"(?<error>error:|fatal error|FAILED:|CMake Error|error C[0-9]+|LNK[0-9]+)|(?<warning>warning)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    // Ninja prefixes every build step with its running count, e.g. "[42/517] Building CXX object …", so
+    // the fraction of steps finished is the build's progress. The MSVC preset's Visual Studio generator
+    // emits no such marker; its build simply reports no fraction and the caller's bar stays indeterminate.
+    private static readonly Regex NinjaStepPattern = new(
+        @"^\[(?<done>\d+)/(?<total>\d+)\]", RegexOptions.Compiled);
+
     /// <summary>The MSVC configure-preset name defined in every Toybox CMakePresets.json.</summary>
     public const string MsvcPreset = "msvc";
 
@@ -78,7 +85,9 @@ public sealed class CMakeCompiler
     /// <summary>
     /// Builds a configured tree from the given build preset; incremental when already up to date. The
     /// build preset carries the configuration and binary directory, so this runs from
-    /// <paramref name="projectDirectory"/> (where cmake finds the presets file).
+    /// <paramref name="projectDirectory"/> (where cmake finds the presets file). When
+    /// <paramref name="progress"/> is supplied it receives the compile's completion fraction as the build
+    /// tool reports its step counts (Ninja generators only; see <see cref="NinjaStepPattern"/>).
     /// </summary>
     public async Task<bool> BuildAsync(
         string projectDirectory,
@@ -86,7 +95,8 @@ public sealed class CMakeCompiler
         string buildPreset,
         bool parallel,
         bool verbose,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<double>? progress = null)
     {
         var arguments = new List<string> { "--build", "--preset", buildPreset };
         if (parallel)
@@ -122,7 +132,8 @@ public sealed class CMakeCompiler
             bool built;
             try
             {
-                built = await RunCMakeAsync(arguments, projectDirectory, ct).ContinueOnAnyContext();
+                built = await RunCMakeAsync(arguments, projectDirectory, ct, progress, ParseBuildProgress)
+                    .ContinueOnAnyContext();
             }
             finally
             {
@@ -332,10 +343,26 @@ public sealed class CMakeCompiler
         }
     }
 
+    // The build's completion fraction from a Ninja step line ("[done/total] …"), or null for any other
+    // line (so the runner only advances the bar on real step counts).
+    private static double? ParseBuildProgress(string line)
+    {
+        var match = NinjaStepPattern.Match(line);
+        if (!match.Success
+            || !int.TryParse(match.Groups["total"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var total)
+            || total <= 0
+            || !int.TryParse(match.Groups["done"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var done))
+            return null;
+
+        return Math.Clamp((double)done / total, 0, 1);
+    }
+
     private async Task<bool> RunCMakeAsync(
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        CancellationToken ct)
+        CancellationToken ct,
+        IProgress<double>? progress = null,
+        Func<string, double?>? progressOf = null)
     {
         var result = await _runner.RunAsync(
             "cmake",
@@ -343,6 +370,8 @@ public sealed class CMakeCompiler
             workingDirectory: workingDirectory,
             logOutput: true,
             logCategoryRegex: BuildLogPattern,
+            progress: progress,
+            progressOf: progressOf,
             ct: ct).ContinueOnAnyContext();
 
         // A launch or timeout failure leaves no tool output to explain itself (value -1, "did not run");

@@ -1,5 +1,5 @@
 using Newtonsoft.Json;
-using Toybox.Studio.Settings;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Themes;
 
@@ -11,19 +11,18 @@ namespace Toybox.Studio.Themes;
 /// </summary>
 public sealed class ThemeRepository
 {
-    private static readonly string ThemesDir =
-        Path.Combine(SettingsManager.BaseDirectory, "Themes");
-
+    private readonly PathsCatalog _paths;
     private readonly List<Theme> _themes = [];
     private readonly List<string> _loadWarnings = [];
 
-    public ThemeRepository()
+    public ThemeRepository(PathsCatalog paths)
     {
+        _paths = paths;
         EnsureDefaults();
         Reload();
     }
 
-    public string ThemesDirectory => ThemesDir;
+    public string ThemesDirectory => _paths.ThemesDirectory;
 
     public IReadOnlyList<Theme> Themes => _themes;
 
@@ -40,7 +39,7 @@ public sealed class ThemeRepository
     {
         _themes.Clear();
         _loadWarnings.Clear();
-        foreach (var file in Directory.EnumerateFiles(ThemesDir, "*.json"))
+        foreach (var file in Directory.EnumerateFiles(ThemesDirectory, "*.json"))
         {
             try
             {
@@ -176,7 +175,7 @@ public sealed class ThemeRepository
 
     private void WriteAndTrack(Theme theme)
     {
-        Directory.CreateDirectory(ThemesDir);
+        Directory.CreateDirectory(ThemesDirectory);
         File.WriteAllText(PathFor(theme.Name), JsonConvert.SerializeObject(theme, Formatting.Indented));
 
         var index = _themes.FindIndex(
@@ -189,12 +188,12 @@ public sealed class ThemeRepository
 
     private void EnsureDefaults()
     {
-        Directory.CreateDirectory(ThemesDir);
+        Directory.CreateDirectory(ThemesDirectory);
         // Built-ins are rewritten on every launch (not write-if-missing) so palette refreshes ship to
         // existing installs. They're read-only in the editor, so there are no user edits to clobber.
         foreach (var theme in Theme.BuiltIns)
             File.WriteAllText(PathFor(theme.Name), JsonConvert.SerializeObject(theme, Formatting.Indented));
     }
 
-    private static string PathFor(string themeName) => Path.Combine(ThemesDir, $"{themeName}.json");
+    private string PathFor(string themeName) => Path.Combine(ThemesDirectory, $"{themeName}.json");
 }

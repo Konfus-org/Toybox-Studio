@@ -1,5 +1,6 @@
 using Avalonia.Media.Imaging;
 using Newtonsoft.Json.Linq;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Projects;
 
@@ -11,11 +12,17 @@ namespace Toybox.Studio.Projects;
 /// </summary>
 public sealed class ProjectLoader
 {
-    /// <summary>The settings file every project carries; its presence is what makes a folder a project.</summary>
+    /// <summary>The settings file every project carries; its presence (inside <c>.toybox</c>) is what
+    /// makes a folder a project.</summary>
     public const string SettingsFileName = "AppSettings.json";
 
-    /// <summary>Whether the folder is a Toybox project (it carries the project settings file).</summary>
-    public static bool IsProjectDirectory(string path) => File.Exists(Path.Combine(path, SettingsFileName));
+    /// <summary>The project's app-settings file for a given root: it lives in the project's <c>.toybox</c>
+    /// folder (the one place a project's editor files and settings live), spelled once here.</summary>
+    public static string SettingsPathFor(string root) =>
+        Path.Combine(ProjectPaths.BaseDirectoryFor(root), SettingsFileName);
+
+    /// <summary>Whether the folder is a Toybox project (it carries the project settings file in <c>.toybox</c>).</summary>
+    public static bool IsProjectDirectory(string path) => File.Exists(SettingsPathFor(path));
 
     /// <summary>Loads the project at <paramref name="root"/> into a new <see cref="Project"/>.</summary>
     public Project Load(string root)
@@ -76,7 +83,7 @@ public sealed class ProjectLoader
     /// </summary>
     private static string? FindIconFile(string root)
     {
-        var settings = JObject.Parse(File.ReadAllText(Path.Combine(root, SettingsFileName)));
+        var settings = JObject.Parse(File.ReadAllText(SettingsPathFor(root)));
         // A handle serializes as its bare id, but tolerate the expanded { "id": … } object form too.
         var icon = settings["icon"]?["value"];
         var iconId = (icon is JObject expanded ? expanded["id"] : icon)?.Value<ulong?>();

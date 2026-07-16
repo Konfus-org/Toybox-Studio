@@ -1,9 +1,9 @@
-using System;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Toybox.Studio.Utils;
+using Avalonia;
+using System;
 using Toybox.Studio.Utils.Extensions;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio.Themes;
 

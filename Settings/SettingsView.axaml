@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:owners="using:Toybox.Studio.AssetOwners"
+             xmlns:local="using:Toybox.Studio.Settings"
+             x:Class="Toybox.Studio.Settings.SettingsView"
+             x:DataType="local:SettingsViewModel">
+
+    <!-- The owner chrome renders the body (the view-model itself, resolved to the tabbed grids
+         below) with Save/Cancel beneath it. -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="local:SettingsViewModel">
+            <local:SettingsBodyView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <owners:AssetOwnerView/>
+</UserControl>

@@ -1,7 +1,7 @@
-using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Animation.Easings;
+using Avalonia.Animation;
 using Avalonia.Styling;
+using Avalonia;
 
 namespace Toybox.Studio.Behaviors.Animations;
 

@@ -38,7 +38,9 @@ public sealed class BuildRunner
         _events = events;
     }
 
-    // Announces the compile phase as BuildStateChanged, which Engine.State folds into the Compiling phase.
+    // Announces the compile phase two ways as it flips: BuildStateChanged, which Engine.State folds into
+    // the coarse Compiling phase (the main splash bar), and the generic LaunchActivityChanged, which drives
+    // the splash's detailed compile bar + caption alongside git's.
     private bool Building
     {
         set
@@ -48,6 +50,7 @@ public sealed class BuildRunner
 
             _isBuilding = value;
             _events.Dispatch(new BuildStateChanged(value));
+            _events.Dispatch(new LaunchActivityChanged(LaunchActivity.Compiling, value));
         }
     }
 
@@ -108,9 +111,16 @@ public sealed class BuildRunner
             }
         }
 
+        // Stream the compile's step-count progress out as LaunchActivityProgress so a listener (the splash's
+        // compile bar) can fill as it builds. The reporter dispatches on the build's output thread; the
+        // listener marshals to its own thread. The configure step above reports none, so the bar stays
+        // indeterminate until the build tool's first step line.
+        var progress = new DelegateProgress<double>(
+            fraction => _events.Dispatch(new LaunchActivityProgress(fraction)));
+
         var buildPreset = CMakeCompiler.BuildPreset(configurePreset, mode.ToString());
         var built = await _compiler
-            .BuildAsync(sourceDirectory, buildDirectory, buildPreset, options.Parallel, options.Verbose, ct)
+            .BuildAsync(sourceDirectory, buildDirectory, buildPreset, options.Parallel, options.Verbose, ct, progress)
             .ContinueOnAnyContext();
         return built ? Result.Ok() : Result.Fail("CMake build failed.");
     }

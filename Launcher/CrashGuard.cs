@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using Toybox.Studio.Logging;
+using Toybox.Studio.Utils;
 
 namespace Toybox.Studio;
 
@@ -71,9 +72,12 @@ public static class CrashGuard
     {
         try
         {
-            Directory.CreateDirectory(LogFile.LogsDirectory);
+            // The container may not exist yet (a crash during startup), so the deterministic, dependency-free
+            // paths catalog is constructed directly here rather than injected.
+            var paths = new PathsCatalog();
+            Directory.CreateDirectory(paths.LogsDirectory);
             File.AppendAllText(
-                Path.Combine(LogFile.LogsDirectory, "TbxStudio.crash.log"),
+                paths.CrashLogFile,
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}{Environment.NewLine}");
         }
         catch (Exception)

@@ -15,14 +15,12 @@ namespace Toybox.Studio.EngineApi;
 /// </summary>
 public sealed class SyncHub : EventSubscriber, IEventHandler<SyncChanged>, IEventHandler<SyncEventRaised>
 {
-    private readonly Logger _log;
     private readonly object _gate = new();
     private readonly Dictionary<string, EngineObject> _bound = [];
 
     public SyncHub(Engine engine, Logger log, EventDispatcher events) : base(events)
     {
         Engine = engine;
-        _log = log;
         Scheduler = new SyncScheduler(engine, log);
     }
 
@@ -54,8 +52,13 @@ public sealed class SyncHub : EventSubscriber, IEventHandler<SyncChanged>, IEven
 
         lock (_gate)
         {
-            if (_bound.TryGetValue(address, out var existing) && !ReferenceEquals(existing, obj))
-                _log.Warning($"Engine sync address '{address}' was already bound; the newer object replaces it.");
+            // Newest-wins: a fresh mirror for an address routinely binds a moment before the mirror it
+            // replaces unbinds — a panel reopens, an asset is re-created on save, a gizmo/preview overlay
+            // rebuilds — so the two briefly share the address. Inbound routing already targets whichever
+            // object is registered now (the newest), and the superseded one detaches itself when its owner
+            // disposes in the same churn. It's expected, self-resolving overlap, so we simply take over the
+            // entry without logging — the old warning fired on every preview/save/layout change and buried
+            // the console.
             _bound[address] = obj;
         }
     }

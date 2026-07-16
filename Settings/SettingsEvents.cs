@@ -8,6 +8,7 @@ namespace Toybox.Studio.Settings;
 /// reloaded, or dropped on disconnect), carrying the mirror it swapped to — null when dropped.</summary>
 public readonly record struct AppSettingsChanged(AppSettings? App);
 
-/// <summary>The editor settings changed, dispatched per <see cref="SettingsManager.SaveAsync"/> — the
-/// commit point of the mutate-then-save editing flow — carrying the live (already mutated) graph.</summary>
+/// <summary>The editor settings changed, dispatched per <see cref="SettingsManager.ApplyAsync"/> — the
+/// commit point of the mutate-the-live-graph-then-apply editing flow — carrying the (already mutated)
+/// graph.</summary>
 public readonly record struct EditorSettingsChanged(EditorSettings Editor);

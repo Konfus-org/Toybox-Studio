@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:local="using:Toybox.Studio.AssetViewer"
+             x:Class="Toybox.Studio.AssetViewer.HandleValueView"
+             x:DataType="local:HandleValueViewModel">
+    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="2">
+        <!-- The reference name; a click opens the referenced asset in the Asset Viewer. -->
+        <Button Grid.Column="0" Classes="Basic" HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Left" Padding="6,2"
+                Command="{Binding OpenCommand}">
+            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+        </Button>
+        <Button Grid.Column="1" Classes="Basic" Padding="2" VerticalAlignment="Center"
+                Command="{Binding PickCommand}" IsEnabled="{Binding !IsReadOnly}" ToolTip.Tip="Choose an asset">
+            <icons:IconView Kind="Pencil" Width="12" Height="12"/>
+        </Button>
+        <Button Grid.Column="2" Classes="Basic" Padding="2" VerticalAlignment="Center"
+                Command="{Binding OpenCommand}" ToolTip.Tip="Open in the Asset Viewer">
+            <icons:IconView Kind="FolderOpen" Width="12" Height="12"/>
+        </Button>
+        <Button Grid.Column="3" Classes="Basic" Padding="2" VerticalAlignment="Center"
+                Command="{Binding ClearCommand}" IsEnabled="{Binding !IsReadOnly}" ToolTip.Tip="Clear">
+            <icons:IconView Kind="X" Width="12" Height="12"/>
+        </Button>
+    </Grid>
+</UserControl>

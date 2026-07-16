@@ -1,9 +1,9 @@
-using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Toybox.Studio.Utils.Toolbars;
+using Avalonia;
+using Toybox.Studio.Toolbar;
 
 namespace Toybox.Studio.Toolbar;
 

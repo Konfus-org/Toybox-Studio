@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:coder="using:Toybox.Studio.Coding"
+             x:Class="Toybox.Studio.Coding.CoderPanelView"
+             x:DataType="coder:CoderPanelViewModel">
+
+    <!-- The dockable is just a thin host around the reusable CoderView. -->
+    <coder:CoderView DataContext="{Binding Editor}"/>
+</UserControl>

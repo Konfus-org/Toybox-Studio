@@ -1,7 +1,6 @@
-using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-using Toybox.Studio.Assets;
-using Toybox.Studio.Utils;
+using Newtonsoft.Json;
+using Toybox.Studio.Keybindings;
 using Toybox.Studio.Utils.Attributes;
 
 namespace Toybox.Studio.Settings;
@@ -15,13 +14,28 @@ public sealed class EditorSettings
 {
     public EngineEditorSettings Engine { get; set; } = new();
 
+    /// <summary>
+    /// How the editor builds this project's native code. NOT part of this (user-global) file's persistence —
+    /// it is project-scoped and lives in the project's <c>.toybox/ProjectSettings.json</c> (owned by
+    /// <see cref="SettingsManager"/>, the same way <see cref="Keybindings"/> lives in its own file). It stays
+    /// a property here so the Settings grid and every consumer still reach it through the live settings.
+    /// </summary>
+    [JsonIgnore]
     public BuildEditorSettings Build { get; set; } = new();
 
     public ProjectEditorSettings Projects { get; set; } = new();
 
     public ScriptingEditorSettings Scripting { get; set; } = new();
 
+    /// <summary>The viewport gizmo's snapping. Project-scoped like <see cref="Build"/> — persisted in the
+    /// project's <c>.toybox/ProjectSettings.json</c>, not this global file.</summary>
+    [JsonIgnore]
     public GizmoEditorSettings Gizmos { get; set; } = new();
+
+    /// <summary>The Asset Browser's categories and open-assets mode. Project-scoped like <see cref="Build"/> —
+    /// persisted in the project's <c>.toybox/ProjectSettings.json</c>, not this global file.</summary>
+    [JsonIgnore]
+    public EditorAssetSettings EditorAssetSettings { get; set; } = new();
 
     public ThemeEditorSettings Theme { get; set; } = new();
 
@@ -39,30 +53,6 @@ public sealed class EditorSettings
     [JsonIgnore]
     [Icon("Keyboard")]
     public IReadOnlyList<Keybinding> Keybindings { get; set; } = [];
-}
-
-/// <summary>
-/// One editor action's binding, shaped for the settings grid: the action id it invokes (which also
-/// labels the row) beside the chord that triggers it — null is "unbound". The name is the registered
-/// action's identity, so it is construction-only and renders read-only; the chord is the editable
-/// part, through the chord capture editor like any <see cref="KeyChordInputControl"/> value. The
-/// action's registered default chord rides along (hidden) as the grid's reset/modified reference,
-/// supplied through <see cref="IDefaultSource"/>.
-/// </summary>
-public sealed class Keybinding(string name) : IDefaultSource
-{
-    /// <summary>The action id the chord invokes (an <c>InputAction</c> name in the keymap).</summary>
-    public string Name { get; } = name;
-
-    public KeyChordInputControl? Chord { get; set; }
-
-    /// <summary>The action's registered default chord — what the state dot compares against and
-    /// reset restores; null when the action ships unbound.</summary>
-    [Hidden]
-    public KeyChordInputControl? DefaultChord { get; init; }
-
-    object? IDefaultSource.CreateDefaults() =>
-        new Keybinding(Name) { Chord = DefaultChord, DefaultChord = DefaultChord };
 }
 
 /// <summary>
@@ -110,6 +100,12 @@ public sealed class BuildEditorSettings
 public sealed class EngineEditorSettings
 {
     public string SourcePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The git URL the engine checkout is cloned from when none is found on startup. Empty by default —
+    /// the launcher asks for it the first time it needs to download the engine, then remembers it here.
+    /// </summary>
+    public string RepoUrl { get; set; } = string.Empty;
 
     public int ConnectTimeoutSeconds { get; set; } = 30;
 
@@ -192,6 +188,7 @@ public sealed class AccessibilityEditorSettings
     /// How energetic the editor's micro-animations are, 0 (no motion) to 1 (full). Defaults to a subtle 0.35.
     /// The Settings window live-previews edits to it, so the motion is felt as the value moves.
     /// </summary>
+    [Slider(0, 1)]
     public double AnimationIntensity { get; set; } = 0.35;
 
     /// <summary>

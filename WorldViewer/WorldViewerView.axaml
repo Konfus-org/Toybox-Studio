@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.WorldViewer"
+             xmlns:viewport="using:Toybox.Studio.Viewport"
+             x:Class="Toybox.Studio.WorldViewer.WorldViewerView"
+             x:DataType="local:WorldViewerViewModel">
+
+    <!-- The world editor viewport: the generic split grid (ViewportSplitView) bound to the owner's embedded
+         Split. The panel VM is the world's asset owner (dirty star + Save/Undo on the tab); the viewport
+         fills it with no owner chrome, so the split view binds to the embedded grid view-model. -->
+    <viewport:ViewportSplitView DataContext="{Binding Split}"/>
+</UserControl>

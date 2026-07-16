@@ -1,7 +1,7 @@
-using System.Collections.ObjectModel;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.Collections.ObjectModel;
 using Toybox.Studio.Projects;
 using Toybox.Studio.Settings;
 using Toybox.Studio.Utils;
@@ -81,7 +81,7 @@ public sealed partial class ProjectPickerViewModel : ObservableObject
         OnPropertyChanged(nameof(HasProjects));
         _settings.Editor.Projects.Recent.RemoveAll(p =>
             string.Equals(p, project.Path, StringComparison.OrdinalIgnoreCase));
-        _settings.SaveAsync().FireAndForget();
+        _settings.ApplyAsync().FireAndForget();
     }
 
     /// <summary>

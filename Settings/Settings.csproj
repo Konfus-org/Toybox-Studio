@@ -1,21 +1,34 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The editor's persisted configuration, in two halves: the plain EditorSettings data (one JSON
-       file in ~/.toybox) the SettingsManager loads and owns, and the open project's AppSettings —
-       an engine-mirrored asset (built on the EngineSync codegen, like the Assets payloads) the
-       manager tracks through the asset catalog. It still knows nothing about the editor features its
-       sections configure; they read the plain values they need. -->
+  <!-- The editor's persisted configuration and its Settings panel, together in one project. The data
+       half is in two parts: the plain EditorSettings data (one JSON file in ~/.toybox) the
+       SettingsManager loads and owns, and the open project's AppSettings — an engine-mirrored asset
+       (built on the EngineSync codegen, like the Assets payloads) the manager tracks through the asset
+       catalog. The UI half is SettingsViewModel/SettingsView — an AssetOwner whose body is two tabbed
+       property grids (the Editor draft + the live Project AppSettings mirror), which is why the project
+       reaches up into the panel/grid/keybinding UI layers. That was possible only after the
+       Keybindings layer stopped referencing Settings (the Keybinding draft type moved into Keybindings
+       and the ~/.toybox base path into Utils), so the dependency now runs one way: Settings -> Keybindings. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
     <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
-    <ProjectReference Include="..\Assets\Assets.csproj" />
+    <ProjectReference Include="..\AssetOwners\AssetOwners.csproj" />
+    <ProjectReference Include="..\Behaviors\Behaviors.csproj" />
+    <ProjectReference Include="..\Keybindings\Keybindings.csproj" />
+    <ProjectReference Include="..\PropertyGrid\PropertyGrid.csproj" />
+    <!-- The Project settings' asset-handle picker (Icon, Startup World) opens a catalog list popup and
+         renders the pick/clear icon buttons. -->
+    <ProjectReference Include="..\Dialogs\Dialogs.csproj" />
+    <ProjectReference Include="..\Resources\Resources.csproj" />
     <ProjectReference Include="..\Generators\Generators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 

@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:Toybox.Studio.Viewport"
              xmlns:ghost="using:Toybox.Studio.Ghost"
+             xmlns:icons="using:Toybox.Studio.Resources"
              xmlns:toolbar="using:Toybox.Studio.Toolbar"
              x:Class="Toybox.Studio.Viewport.ViewportView"
              x:DataType="local:ViewportViewModel"
@@ -18,7 +19,29 @@
 
         <Border x:Name="InputSurface" Background="Transparent"/>
 
+        <!-- The content overlay (an editor viewport's node graph), positioned by the code-behind at the
+             surface's image rect so it shares the rendered image's coordinate space. Clipped to the
+             control; the host and content set no Background (x:Null, not Transparent) so their empty areas
+             stay hit-transparent and pointer events fall through to InputSurface — only the nodes capture. -->
+        <Panel x:Name="OverlayClip" ClipToBounds="True" Background="{x:Null}">
+            <ContentControl x:Name="OverlayHost" Content="{Binding Overlay}"
+                            HorizontalAlignment="Left" VerticalAlignment="Top" ClipToBounds="False"/>
+        </Panel>
+
         <ghost:GhostView Message="{Binding EmptyMessage}" IsVisible="{Binding ShowEmptyGhost}"/>
+
+        <!-- Empty-viewport call-to-action: a launch button shown only while the engine is fully off (crashed
+             and gave up, stopped, or never started). A LATER SIBLING of the input surface so its click isn't
+             swallowed by the input panel's pointer capture, and offset below the empty ghost's message so the
+             two read as one empty state with a call to action. -->
+        <Button Classes="action" Command="{Binding LaunchEngineCommand}"
+                IsVisible="{Binding ShowLaunchPrompt}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,88,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <icons:IconView Kind="Power" Width="16" Height="16"/>
+                <TextBlock Text="Launch Engine" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Button>
 
         <!-- Loading blocks only the viewport; the rest of the editor stays interactive. -->
         <Border Background="{DynamicResource ThemeScrimBrush}" IsVisible="{Binding ShowLoadingGhost}">

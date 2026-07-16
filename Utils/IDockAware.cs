@@ -1,8 +1,8 @@
 namespace Toybox.Studio.Utils;
 
 /// <summary>
-/// Lets a dockable's view-model react to its panel opening and closing — e.g. Settings builds its
-/// editable draft on open and discards it on close. The window manager calls these once per open
+/// Lets a dockable's view-model react to its panel opening and closing — e.g. Settings shows the live
+/// settings in its grids on open and drops them on close. The window manager calls these once per open
 /// panel (not per re-templating pass). Lives in Utils so feature projects can implement it without
 /// referencing the workspace.
 /// </summary>

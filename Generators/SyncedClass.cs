@@ -15,6 +15,7 @@ internal sealed class SyncedClass(
     List<SyncedEvent> events,
     List<SyncedMethod> methods,
     List<DiagnosticInfo> diagnostics,
+    bool pathAddressed,
     bool emit)
 {
     /// <summary>The containing namespace; empty for the global namespace.</summary>
@@ -46,6 +47,12 @@ internal sealed class SyncedClass(
     public List<SyncedMethod> Methods { get; } = methods;
 
     public List<DiagnosticInfo> Diagnostics { get; } = diagnostics;
+
+    /// <summary>Whether the class's pushes are world-qualified sync.set paths: the emitted
+    /// <c>PathAddressed</c> override folds each property's key into the address (…/{key}) on
+    /// set/reset/isDefault, with no separate key field. Only the base-injecting root emits it; derived
+    /// types inherit the override.</summary>
+    public bool PathAddressed { get; } = pathAddressed;
 
     /// <summary>False when a class-level error makes any generated output meaningless.</summary>
     public bool Emit { get; } = emit;

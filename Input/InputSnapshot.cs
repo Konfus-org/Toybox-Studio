@@ -1,5 +1,5 @@
-using Avalonia;
 using Avalonia.Input;
+using Avalonia;
 
 namespace Toybox.Studio.Input;
 

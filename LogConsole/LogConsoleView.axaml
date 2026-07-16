@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.LogConsole"
+             xmlns:console="using:Toybox.Studio.Console"
+             x:Class="Toybox.Studio.LogConsole.LogConsoleView"
+             x:DataType="local:LogConsoleViewModel"
+             x:Name="Root">
+
+    <!-- The whole panel is the generic console fed by the log stream; its DataContext is the inner scrollback,
+         and link clicks are routed back up to this view-model's OpenLink (which opens the source file). -->
+    <console:ConsoleView DataContext="{Binding Console}"
+                         LinkCommand="{Binding #Root.((local:LogConsoleViewModel)DataContext).OpenLinkCommand}"/>
+</UserControl>

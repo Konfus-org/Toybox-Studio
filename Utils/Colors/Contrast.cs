@@ -1,5 +1,5 @@
-using System;
 using Avalonia.Media;
+using System;
 using Toybox.Studio.Utils.Extensions;
 
 namespace Toybox.Studio.Utils;

@@ -2,7 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:studio="using:Toybox.Studio"
         xmlns:anim="using:Toybox.Studio.Behaviors.Animations"
+        xmlns:console="using:Toybox.Studio.Console"
         x:Class="Toybox.Studio.SplashWindow"
+        x:Name="Root"
         x:DataType="studio:SplashViewModel"
         Width="440" Height="280" CanResize="False"
         WindowDecorations="None"
@@ -48,7 +50,36 @@
 
         <ProgressBar Width="320" Minimum="0" Maximum="1" Value="{Binding Progress}"/>
 
+        <!-- A dedicated activity bar for the longest, least-legible stretches of a launch (compiling the
+             engine, or a git transfer): a bar thinner than the main one so it reads as its detail —
+             indeterminate until the running tool reports its first step, then filling with the share done,
+             with the percentage beneath. Its caption rides the single status line below (where the
+             compile/git fact takes precedence). Collapses out of layout whenever no such activity is running. -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsActivityRunning}">
+            <ProgressBar Width="320" Height="6" Minimum="0" Maximum="1"
+                         Value="{Binding ActivityProgress}"
+                         IsIndeterminate="{Binding ActivityIsIndeterminate}"/>
+            <TextBlock Text="{Binding ActivityProgress, StringFormat={}{0:P0}}"
+                       IsVisible="{Binding !ActivityIsIndeterminate}"
+                       HorizontalAlignment="Center" FontSize="11"
+                       Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+        </StackPanel>
+
         <TextBlock Text="{Binding Status}" HorizontalAlignment="Center"
                    Foreground="{DynamicResource ThemeMutedTextBrush}" FontSize="{DynamicResource ThemeFontSize}"/>
+
+        <!-- Developer builds only (ShowLogConsole is set under #if DEBUG): the live log stream on the splash,
+             so a long compile or download is legible while it runs. It's the same log console the main
+             window's dockable uses, minus its search/filter toolbar (ShowToolbar=False) for a bare tail. The
+             window grows to fit it in Debug (see SplashWindow.axaml.cs); Release never builds it. -->
+        <Border IsVisible="{Binding ShowLogConsole}"
+                Width="392" Height="184"
+                Background="{DynamicResource ThemeWellFillBrush}"
+                BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"
+                CornerRadius="6" ClipToBounds="True">
+            <console:ConsoleView DataContext="{Binding LogConsole.Console}"
+                                 ShowToolbar="False"
+                                 LinkCommand="{Binding #Root.((studio:SplashViewModel)DataContext).LogConsole.OpenLinkCommand}"/>
+        </Border>
     </StackPanel>
 </Window>

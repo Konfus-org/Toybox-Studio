@@ -1,0 +1,18 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio"
+             x:Class="Toybox.Studio.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.DataTemplates>
+        <!-- Resolves XxxViewModel → XxxView by convention for content that isn't templated explicitly
+             (the viewport's node overlay), so hosting projects need not reference the feature. -->
+        <local:ConventionViewLocator/>
+    </Application.DataTemplates>
+
+    <Application.Styles>
+        <FluentTheme/>
+        <!-- All app styling — design tokens and control styles — lives in this single stylesheet. -->
+        <StyleInclude Source="/AppStyles.axaml"/>
+    </Application.Styles>
+</Application>

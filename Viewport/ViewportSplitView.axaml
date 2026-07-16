@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.Viewport"
+             xmlns:splitting="using:Toybox.Studio.Splitting"
+             x:Class="Toybox.Studio.Viewport.ViewportSplitView"
+             x:DataType="local:ViewportSplitViewModel">
+
+    <!-- A reusable Blender-style split grid of viewports. Each pane's content is a
+         ViewportViewModel, rendered as a ViewportView by the template below; the container mints/disposes
+         those through the view-model's IPaneSource, and drags on any pane's corners split/join the grid
+         (SplitCornerBehavior, attached to each pane by the container). -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="local:ViewportViewModel">
+            <local:ViewportView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <splitting:SplitContainer Layout="{Binding Layout}" PaneSource="{Binding}"/>
+</UserControl>

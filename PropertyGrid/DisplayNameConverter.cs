@@ -1,6 +1,6 @@
+using Avalonia.Data.Converters;
 using System.Globalization;
 using System.Text;
-using Avalonia.Data.Converters;
 
 namespace Toybox.Studio.PropertyGrid;
 

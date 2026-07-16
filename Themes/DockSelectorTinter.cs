@@ -1,8 +1,8 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media;
 using Avalonia.Platform;
+using Avalonia;
 using System.Runtime.InteropServices;
 using Toybox.Studio.Utils.Extensions;
 

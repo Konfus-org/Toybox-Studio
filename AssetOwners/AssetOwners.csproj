@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Utils\Utils.csproj" />
-    <ProjectReference Include="..\Assets\Assets.csproj" />
+    <ProjectReference Include="..\EngineApi\EngineApi.csproj" />
   </ItemGroup>
 
   <ItemGroup>

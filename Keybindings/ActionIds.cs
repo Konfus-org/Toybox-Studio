@@ -8,7 +8,19 @@ namespace Toybox.Studio.Keybindings;
 /// </summary>
 public static class ActionIds
 {
+    // The File menu: save the focused document, switch the active project (in-process), open an asset, open a
+    // raw source file (a script or shader) in the Coder editor.
+    public const string Save = "file.save";
+    public const string OpenProject = "file.openProject";
+    public const string OpenAsset = "file.openAsset";
+    public const string OpenSource = "file.openSource";
+
     public const string OpenSettings = "edit.openSettings";
+
+    // Undo/redo of the focused document (see Workspace.Focused / IUndoTarget) — global chords routed to
+    // whichever panel has focus.
+    public const string Undo = "edit.undo";
+    public const string Redo = "edit.redo";
 
     public const string BuildAppDebug = "build.app.debug";
     public const string BuildAppRelease = "build.app.release";
@@ -20,16 +32,28 @@ public static class ActionIds
     public const string LoadLayout = "layout.load";
     public const string ResetLayout = "layout.reset";
 
-    // The viewport transform tools (scoped to the focused viewport; see ActionSchemes.Viewport).
+    // The World Tree's entity edit verbs (scoped to the focused hierarchy panel; registered by
+    // WorldTree's WorldTreeActions under Scheme.For<WorldTreeViewModel>(), executed by the panel through
+    // EntityOperations). Also shown as rows in the Edit menu.
+    public const string EntityCopy = "edit.entity.copy";
+    public const string EntityCut = "edit.entity.cut";
+    public const string EntityPaste = "edit.entity.paste";
+    public const string EntityDuplicate = "edit.entity.duplicate";
+    public const string EntityDelete = "edit.entity.delete";
+    public const string EntityRename = "edit.entity.rename";
+
+    // The world viewport transform tools (scoped to the focused world viewport; registered by
+    // WorldViewer's WorldViewerToolbarActions under Scheme.For<WorldViewerViewModel>()).
     public const string GizmoSelect = "gizmo.select";
     public const string GizmoTranslate = "gizmo.translate";
     public const string GizmoRotate = "gizmo.rotate";
     public const string GizmoScale = "gizmo.scale";
     public const string GizmoSnapHold = "gizmo.snapHold";
     public const string GizmoToggleSnap = "gizmo.toggleSnap";
+    public const string GizmoToggleOrientation = "gizmo.toggleOrientation";
 
-    // The viewport render layers (the collider wireframe toggles, the post-processing toggle, and
-    // the render-stage radio row; see Worlds/RenderLayers).
+    // The world viewport render layers (the collider wireframe toggles, the post-processing toggle,
+    // and the render-stage radio row; see WorldViewer/RenderLayers).
     public const string RenderLayersCollidersAll = "renderLayers.collidersAll";
     public const string RenderLayersCollidersOnSelection = "renderLayers.collidersOnSelection";
     public const string RenderLayersPostProcessing = "renderLayers.postProcessing";

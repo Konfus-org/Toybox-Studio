@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.ColorValueView"
+             x:DataType="local:ColorValueViewModel">
+    <!-- A swatch button opening the channel sliders + hex field. Self-contained (no ColorPicker
+         package) so it can't crash the app's Avalonia theme. -->
+    <Button Classes="Basic" Padding="1" HorizontalAlignment="Left" IsEnabled="{Binding !IsReadOnly}">
+        <Border Width="46" Height="18" CornerRadius="3" Background="{Binding Swatch}"
+                BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1"/>
+        <Button.Flyout>
+            <Flyout>
+                <StackPanel Width="212" Spacing="6">
+                    <Grid ColumnDefinitions="16,*,40" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="R" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="255" Value="{Binding R}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding R}" TextAlignment="Right"
+                                   VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="G" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="255" Value="{Binding G}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding G}" TextAlignment="Right"
+                                   VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="B" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="255" Value="{Binding B}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding B}" TextAlignment="Right"
+                                   VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="A" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="255" Value="{Binding A}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding A}" TextAlignment="Right"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                    <TextBox Text="{Binding Hex}"/>
+                </StackPanel>
+            </Flyout>
+        </Button.Flyout>
+    </Button>
+</UserControl>

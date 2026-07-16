@@ -1,0 +1,35 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- =================================================================================================
+         Toybox Studio's umbrella stylesheet. App.axaml includes only this file; it pulls in the focused
+         style files under App/Styles/ in load order. Splitting keeps each control family in its own file
+         while preserving a single include + a single, well-defined ordering:
+
+           1. DesignTokens   — theme "variables" (first-frame fallbacks; ThemeApplier overwrites them live
+                                from the active Theme.json). Must load first so everything below can key off
+                                them via DynamicResource.
+           2. Packaged themes — control themes we depend on (ColorPicker, Dock). Loaded after FluentTheme
+                                (applied in App.axaml) and our tokens, before our overrides.
+           3. Our control styles — window/shell chrome, buttons, inputs, menus, docking, tabs, sections.
+
+         View-specific styles stay co-located in their own widget .axaml (Console, PropertyGrid, SearchBox,
+         WorldTree, …) — only app-wide styling lives here.
+         ================================================================================================= -->
+
+    <StyleInclude Source="/Styles/DesignTokens.axaml"/>
+
+    <!-- Dock's control themes ship in their own package and are NOT bundled with FluentTheme; without
+         this include the DockControl has no templates. Loaded before our overrides below. -->
+    <StyleInclude Source="avares://Dock.Avalonia.Themes.Fluent/DockFluentTheme.axaml"/>
+
+    <StyleInclude Source="/Styles/WindowStyle.axaml"/>
+    <StyleInclude Source="/Styles/ShellStyle.axaml"/>
+    <StyleInclude Source="/Styles/ButtonStyle.axaml"/>
+    <StyleInclude Source="/Styles/InputStyle.axaml"/>
+    <StyleInclude Source="/Styles/SliderStyle.axaml"/>
+    <StyleInclude Source="/Styles/MenuStyle.axaml"/>
+    <StyleInclude Source="/Styles/DockStyle.axaml"/>
+    <StyleInclude Source="/Styles/TabStyle.axaml"/>
+    <StyleInclude Source="/Styles/SectionStyle.axaml"/>
+</Styles>

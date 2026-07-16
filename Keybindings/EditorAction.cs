@@ -1,4 +1,4 @@
-using Toybox.Studio.Assets;
+using Toybox.Studio.EngineApi.Types.Assets;
 using Icon = IconPacks.Avalonia.Lucide.PackIconLucideKind;
 
 namespace Toybox.Studio.Keybindings;
@@ -22,7 +22,7 @@ public sealed record EditorAction
     public Icon Icon { get; init; }
 
     /// <summary>The keymap scheme (scope) the action's bindings live in; global by default.</summary>
-    public string Scheme { get; init; } = ActionSchemes.Global;
+    public string Scheme { get; init; } = Keybindings.Scheme.Global;
 
     /// <summary>The chords the action is bound to out of the box; rebindable, of course.</summary>
     public IReadOnlyList<KeyChordInputControl> DefaultChords { get; init; } = [];

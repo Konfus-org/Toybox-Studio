@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.PropertyGrid.Slots"
+             x:Class="Toybox.Studio.PropertyGrid.Slots.SliderValueView"
+             x:DataType="local:SliderValueViewModel">
+    <Grid ColumnDefinitions="*,Auto">
+        <Slider Grid.Column="0"
+                Minimum="{Binding Minimum}"
+                Maximum="{Binding Maximum}"
+                Value="{Binding Value}"
+                SmallChange="{Binding Step}"
+                IsEnabled="{Binding !IsReadOnly}"
+                VerticalAlignment="Center"/>
+        <!-- 0.## keeps both integer scales ("5") and fractional dials ("0.35") clean. -->
+        <TextBlock Grid.Column="1"
+                   Text="{Binding Value, StringFormat={}{0:0.##}}"
+                   VerticalAlignment="Center"
+                   TextAlignment="Right"
+                   MinWidth="32"
+                   Margin="8,0,0,0"/>
+    </Grid>
+</UserControl>

@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:grid="using:Toybox.Studio.PropertyGrid"
+             xmlns:chords="using:Toybox.Studio.Keybindings"
+             xmlns:local="using:Toybox.Studio.Settings"
+             x:Class="Toybox.Studio.Settings.SettingsBodyView"
+             x:DataType="local:SettingsViewModel">
+
+    <!-- The chord capture editor isn't one of the grid's built-in slots; registering its template
+         here puts it in scope for every grid below (the Keybindings section's chords, and any chord
+         a project input map would show). The Project settings' asset-handle picker (app Icon, Startup
+         World) is likewise a Settings-local slot, registered here for the Project grid below. The
+         Resolution's Size editor needs no template — it reuses the grid's built-in AxisValueView. -->
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="chords:ChordValueViewModel">
+            <chords:ChordValueView/>
+        </DataTemplate>
+        <DataTemplate DataType="local:HandlePickerValueViewModel">
+            <local:HandlePickerValueView/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <TabControl>
+        <TabItem Header="Editor">
+            <grid:PropertyGridView DataContext="{Binding EditorGrid}" Margin="0,6,0,0"/>
+        </TabItem>
+        <TabItem Header="Project">
+            <Panel Margin="0,6,0,0">
+                <Border IsVisible="{Binding IsProjectAvailable}">
+                    <grid:PropertyGridView DataContext="{Binding ProjectGrid}"/>
+                </Border>
+                <TextBlock Text="No project settings — the engine connection carries them once it is up."
+                           Opacity="0.6" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsVisible="{Binding !IsProjectAvailable}"/>
+            </Panel>
+        </TabItem>
+    </TabControl>
+</UserControl>

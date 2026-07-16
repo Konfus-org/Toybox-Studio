@@ -1,5 +1,5 @@
 using Avalonia.Input;
-using Toybox.Studio.Assets;
+using Toybox.Studio.EngineApi.Types.Assets;
 using Toybox.Studio.EngineApi;
 
 namespace Toybox.Studio.Keybindings;

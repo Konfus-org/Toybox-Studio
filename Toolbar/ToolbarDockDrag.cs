@@ -1,11 +1,11 @@
-using System.Runtime.CompilerServices;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using Toybox.Studio.Utils.Toolbars;
+using Avalonia;
+using System.Runtime.CompilerServices;
+using Toybox.Studio.Toolbar;
 
 namespace Toybox.Studio.Toolbar;
 

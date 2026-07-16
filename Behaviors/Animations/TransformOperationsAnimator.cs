@@ -1,6 +1,6 @@
 using Avalonia.Animation;
-using Avalonia.Media;
 using Avalonia.Media.Transformation;
+using Avalonia.Media;
 
 namespace Toybox.Studio.Behaviors.Animations;
 

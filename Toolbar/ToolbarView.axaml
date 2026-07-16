@@ -70,17 +70,9 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- The live snap-amount badge: shown only when the toolbar sets an Annotation (the
-                 transform toolbar, while snapping is effectively on via the magnet toggle or the
-                 held snap key). A generic trailing chip so any toolbar can surface a status. -->
-            <Border IsVisible="{Binding HasAnnotation}"
-                    Background="{DynamicResource ThemeMenuHighlightBrush}"
-                    BorderBrush="{DynamicResource ThemeAccentSolidBrush}" BorderThickness="1"
-                    CornerRadius="{DynamicResource ControlCornerRadius}"
-                    Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="{Binding Annotation}" FontSize="11" FontWeight="SemiBold"
-                           Foreground="{DynamicResource ThemeTextBrush}"/>
-            </Border>
+            <!-- The live snap-amount field: an editable numeric chip the transform toolbar supplies (null
+                 on toolbars that surface no value; it hides itself while snapping is effectively off). -->
+            <local:ToolbarNumberFieldView DataContext="{Binding NumberField}"/>
         </StackPanel>
     </Border>
 </UserControl>

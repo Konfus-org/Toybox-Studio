@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.AssetViewer"
+             x:Class="Toybox.Studio.AssetViewer.MaterialValueView"
+             x:DataType="local:MaterialValueViewModel">
+    <!-- Kind selector + the value editor for the current kind. The nested editor's template (bool /
+         number / colour / vector) resolves from the grid's own DataTemplates above this row. -->
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+        <ComboBox Grid.Column="0" ItemsSource="{Binding Kinds}" SelectedItem="{Binding Kind}"
+                  IsEnabled="{Binding !IsReadOnly}" MinWidth="78" VerticalAlignment="Center"/>
+        <ContentControl Grid.Column="1" Content="{Binding Editor}" VerticalAlignment="Center"/>
+    </Grid>
+</UserControl>

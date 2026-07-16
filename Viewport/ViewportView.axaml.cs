@@ -1,16 +1,16 @@
-using System;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Platform;
+using Avalonia.Rendering.Composition;
+using Avalonia;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Interactivity;
-using Avalonia.Platform;
-using Avalonia.Rendering.Composition;
+using System;
 using Toybox.Studio.EngineApi;
 using Toybox.Studio.Input;
 using Toybox.Studio.Utils;
-using Toybox.Studio.Utils.Attributes;
 
 namespace Toybox.Studio.Viewport;
 
@@ -23,9 +23,11 @@ namespace Toybox.Studio.Viewport;
 /// input-binding behavior forwards captured snapshots here, and the cover-scaling mapping (how the
 /// texture fills the control, and so where the pointer lands on it) lives here too, view concerns
 /// both — before they flow on to the bound <see cref="ViewportViewModel"/>.
+///
+/// It is a pane, not the dockable itself: it is hosted inside the <see cref="ViewportSplitView"/> grid
+/// (which carries the <c>[Dockable]</c>) so a viewport can be split Blender-style, each pane a fresh
+/// instance with its own engine-camera stream.
 /// </summary>
-[Dockable(Title = "Viewport", Icon = "Axis3d", Slot = DockSlot.Top, Singleton = false,
-    FloatWidth = 960, FloatHeight = 600)]
 public partial class ViewportView : UserControl, IInputSink
 {
     /// <summary>The engine view's shared GPU texture to show (bound to the view-model). Null clears.</summary>
@@ -279,6 +281,21 @@ public partial class ViewportView : UserControl, IInputSink
     /// <see cref="ImageRect"/>), centred and clipped on the long axis.</summary>
     private void UpdateVisualLayout()
     {
+        // The content overlay follows the same image rect as the composited texture, so keep it in step
+        // even before the composition visual exists (it may be present on a viewport that never lit up).
+        UpdateOverlayLayout();
+
+        // Report the pane's device-pixel size so an editor view renders at its own resolution rather than
+        // the full graphics resolution. Bounds are in DIPs; render scaling converts to physical pixels.
+        if (DataContext is ViewportViewModel viewModel)
+        {
+            var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+            var paneBounds = SurfaceHost.Bounds;
+            viewModel.UpdateRenderSize(
+                (int)Math.Round(paneBounds.Width * scaling),
+                (int)Math.Round(paneBounds.Height * scaling));
+        }
+
         if (_visual is null)
             return;
 
@@ -295,6 +312,28 @@ public partial class ViewportView : UserControl, IInputSink
             ImageRect(bounds.Width, bounds.Height, surface.Width, surface.Height);
         _visual.Size = new Vector2((float)width, (float)height);
         _visual.Offset = new Vector3((float)offsetX, (float)offsetY, 0F);
+    }
+
+    // Sizes and offsets the content overlay to the surface's image rect (the same cover mapping the texture
+    // uses), so the overlay's normalized coordinate space matches what's on screen. Hidden until a surface
+    // exists. The OverlayClip parent clips the (possibly overflowing) rect back to the control.
+    private void UpdateOverlayLayout()
+    {
+        if (OverlayHost is null)
+            return;
+
+        var bounds = SurfaceHost.Bounds;
+        if (Surface is not { Width: > 0, Height: > 0 } surface || bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            OverlayHost.IsVisible = false;
+            return;
+        }
+
+        var (x, y, width, height) = ImageRect(bounds.Width, bounds.Height, surface.Width, surface.Height);
+        OverlayHost.IsVisible = true;
+        OverlayHost.Width = width;
+        OverlayHost.Height = height;
+        OverlayHost.RenderTransform = new TranslateTransform(x, y);
     }
 
     private void TearDown()

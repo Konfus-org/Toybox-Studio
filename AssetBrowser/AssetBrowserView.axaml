@@ -1,0 +1,277 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Toybox.Studio.AssetBrowser"
+             xmlns:icons="using:Toybox.Studio.Resources"
+             xmlns:ghost="using:Toybox.Studio.Ghost"
+             xmlns:behaviors="using:Toybox.Studio.Behaviors"
+             xmlns:anim="using:Toybox.Studio.Behaviors.Animations"
+             xmlns:search="using:Toybox.Studio.Searching"
+             xmlns:overlay="using:Toybox.Studio.Overlays"
+             xmlns:viewport="using:Toybox.Studio.Viewport"
+             xmlns:conv="using:Avalonia.Data.Converters"
+             x:Class="Toybox.Studio.AssetBrowser.AssetBrowserView"
+             x:DataType="local:AssetBrowserViewModel">
+
+    <UserControl.KeyBindings>
+        <!-- Asset CRUD shortcuts; they act on the selected tile (paste needs only a clipboard asset). -->
+        <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedCommand}"/>
+        <KeyBinding Gesture="F2" Command="{Binding RenameSelectedCommand}"/>
+        <KeyBinding Gesture="Ctrl+D" Command="{Binding DuplicateSelectedCommand}"/>
+        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopySelectedCommand}"/>
+        <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}"/>
+    </UserControl.KeyBindings>
+
+    <UserControl.Styles>
+        <!-- Segmented view toggle (grid / list): a flat pair; the active side lights its glyph in the accent. -->
+        <Style Selector="Button.seg">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Opacity" Value="0.5"/>
+        </Style>
+        <Style Selector="Button.seg:pointerover">
+            <Setter Property="Opacity" Value="0.85"/>
+        </Style>
+        <Style Selector="Button.seg.active">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="Button.seg.active icons|IconView">
+            <Setter Property="Foreground" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
+
+        <!-- The tile/list grid item hosts are chrome-less; the card Border inside carries the look and the
+             accent selection frame, so the ListBox's own selection highlight is neutralised. -->
+        <Style Selector="ListBox.content">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.content ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.content ListBoxItem /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- A grid tile: a soft card that grows on hover (Pop) and frames in the accent when selected. -->
+        <Style Selector="Border.tile">
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="6"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.tile:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
+        </Style>
+        <Style Selector="Border.tile.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
+
+        <!-- The preview well a tile's glyph sits in. -->
+        <Style Selector="Border.thumb">
+            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+        </Style>
+
+        <!-- The little type pill (FBX / PNG / MAT …). -->
+        <Style Selector="Border.pill">
+            <Setter Property="Background" Value="{DynamicResource ThemeSurfaceBrush}"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="5,1"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+
+        <!-- A list-mode row: same selection affordance as a tile, laid out horizontally. -->
+        <Style Selector="Border.listRow">
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.listRow:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}"/>
+        </Style>
+        <Style Selector="Border.listRow.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentSolidBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- A grid tile: glyph in a preview well, name, type pill. A single click selects (the ListBox);
+             double-tap opens; the live 3D turntable + info live in the shared hover card below. -->
+        <DataTemplate x:Key="GridTile" x:DataType="local:AssetTileViewModel">
+            <Border Classes="tile" Classes.selected="{Binding IsSelected}" anim:Pop.Enabled="True"
+                    behaviors:ContextMenuOpener.Enabled="True"
+                    behaviors:PointerEnterCommandBehavior.Command="{Binding HoverCommand}"
+                    behaviors:DoubleTapCommandBehavior.Command="{Binding OpenCommand}"
+                    ToolTip.Tip="{Binding Entry.Path}">
+                <StackPanel Width="104" Spacing="2">
+                    <Border Classes="thumb" Height="74">
+                        <Panel>
+                            <icons:IconView Width="30" Height="30" HorizontalAlignment="Center"
+                                            VerticalAlignment="Center" Kind="{Binding Icon}"
+                                            Foreground="{Binding IconBrush}"/>
+                            <Border IsVisible="{Binding MissingMeta}" Width="8" Height="8" CornerRadius="4"
+                                    Background="{DynamicResource ThemeWarningBrush}" Margin="4"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    ToolTip.Tip="Missing metadata"/>
+                        </Panel>
+                    </Border>
+                    <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" Margin="2,6,2,0"/>
+                    <Border Classes="pill" Margin="2,4,0,0">
+                        <TextBlock Text="{Binding TypeLabel}" FontSize="10"
+                                   Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- A list row: glyph, name, trailing type pill. -->
+        <DataTemplate x:Key="ListRow" x:DataType="local:AssetTileViewModel">
+            <Border Classes="listRow" Classes.selected="{Binding IsSelected}"
+                    behaviors:ContextMenuOpener.Enabled="True"
+                    behaviors:PointerEnterCommandBehavior.Command="{Binding HoverCommand}"
+                    behaviors:DoubleTapCommandBehavior.Command="{Binding OpenCommand}"
+                    ToolTip.Tip="{Binding Entry.Path}">
+                <DockPanel>
+                    <icons:IconView DockPanel.Dock="Left" Width="15" Height="15" Margin="0,0,9,0"
+                                    VerticalAlignment="Center" Kind="{Binding Icon}"
+                                    Foreground="{Binding IconBrush}"/>
+                    <Border DockPanel.Dock="Right" Classes="pill" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <TextBlock Text="{Binding TypeLabel}" FontSize="10"
+                                   Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                    </Border>
+                    <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel Margin="{DynamicResource ThemePanelPadding}">
+
+        <!-- Toolbar: search fills, with the view-toggle and a refresh on the right. -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Button DockPanel.Dock="Right" Classes="toy" Margin="6,0,0,0" VerticalAlignment="Center"
+                    Command="{Binding ReloadCommand}" ToolTip.Tip="Reload assets">
+                <Panel Width="16" Height="16">
+                    <icons:IconView Kind="RefreshCw" Width="16" Height="16"
+                                    IsVisible="{Binding !ReloadCommand.IsRunning}"/>
+                    <search:Spinner IsVisible="{Binding ReloadCommand.IsRunning}"/>
+                </Panel>
+            </Button>
+
+            <Border DockPanel.Dock="Right" Background="{DynamicResource ThemeSurfaceBrush}"
+                    BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1"
+                    CornerRadius="8" Padding="2" Margin="6,0,0,0" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="1">
+                    <Button Classes="seg" Classes.active="{Binding !IsListView}" ToolTip.Tip="Grid view"
+                            Command="{Binding ShowGridCommand}">
+                        <icons:IconView Width="15" Height="15" Kind="LayoutGrid"
+                                        Foreground="{DynamicResource ThemeTextBrush}"/>
+                    </Button>
+                    <Button Classes="seg" Classes.active="{Binding IsListView}" ToolTip.Tip="List view"
+                            Command="{Binding ShowListCommand}">
+                        <icons:IconView Width="15" Height="15" Kind="List"
+                                        Foreground="{DynamicResource ThemeTextBrush}"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <search:SearchBox Watermark="Search assets…" HorizontalAlignment="Stretch"
+                              Text="{Binding Search.Query, Mode=TwoWay}"
+                              IsBusy="{Binding Search.IsBusy}"
+                              Progress="{Binding Search.Progress}"/>
+        </DockPanel>
+
+        <!-- Category rail (resizable) | splitter | content (grid or list). -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" MinWidth="110" MaxWidth="420"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Category rail. -->
+            <Border Grid.Column="0">
+                <ListBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                         Background="Transparent" BorderThickness="0" Padding="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="local:AssetCategoryViewModel">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Count}" Opacity="0.55"
+                                           Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <icons:IconView Kind="{Binding Icon}" Foreground="{Binding IconBrush}"
+                                                Width="15" Height="15" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="6" Margin="2,0" Background="Transparent"
+                          ResizeDirection="Columns" HorizontalAlignment="Center"/>
+
+            <!-- The content: grid cards or list rows over the empty-state ghost, plus the live hover card.
+                 One type-routed context menu serves the whole content (right-click empty space → create rows;
+                 right-click a tile → its verbs + create rows). Pointer leaving the content clears the hover. -->
+            <Panel Grid.Column="2" Background="Transparent"
+                   behaviors:ContextMenuOpener.Enabled="True"
+                   behaviors:PointerExitCommandBehavior.Command="{Binding ClearHoverCommand}">
+
+                <ListBox Classes="content" ItemsSource="{Binding Tiles}"
+                         SelectedItem="{Binding SelectedTile, Mode=TwoWay}"
+                         ItemTemplate="{StaticResource GridTile}" IsVisible="{Binding !IsListView}">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                </ListBox>
+
+                <ListBox Classes="content" ItemsSource="{Binding Tiles}"
+                         SelectedItem="{Binding SelectedTile, Mode=TwoWay}"
+                         ItemTemplate="{StaticResource ListRow}" IsVisible="{Binding IsListView}"
+                         Margin="0,0,4,0"/>
+
+                <ghost:GhostView Message="No assets to show." IsVisible="{Binding IsEmpty}"
+                                 IsHitTestVisible="False"/>
+
+                <!-- The custom hover card: a bounded, auto-rotating live 3D render of whatever the pointer is
+                     over (model, material, or texture) plus its name, type, and path. CursorTooltip floats it
+                     next to the pointer while keeping it in the visual tree (so the GPU interop renders) and
+                     pointer-transparent (tiles still hover). -->
+                <overlay:CursorTooltip
+                    IsOpen="{Binding HoverPreview.Current, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                    <Border Width="220" Height="272" CornerRadius="12" ClipToBounds="True"
+                            Background="{DynamicResource ThemeSurfaceBrush}"
+                            BorderBrush="{DynamicResource ThemeBorderBrush}" BorderThickness="1">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Margin="10,6,10,9" Spacing="2">
+                                <TextBlock Text="{Binding HoverPreview.Current.Name}" FontWeight="Medium"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding HoverPreview.Current.Type}"
+                                           Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                                <TextBlock Text="{Binding HoverPreview.Current.Path}" Margin="0,3,0,0"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource ThemeMutedTextBrush}"/>
+                            </StackPanel>
+                            <viewport:ViewportView DataContext="{Binding HoverPreview.Viewport}"/>
+                        </DockPanel>
+                    </Border>
+                </overlay:CursorTooltip>
+            </Panel>
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -1,7 +1,7 @@
 using Avalonia.Layout;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Toybox.Studio.Events;
-using Toybox.Studio.Utils.Toolbars;
+using Toybox.Studio.Toolbar;
 
 namespace Toybox.Studio.Toolbar;
 
@@ -42,14 +42,11 @@ public partial class ToolbarViewModel : ObservableEventSubscriber
     /// <summary>The tool buttons, in display order.</summary>
     public IReadOnlyList<ToolbarItemViewModel> Tools { get; }
 
-    /// <summary>An optional live status chip shown after the tools (e.g. the transform toolbar's
-    /// snap amount while snapping is active); null or empty hides it. Concrete toolbars set it.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasAnnotation))]
-    public partial string? Annotation { get; protected set; }
-
-    /// <summary>Whether the annotation chip should show.</summary>
-    public bool HasAnnotation => !string.IsNullOrEmpty(Annotation);
+    /// <summary>An optional editable numeric chip shown after the tools (the transform toolbar's snap
+    /// amount): drag-to-scrub or type, the same control the property grid's number fields use. Null on
+    /// toolbars that surface no value. Concrete toolbars build one and refresh it from their domain's
+    /// changed event.</summary>
+    public ToolbarNumberField? NumberField { get; protected set; }
 
     /// <summary>The viewport edge or corner the toolbar is docked against.</summary>
     [ObservableProperty]
